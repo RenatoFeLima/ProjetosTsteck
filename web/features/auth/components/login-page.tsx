@@ -73,75 +73,20 @@ function TechnicalDecoration({ className }: { className?: string }) {
 function BrandPanel() {
   return (
     <div className="hidden lg:flex lg:w-[52%] xl:w-1/2 relative flex-col overflow-hidden">
-      {/* Base gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white via-[#fff9f9] to-[#f5f6f8]" />
-
-      {/* Subtle grid overlay */}
+      {/* Background image */}
       <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage: `
-            linear-gradient(rgba(158, 11, 15, 0.032) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(158, 11, 15, 0.032) 1px, transparent 1px)
-          `,
-          backgroundSize: "44px 44px",
-        }}
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url('/TelaLogin.png')" }}
       />
 
-      {/* Radial fade to soften the grid in the center */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_70%_at_45%_50%,rgba(255,255,255,0.9)_0%,transparent_100%)]" />
+      {/* Subtle dark overlay at the bottom for footer legibility */}
+      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/20 to-transparent" />
 
-      {/* Red glow accent top-right */}
-      <div className="absolute -top-24 right-0 h-80 w-72 rounded-full bg-brand/[0.06] blur-[90px]" />
-
-      {/* Technical schematic SVG */}
-      <TechnicalDecoration className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-[28%] h-[560px] w-[560px]" />
-
-      {/* Foreground content */}
-      <div className="relative z-10 flex h-full flex-col justify-between p-12 xl:p-16">
-        {/* Wordmark */}
-        <div className="flex items-baseline gap-3">
-          <span
-            className="text-[1.55rem] font-bold leading-none tracking-[0.22em] text-brand"
-            style={{ fontFamily: "var(--font-rajdhani), sans-serif" }}
-          >
-            TSTECK
-          </span>
-          <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-            Engenharia Operacional
-          </span>
-        </div>
-
-        {/* Main tagline block */}
-        <div>
-          <div className="mb-5 h-[2px] w-10 rounded-full bg-brand" />
-          <h2 className="text-[2.25rem] xl:text-[2.6rem] font-bold leading-[1.15] tracking-tight text-zinc-900">
-            Controle inteligente<br />
-            de projetos,<br />
-            <span className="text-brand">prazos</span> e produtividade.
-          </h2>
-          <p className="mt-5 max-w-[300px] text-[13.5px] leading-relaxed text-zinc-500">
-            Sistema operacional interno para gestão de projetos de engenharia com rastreabilidade completa.
-          </p>
-          <ul className="mt-6 space-y-2.5">
-            {[
-              "Controle de status e prazos",
-              "Histórico completo de projetos",
-              "KPIs e indicadores em tempo real",
-              "Gestão de cadastros mestres",
-            ].map((feat) => (
-              <li key={feat} className="flex items-center gap-2.5 text-[12.5px] text-zinc-400">
-                <span className="h-1 w-1 flex-shrink-0 rounded-full bg-brand/50" />
-                {feat}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center gap-3 text-[11px] text-zinc-400">
+      {/* Footer */}
+      <div className="relative z-10 flex h-full flex-col justify-end p-10 xl:p-12">
+        <div className="flex items-center gap-3 text-[11px] text-white/60">
           <span>Pipeline de Projetos</span>
-          <span className="h-px w-5 bg-zinc-300" />
+          <span className="h-px w-5 bg-white/30" />
           <span>v1.0.0</span>
         </div>
       </div>
@@ -197,7 +142,7 @@ function InputField({
           disabled={disabled}
           autoComplete={autoComplete}
           className={cn(
-            "h-11 w-full rounded-xl border bg-white pl-10 text-[14px] text-zinc-900 outline-none transition-all duration-150 placeholder:text-zinc-300",
+            "h-[52px] w-full rounded-xl border bg-white pl-10 text-[14px] text-zinc-900 outline-none transition-all duration-150 placeholder:text-zinc-300",
             suffix ? "pr-10" : "pr-4",
             error
               ? "border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100"
@@ -287,44 +232,42 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      {/* Left brand panel — hidden on mobile/tablet */}
-      <BrandPanel />
+    <div className="relative h-screen w-full overflow-hidden">
 
-      {/* Right login area */}
-      <div className="flex flex-1 flex-col items-center justify-center bg-[#f5f6f8] p-6">
-        {/* Mobile-only brand header */}
-        <div className="mb-6 flex flex-col items-center lg:hidden">
-          <span
-            className="text-2xl font-bold tracking-[0.22em] text-brand"
-            style={{ fontFamily: "var(--font-rajdhani), sans-serif" }}
-          >
-            TSTECK
-          </span>
-          <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-            Engenharia Operacional
-          </span>
-        </div>
+      {/* ── Layer 1: Background image ── */}
+      <img
+        src="/Login.png"
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-[30%_top]"
+      />
 
-        {/* Login card */}
+      {/* ── Layer 2: Right-side strong gradient — apaga o painel Layers e cria zona limpa ── */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/45 to-white/85" />
+      {/* Extra fade no canto inferior direito (painel Layers) */}
+      <div className="pointer-events-none absolute bottom-0 right-0 h-[55%] w-[40%] bg-gradient-to-tl from-white/90 via-white/60 to-transparent" />
+
+      {/* ── Layer 3: Positioning shell ── */}
+      <div className="absolute inset-0 flex items-center justify-center lg:justify-end lg:pr-[8vw]">
         <div
-          className="w-full max-w-[420px]"
-          style={{ animation: "fadeScaleIn 280ms ease-out both" }}
+          className="w-full max-w-[480px] px-4 lg:px-0"
+          style={{ animation: "fadeScaleIn 280ms ease-out both", transform: "translateY(-20px)" }}
         >
-          <div className="rounded-2xl bg-white px-8 py-7 shadow-[0_4px_32px_-8px_rgba(0,0,0,0.12),0_1px_4px_rgba(0,0,0,0.04)]">
-            {/* Card header */}
+
+          {/* ── Card ── */}
+          <div className="min-h-0 rounded-[28px] border border-white/80 bg-white/[0.98] p-11 shadow-[0_20px_60px_rgba(0,0,0,0.13),0_2px_8px_rgba(0,0,0,0.06)] backdrop-blur-sm sm:min-h-[560px]">
+
+            {/* Header */}
             <div className="mb-7">
-              <span
-                className="hidden text-[1.1rem] font-bold tracking-[0.22em] text-brand lg:block"
-                style={{ fontFamily: "var(--font-rajdhani), sans-serif" }}
-              >
+              <span className="block text-[11px] font-bold uppercase tracking-[0.28em] text-[#9e0b0f]">
                 TSTECK
               </span>
-              <h1 className="mt-1.5 text-[1.2rem] font-semibold tracking-tight text-zinc-900">
+              <h1 className="mt-2 text-[1.75rem] font-bold leading-tight tracking-tight text-[#262626]">
                 Acessar sistema
               </h1>
-              <p className="mt-1 text-[13px] leading-relaxed text-zinc-400">
-                Entre com suas credenciais para acessar o Pipeline de Projetos.
+              <p className="mt-2 text-[13.5px] leading-relaxed text-[#6b7280]">
+                Entre com suas credenciais para acessar<br /> o Pipeline de Projetos.
               </p>
             </div>
 
@@ -343,15 +286,12 @@ export function LoginPage() {
             {/* Form */}
             <form onSubmit={handleSubmit} noValidate>
               <div className="space-y-4">
-                {/* Email / username */}
+                {/* Email */}
                 <InputField
                   id="login-email"
                   label="Usuário ou e-mail"
                   value={email}
-                  onChange={(v) => {
-                    setEmail(v);
-                    clearFieldError("email");
-                  }}
+                  onChange={(v) => { setEmail(v); clearFieldError("email"); }}
                   placeholder="usuario@tsteck.com"
                   icon={<User size={15} />}
                   error={fieldErrors.email}
@@ -362,16 +302,10 @@ export function LoginPage() {
                 {/* Password */}
                 <div>
                   <div className="mb-1.5 flex items-center justify-between">
-                    <label
-                      htmlFor="login-password"
-                      className="text-[13px] font-medium text-zinc-700"
-                    >
+                    <label htmlFor="login-password" className="text-[13px] font-medium text-[#262626]">
                       Senha
                     </label>
-                    <button
-                      type="button"
-                      className="text-[12px] text-zinc-400 transition hover:text-brand"
-                    >
+                    <button type="button" className="text-[12px] text-[#9e0b0f] transition hover:underline">
                       Esqueci minha senha
                     </button>
                   </div>
@@ -380,10 +314,7 @@ export function LoginPage() {
                     label=""
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={(v) => {
-                      setPassword(v);
-                      clearFieldError("password");
-                    }}
+                    onChange={(v) => { setPassword(v); clearFieldError("password"); }}
                     placeholder="••••••••"
                     icon={<Lock size={15} />}
                     error={fieldErrors.password}
@@ -405,56 +336,39 @@ export function LoginPage() {
               </div>
 
               {/* Remember me */}
-              <label className="mt-4 flex cursor-pointer select-none items-center gap-2 text-[13px] text-zinc-500">
+              <label className="mt-4 flex cursor-pointer select-none items-center gap-2.5 text-[13px] text-[#6b7280]">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="h-[15px] w-[15px] rounded border-zinc-300 accent-brand"
+                  className="h-4 w-4 rounded border-zinc-300 accent-[#9e0b0f]"
                   disabled={loading}
                 />
                 Manter conectado
               </label>
 
-              {/* Submit button */}
+              {/* Submit */}
               <button
                 type="submit"
                 disabled={loading}
                 className={cn(
-                  "mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-[14px] font-semibold text-white transition-all duration-150",
+                  "mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-white transition-all duration-150",
                   loading
-                    ? "cursor-not-allowed bg-brand/75"
-                    : "bg-brand hover:bg-brand-dark active:scale-[0.99]",
+                    ? "cursor-not-allowed bg-[#9e0b0f]/70"
+                    : "bg-[#9e0b0f] hover:bg-[#7f090c] active:scale-[0.99]",
                 )}
               >
                 {loading ? (
                   <>
-                    <svg
-                      className="h-4 w-4 animate-spin"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      aria-hidden="true"
-                    >
-                      <circle
-                        cx="12"
-                        cy="12"
-                        r="9"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        strokeOpacity="0.3"
-                      />
-                      <path
-                        d="M12 3a9 9 0 0 1 9 9"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                      />
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" strokeOpacity="0.3" />
+                      <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
                     </svg>
                     Entrando...
                   </>
                 ) : (
                   <>
-                    <LogIn size={15} />
+                    <LogIn size={16} />
                     Entrar
                   </>
                 )}
@@ -462,15 +376,14 @@ export function LoginPage() {
             </form>
 
             {/* Card footer */}
-            <p className="mt-6 text-center text-[11px] leading-relaxed text-zinc-400">
-              Acesso restrito aos usuários autorizados.
-              <br />
+            <p className="mt-7 text-center text-[12px] leading-relaxed text-[#6b7280]">
+              Acesso restrito aos usuários autorizados.<br />
               Ambiente interno TSTECK. O acesso é monitorado.
             </p>
           </div>
 
-          {/* Version tag */}
-          <p className="mt-4 text-center text-[11px] text-zinc-400/50">
+          {/* Version */}
+          <p className="mt-3.5 text-center text-[11px] text-zinc-500/60">
             v1.0.0 — Pipeline de Projetos
           </p>
         </div>
