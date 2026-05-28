@@ -16,7 +16,7 @@ describe("projects store", () => {
     const created = useProjectsStore
       .getState()
       .projects.find((project) => project.codigo_projeto === "UNIQUE-CODE-001");
-    expect(created?.status_atual).toBe("ELABORAR ANTE-PROJETO");
+    expect(created?.status_atual).toBe("CADASTRO INICIAL");
   });
 
   it("registra historico ao mover status", () => {

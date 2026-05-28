@@ -5,7 +5,7 @@ import { ProjectsPageShell } from "@/features/projects/components/projects-page-
 describe("projects page", () => {
   it("renderiza shell principal", () => {
     render(<ProjectsPageShell />);
-    expect(screen.getByText(/Pipeline de Projetos/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Novo Projeto/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Projetos$/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Novo projeto/i })).toBeInTheDocument();
   });
 });

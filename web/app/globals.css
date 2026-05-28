@@ -1,35 +1,63 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f3efe8;
-  --foreground: #1f2937;
-  --panel: #fffdf7;
+  --background: #f4f5f7;
+  --foreground: #262626;
+  --panel: #ffffff;
+  --panel-soft: #fafafb;
   --muted: #6b7280;
-  --brand: #0f766e;
-  --danger: #b91c1c;
-  --warn: #b45309;
-  --ok: #166534;
+  --brand: #9e0b0f;
+  --brand-dark: #6c070a;
+  --danger: #b42318;
+  --warn: #b54708;
+  --ok: #027a48;
+  --ring: #9e0b0f;
+  --line: #e4e7ec;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-panel: var(--panel);
+  --color-panel-soft: var(--panel-soft);
   --color-muted: var(--muted);
   --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
   --color-danger: var(--danger);
   --color-warn: var(--warn);
   --color-ok: var(--ok);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ring: var(--ring);
+  --color-line: var(--line);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+  --font-display: var(--font-rajdhani);
 }
 
 body {
   min-height: 100vh;
   background:
-    radial-gradient(circle at 20% 10%, #dbeafe 0%, transparent 40%),
-    radial-gradient(circle at 80% 30%, #fecaca 0%, transparent 35%),
-    linear-gradient(180deg, #fffdf8 0%, #f3efe8 60%, #ece5da 100%);
+    radial-gradient(circle at 2% -8%, rgb(158 11 15 / 8%) 0%, transparent 30%),
+    radial-gradient(circle at 98% 2%, rgb(38 38 38 / 5%) 0%, transparent 22%),
+    linear-gradient(165deg, #f9fafb 0%, #f5f6f8 45%, #eef0f3 100%);
   color: var(--foreground);
   font-family: var(--font-sans), "Segoe UI", sans-serif;
+}
+
+* {
+  border-color: var(--line);
+}
+
+::selection {
+  background-color: rgb(158 11 15 / 20%);
+}
+
+@keyframes fadeScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }

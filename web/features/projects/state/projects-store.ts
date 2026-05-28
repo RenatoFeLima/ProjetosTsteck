@@ -1,10 +1,9 @@
-"use client";
+﻿"use client";
 
 import { create } from "zustand";
 import { formatISO } from "date-fns";
 import { buildSeedProjects } from "@/features/projects/domain/project-seed";
 import {
-  applyAlignmentAutomation,
   computePrazoBadge,
   computePrazoEntrega,
   todayIsoDate,
@@ -18,12 +17,13 @@ import type {
   StatusHistoryItem,
 } from "@/features/projects/domain/project-types";
 
-export type ProjectsView = "table" | "kanban" | "alerts";
+export type ProjectsView = "table" | "kanban" | "kpis" | "alerts";
 
 type Filters = {
   search: string;
   status: "all" | ProjectStatus;
   construtora: string;
+  obra: string;
   vendedor: string;
   equipamento: string;
   atrasadoOnly: boolean;
@@ -72,7 +72,7 @@ function buildInitialHistory(projects: Project[]): StatusHistoryItem[] {
 
 function rankAlert(project: Project): number {
   if (project.urgente) return 0;
-  const badge = computePrazoBadge(todayIsoDate(), computePrazoEntrega(project.data_alinhamento));
+  const badge = computePrazoBadge(todayIsoDate(), computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido));
   if (badge === "atrasado") return 1;
   if (badge === "atencao") return 2;
   return 3;
@@ -89,6 +89,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     search: "",
     status: "all",
     construtora: "",
+    obra: "",
     vendedor: "",
     equipamento: "",
     atrasadoOnly: false,
@@ -111,12 +112,13 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
 
       if (filters.status !== "all" && project.status_atual !== filters.status) return false;
       if (filters.construtora && project.construtora !== filters.construtora) return false;
+      if (filters.obra && project.obra !== filters.obra) return false;
       if (filters.vendedor && project.vendedor !== filters.vendedor) return false;
       if (filters.equipamento && project.equipamento !== filters.equipamento) return false;
       if (filters.urgenteOnly && !project.urgente) return false;
 
       if (filters.atrasadoOnly) {
-        const badge = computePrazoBadge(todayIsoDate(), computePrazoEntrega(project.data_alinhamento));
+        const badge = computePrazoBadge(todayIsoDate(), computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido));
         if (badge !== "atrasado") return false;
       }
 
@@ -167,7 +169,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       alinhamento: input.alinhamento ?? false,
       data_lancamento: input.data_lancamento,
       data_alinhamento: input.data_alinhamento ?? null,
-      status_atual: "ELABORAR ANTE-PROJETO",
+      status_atual: "CADASTRO INICIAL",
       data_previsao: input.data_previsao ?? null,
       data_envio: null,
       data_aprovacao: null,
@@ -181,18 +183,6 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       created_at: now,
       updated_at: now,
     };
-
-    const alignment = applyAlignmentAutomation({
-      proj_obra_recebido: next.proj_obra_recebido,
-      local_cabine_definido: next.local_cabine_definido,
-      alinhamento: next.alinhamento,
-      data_alinhamento: next.data_alinhamento,
-    });
-
-    if (alignment.alinhamentoSuggested) {
-      next.alinhamento = true;
-      next.data_alinhamento = alignment.nextDataAlinhamento;
-    }
 
     set((state) => ({
       projects: [next, ...state.projects],
@@ -224,22 +214,33 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     }
 
     const merged = { ...current, ...patch } as Project;
-    const alignment = applyAlignmentAutomation({
-      proj_obra_recebido: merged.proj_obra_recebido,
-      local_cabine_definido: merged.local_cabine_definido,
-      alinhamento: merged.alinhamento,
-      data_alinhamento: merged.data_alinhamento,
-    });
 
-    if (alignment.alinhamentoSuggested) {
-      merged.alinhamento = true;
-      if (!merged.data_alinhamento) merged.data_alinhamento = alignment.nextDataAlinhamento;
+    if (current.status_atual !== "CADASTRO INICIAL" && merged.status_atual === "CADASTRO INICIAL") {
+      return {
+        ok: false,
+        error:
+          "Este projeto ja foi liberado para elaboracao de anteprojeto e nao pode retornar automaticamente para a fase inicial.",
+      };
     }
 
     set((state) => ({
       projects: state.projects.map((project) =>
         project.id === id ? { ...merged, updated_at: nowDate() } : project,
       ),
+      statusHistory:
+        current.status_atual !== merged.status_atual
+          ? [
+              {
+                id: crypto.randomUUID(),
+                projeto_id: id,
+                status_de: current.status_atual,
+                status_para: merged.status_atual,
+                alterado_em: nowDate(),
+                origem: "formulario",
+              },
+              ...state.statusHistory,
+            ]
+          : state.statusHistory,
     }));
 
     return { ok: true };

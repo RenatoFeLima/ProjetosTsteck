@@ -1,19 +1,25 @@
-import { computePrazoBadge, computePrazoEntrega, prazoLabel, todayIsoDate } from "@/features/projects/domain/project-rules";
+﻿import { computePrazoBadge, computePrazoEntrega, todayIsoDate } from "@/features/projects/domain/project-rules";
+import { differenceInCalendarDays, parseISO } from "date-fns";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
+import { format, isValid } from "date-fns";
+
+const BASE_BADGE_CLASS =
+  "inline-flex h-7 max-w-full items-center whitespace-nowrap overflow-hidden text-ellipsis rounded-full border px-2.5 text-[11px] font-semibold tracking-wide";
 
 export function StatusBadge({ status }: { status: ProjectStatus }) {
   const styleMap: Record<ProjectStatus, string> = {
-    "ELABORAR ANTE-PROJETO": "bg-sky-100 text-sky-700",
-    "ANTE-PROJETO ENVIADO": "bg-indigo-100 text-indigo-700",
-    "ANTE-PROJETO APROVADO": "bg-violet-100 text-violet-700",
-    "PROJETO APROVADO": "bg-amber-100 text-amber-700",
-    "PROJETO FINAL ENVIADO": "bg-emerald-100 text-emerald-700",
-    "REVISAO DE ESTUDO": "bg-orange-100 text-orange-700",
+    "CADASTRO INICIAL": "border-zinc-300 bg-zinc-100 text-zinc-700",
+    "ELABORAR ANTE-PROJETO": "border-sky-200 bg-sky-50 text-sky-700",
+    "ANTE-PROJETO ENVIADO": "border-violet-200 bg-violet-50 text-violet-700",
+    "ANTE-PROJETO APROVADO": "border-purple-200 bg-purple-50 text-purple-700",
+    "PROJETO APROVADO": "border-amber-200 bg-amber-50 text-amber-700",
+    "PROJETO FINAL ENVIADO": "border-emerald-200 bg-emerald-50 text-emerald-700",
+    "REVISAO DE ESTUDO": "border-orange-200 bg-orange-50 text-orange-700",
   };
 
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${styleMap[status]}`}>
-      {status}
+    <span title={status} className={`${BASE_BADGE_CLASS} max-w-[165px] ${styleMap[status]}`}>
+      <span className="truncate">{status}</span>
     </span>
   );
 }
@@ -21,27 +27,60 @@ export function StatusBadge({ status }: { status: ProjectStatus }) {
 export function UrgenteBadge({ urgente }: { urgente: boolean }) {
   if (!urgente) return null;
   return (
-    <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold tracking-wide text-white">
-      URGENTE
+    <span className={`${BASE_BADGE_CLASS} gap-1 border-red-200 bg-red-50 text-[#9e0b0f]`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-[#9e0b0f]" />
+      Urgente
     </span>
   );
 }
 
-export function PrazoBadge({ project }: { project: Project }) {
-  const prazo = computePrazoEntrega(project.data_alinhamento);
-  const badge = computePrazoBadge(todayIsoDate(), prazo);
-  const label = prazoLabel(todayIsoDate(), prazo);
+function formatDateLabel(isoDate: string | null): string {
+  if (!isoDate) return "";
+  const parsed = parseISO(isoDate);
+  if (!isValid(parsed)) return "";
+  return format(parsed, "dd/MM/yyyy");
+}
+
+function getDeadlineTooltip(delta: number | null, prazo: string | null): string {
+  if (!prazo || delta === null) return "Este projeto ainda nao possui prazo definido.";
+  if (delta < 0) {
+    const dueDateLabel = formatDateLabel(prazo);
+    return `Projeto atrasado ha ${Math.abs(delta)} dias. Prazo vencido em ${dueDateLabel}.`;
+  }
+  return `Faltam ${delta} dias para o prazo do projeto.`;
+}
+
+export function DeadlineBadge({ project }: { project: Project }) {
+  const today = todayIsoDate();
+  const prazo = computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido);
+  const badge = computePrazoBadge(today, prazo);
+  const delta = prazo ? differenceInCalendarDays(parseISO(prazo), parseISO(today)) : null;
+
+  const label =
+    delta === null
+      ? "Sem prazo"
+      : delta < 0
+        ? `${Math.abs(delta)}d atraso`
+        : `${delta}d restantes`;
+
+  const tooltip = getDeadlineTooltip(delta, prazo);
 
   const className =
     badge === "atrasado"
-      ? "bg-red-100 text-red-700"
-      : badge === "atencao"
-        ? "bg-yellow-100 text-yellow-700"
+      ? "border-red-300 bg-red-100 text-red-700"
+      : typeof delta === "number" && delta <= 7
+        ? "border-rose-200 bg-rose-50 text-rose-700"
+        : badge === "atencao"
+          ? "border-amber-200 bg-amber-50 text-amber-700"
         : badge === "no_prazo"
-          ? "bg-green-100 text-green-700"
-          : "bg-zinc-100 text-zinc-600";
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-zinc-200 bg-zinc-50 text-zinc-600";
 
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}>{label}</span>
+    <span title={tooltip} className={`${BASE_BADGE_CLASS} max-w-[120px] ${className}`}>
+      <span className="truncate">{label}</span>
+    </span>
   );
 }
+
+export const PrazoBadge = DeadlineBadge;
