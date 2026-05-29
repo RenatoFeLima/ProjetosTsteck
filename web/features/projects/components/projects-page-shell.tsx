@@ -14,8 +14,10 @@ import { ProjectStatusChangeDialog } from "./project-status-change-dialog";
 import { KpiDashboardErrorBoundary } from "./kpi-dashboard-error-boundary";
 import { PageContainer } from "./page-container";
 import { useProjectsStore } from "@/features/projects/state/projects-store";
+import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import { computePrazoBadge, computePrazoEntrega, todayIsoDate } from "@/features/projects/domain/project-rules";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
+import { sendProjectNotification } from "@/features/projects/services/project-notification-service";
 
 export function ProjectsPageShell() {
   const {
@@ -36,6 +38,16 @@ export function ProjectsPageShell() {
     isCodigoProjetoDuplicado,
     addObservation,
   } = useProjectsStore();
+
+  const { vendedores } = useMasterDataStore();
+
+  /** Retorna e-mail do vendedor pelo nome cadastrado. */
+  function getVendorEmail(vendedorName: string): string | undefined {
+    const found = vendedores.find(
+      (v) => v.name.toLowerCase().trim() === vendedorName.toLowerCase().trim() && v.active,
+    );
+    return found?.email?.trim() || undefined;
+  }
 
   const [modalOpen, setModalOpen] = useState(false);
   const [quickCreate, setQuickCreate] = useState(false);
@@ -159,6 +171,7 @@ export function ProjectsPageShell() {
     const project = statusChangeProject;
     if (!project) return;
 
+    const oldStatus = project.status_atual;
     const result = moveStatus(project.id, nextStatus, "acao-rapida");
     if (!result.ok) {
       notify(result.error ?? "Nao foi possivel alterar o status.");
@@ -168,7 +181,7 @@ export function ProjectsPageShell() {
     if (observation?.trim()) {
       addObservation(
         project.id,
-        `Mudanca de status via menu de acoes: ${project.status_atual} -> ${nextStatus}. Observacao: ${observation.trim()}`,
+        `Mudanca de status via menu de acoes: ${oldStatus} -> ${nextStatus}. Observacao: ${observation.trim()}`,
         "usuario.local",
       );
     }
@@ -176,6 +189,35 @@ export function ProjectsPageShell() {
     setStatusChangeProject(undefined);
     touchLastUpdated();
     notify("Status atualizado com sucesso.");
+
+    // Disparar e-mail ao vendedor (fire-and-forget)
+    const sellerEmail = getVendorEmail(project.vendedor);
+    if (sellerEmail) {
+      const isFinished = nextStatus === "PROJETO FINAL ENVIADO";
+      sendProjectNotification({
+        projectId: project.id,
+        projectCode: project.codigo_projeto,
+        constructorName: project.construtora,
+        workName: project.obra,
+        sellerName: project.vendedor,
+        sellerEmail,
+        oldStatus,
+        newStatus: nextStatus,
+        eventType: isFinished ? "PROJECT_FINISHED" : "STATUS_CHANGED",
+        changedBy: "usuario.local",
+        changedAt: new Date().toISOString(),
+        notes: observation?.trim() || undefined,
+      }).then((emailResult) => {
+        if (!emailResult.success) {
+          addObservation(project.id, `Falha ao enviar e-mail para [${sellerEmail}].`, "sistema");
+          notify("Status atualizado, mas não foi possível enviar o e-mail ao vendedor.");
+        } else {
+          addObservation(project.id, `E-mail enviado para [${sellerEmail}] sobre alteração de status.`, "sistema");
+        }
+      });
+    } else if (project.vendedor && project.vendedor !== "SEM VENDEDOR") {
+      addObservation(project.id, "E-mail não enviado: vendedor sem e-mail cadastrado.", "sistema");
+    }
   }
 
   function notify(message: string) {
@@ -198,6 +240,32 @@ export function ProjectsPageShell() {
 
     touchLastUpdated();
     notify("Projeto marcado como urgente.");
+
+    // Disparar e-mail ao vendedor (fire-and-forget)
+    const sellerEmail = getVendorEmail(target.vendedor);
+    if (sellerEmail) {
+      sendProjectNotification({
+        projectId: target.id,
+        projectCode: target.codigo_projeto,
+        constructorName: target.construtora,
+        workName: target.obra,
+        sellerName: target.vendedor,
+        sellerEmail,
+        newStatus: target.status_atual,
+        eventType: "MARKED_URGENT",
+        changedBy: payload.updatedBy,
+        changedAt: payload.updatedAt,
+        urgencyReason: payload.urgencyReason,
+      }).then((emailResult) => {
+        if (!emailResult.success) {
+          addObservation(target.id, `Falha ao enviar e-mail para [${sellerEmail}].`, "sistema");
+        } else {
+          addObservation(target.id, `E-mail enviado para [${sellerEmail}] sobre marcação de urgência.`, "sistema");
+        }
+      });
+    } else if (target.vendedor && target.vendedor !== "SEM VENDEDOR") {
+      addObservation(target.id, "E-mail não enviado: vendedor sem e-mail cadastrado.", "sistema");
+    }
   }
 
   function removeUrgent(project: Project) {
@@ -210,6 +278,29 @@ export function ProjectsPageShell() {
 
     touchLastUpdated();
     notify("Urgencia removida do projeto.");
+
+    // Disparar e-mail ao vendedor (fire-and-forget)
+    const sellerEmail = getVendorEmail(project.vendedor);
+    if (sellerEmail) {
+      sendProjectNotification({
+        projectId: project.id,
+        projectCode: project.codigo_projeto,
+        constructorName: project.construtora,
+        workName: project.obra,
+        sellerName: project.vendedor,
+        sellerEmail,
+        newStatus: project.status_atual,
+        eventType: "URGENCY_REMOVED",
+        changedBy: by,
+        changedAt: new Date().toISOString(),
+      }).then((emailResult) => {
+        if (!emailResult.success) {
+          addObservation(project.id, `Falha ao enviar e-mail para [${sellerEmail}].`, "sistema");
+        } else {
+          addObservation(project.id, `E-mail enviado para [${sellerEmail}] sobre remoção de urgência.`, "sistema");
+        }
+      });
+    }
   }
 
   function retryTableLoad() {
@@ -352,14 +443,43 @@ export function ProjectsPageShell() {
             notify={notify}
             onMoveStatus={(projectId, status, observation) => {
               const current = projects.find((item) => item.id === projectId);
+              const oldStatus = current?.status_atual;
               const result = moveStatus(projectId, status, "kanban");
 
               if (result.ok && current) {
                 const message = observation?.trim()
-                  ? `Mudanca de status via Kanban: ${current.status_atual} -> ${status}. Observacao: ${observation.trim()}`
-                  : `Mudanca de status via Kanban: ${current.status_atual} -> ${status}.`;
+                  ? `Mudanca de status via Kanban: ${oldStatus} -> ${status}. Observacao: ${observation.trim()}`
+                  : `Mudanca de status via Kanban: ${oldStatus} -> ${status}.`;
                 addObservation(projectId, message, "usuario.local");
                 touchLastUpdated();
+
+                // Disparar e-mail ao vendedor (fire-and-forget)
+                const sellerEmail = getVendorEmail(current.vendedor);
+                if (sellerEmail) {
+                  const isFinished = status === "PROJETO FINAL ENVIADO";
+                  sendProjectNotification({
+                    projectId: current.id,
+                    projectCode: current.codigo_projeto,
+                    constructorName: current.construtora,
+                    workName: current.obra,
+                    sellerName: current.vendedor,
+                    sellerEmail,
+                    oldStatus,
+                    newStatus: status,
+                    eventType: isFinished ? "PROJECT_FINISHED" : "STATUS_CHANGED",
+                    changedBy: "usuario.local",
+                    changedAt: new Date().toISOString(),
+                    notes: observation?.trim() || undefined,
+                  }).then((emailResult) => {
+                    if (!emailResult.success) {
+                      addObservation(projectId, `Falha ao enviar e-mail para [${sellerEmail}].`, "sistema");
+                    } else {
+                      addObservation(projectId, `E-mail enviado para [${sellerEmail}] sobre alteração de status.`, "sistema");
+                    }
+                  });
+                } else if (current.vendedor && current.vendedor !== "SEM VENDEDOR") {
+                  addObservation(projectId, "E-mail não enviado: vendedor sem e-mail cadastrado.", "sistema");
+                }
               }
 
               if (!result.ok) notify(result.error ?? "Falha na movimentacao");

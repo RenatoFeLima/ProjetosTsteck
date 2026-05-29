@@ -146,11 +146,11 @@ export function ProjectsTable({
       <div className="overflow-x-auto lg:overflow-visible rounded-3xl border border-line bg-white dark:bg-panel shadow-[0_18px_32px_-28px_rgba(0,0,0,0.6)]">
         <table className="w-full table-fixed text-sm">
           <colgroup>
-            <col style={{ width: "150px" }} />
+            <col style={{ width: "170px" }} />
             <col style={{ width: "auto" }} />
             <col style={{ width: "130px" }} />
-            <col style={{ width: "180px" }} />
-            <col style={{ width: "130px" }} />
+            <col style={{ width: "170px" }} />
+            <col style={{ width: "120px" }} />
             <col style={{ width: "110px" }} />
             <col style={{ width: "190px" }} />
             <col style={{ width: "60px" }} />
@@ -183,8 +183,8 @@ export function ProjectsTable({
               >
                 <td className="relative px-3 py-3 font-semibold text-zinc-900 dark:text-foreground whitespace-nowrap">
                   {project.urgente && <span className="absolute top-0 left-0 h-full w-[3px] rounded-r-full bg-[#9e0b0f]" />}
-                  <div title={project.codigo_projeto} className="inline-flex max-w-full items-center gap-2 rounded-lg border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-2 py-1 font-mono text-xs">
-                    <span className="truncate">{project.codigo_projeto}</span>
+                  <div title={project.codigo_projeto} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-2 py-1 font-mono text-xs">
+                    <span className="shrink-0">{project.codigo_projeto}</span>
                     <button
                       type="button"
                       title="Copiar codigo"
