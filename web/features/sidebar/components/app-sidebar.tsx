@@ -30,7 +30,7 @@ export function AppSidebar({ collapsed, onToggle, user, onIdentify, onLogout }: 
 
       {/* Navigation */}
       <nav
-        className="flex flex-1 flex-col gap-5 overflow-y-auto py-4 px-2"
+        className="flex flex-1 flex-col gap-5 overflow-y-auto py-4"
         aria-label="Navegação principal"
       >
         {NAV_GROUPS.map((group, i) => (

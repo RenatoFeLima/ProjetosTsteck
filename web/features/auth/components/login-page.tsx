@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, Eye, EyeOff, Lock, LogIn, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/features/user/hooks/use-current-user";
+import { MOCK_USER, validateCredentials } from "@/features/auth/lib/mock-auth";
 
 // ─── SVG: Engineering schematic decoration ───────────────────────────────────
 function TechnicalDecoration({ className }: { className?: string }) {
@@ -207,23 +208,16 @@ export function LoginPage() {
     setLoading(true);
 
     try {
-      // Simulate authentication delay
+      // Simula latência de autenticação
       await new Promise((resolve) => setTimeout(resolve, 1200));
 
-      // Derive display name from email/username
-      const raw = email.trim();
-      const displayName = raw.includes("@")
-        ? raw
-            .split("@")[0]
-            .replace(/[._-]+/g, " ")
-            .replace(/\b\w/g, (l) => l.toUpperCase())
-            .trim()
-        : raw
-            .replace(/[._-]+/g, " ")
-            .replace(/\b\w/g, (l) => l.toUpperCase())
-            .trim();
+      if (!validateCredentials(email.trim(), password)) {
+        setGlobalError("Usuário ou senha inválidos. Verifique os dados e tente novamente.");
+        setLoading(false);
+        return;
+      }
 
-      identify({ name: displayName || "Usuário TSTECK", role: "Admin" });
+      identify({ name: MOCK_USER.displayName, role: MOCK_USER.role });
       router.push("/");
     } catch {
       setGlobalError("Não foi possível conectar. Tente novamente.");
@@ -364,7 +358,7 @@ export function LoginPage() {
                       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" strokeOpacity="0.3" />
                       <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
                     </svg>
-                    Entrando...
+                    Acessando...
                   </>
                 ) : (
                   <>

@@ -61,3 +61,58 @@ body {
     transform: scale(1) translateY(0);
   }
 }
+
+/* ─── Page transition ─────────────────────────────────────────────────────── */
+@keyframes pageIn {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─── Microinterações globais ─────────────────────────────────────────────── */
+
+/* Transição suave em todos os elementos interativos */
+button,
+a,
+[role="button"],
+[role="tab"],
+[role="menuitem"] {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Inputs e selects */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  transition-property: border-color, box-shadow, background-color;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Cards com hover sutil */
+.card-hover {
+  transition: box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-hover:hover {
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+/* Botão primário — feedback de pressão */
+button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Scroll suave global */
+html {
+  scroll-behavior: smooth;
+}
+
