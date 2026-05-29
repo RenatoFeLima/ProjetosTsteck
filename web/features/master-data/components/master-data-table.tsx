@@ -43,7 +43,7 @@ export function MasterDataTable<T extends MasterEntity>({
           value={searchValue}
           onChange={(e) => onSearch(e.target.value)}
           placeholder={`Buscar ${entityLabel.toLowerCase()}...`}
-          className="h-10 flex-1 min-w-[200px] rounded-xl border border-line bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+          className="h-10 flex-1 min-w-[200px] rounded-xl border border-line bg-white dark:bg-panel-soft dark:text-foreground dark:placeholder:text-zinc-600 px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
           aria-label={`Buscar ${entityLabel}`}
         />
         <span className="text-sm text-zinc-500">
@@ -60,10 +60,10 @@ export function MasterDataTable<T extends MasterEntity>({
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-2xl border border-line bg-white">
+      <div className="overflow-hidden rounded-2xl border border-line bg-white dark:bg-panel">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-line bg-zinc-50">
+            <tr className="border-b border-line bg-zinc-50 dark:bg-panel-soft">
               {columns.map((col) => (
                 <th
                   key={String(col.key)}
@@ -93,11 +93,11 @@ export function MasterDataTable<T extends MasterEntity>({
                   key={item.id}
                   className={cn(
                     "border-b border-line transition-colors last:border-0",
-                    item.active ? "bg-white hover:bg-zinc-50" : "bg-zinc-50/60 opacity-60 hover:opacity-80",
+                    item.active ? "bg-white dark:bg-panel hover:bg-zinc-50 dark:hover:bg-white/5" : "bg-zinc-50/60 dark:bg-panel-soft/60 opacity-60 hover:opacity-80",
                   )}
                 >
                   {columns.map((col) => (
-                    <td key={String(col.key)} className="px-4 py-3 text-zinc-700">
+                    <td key={String(col.key)} className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
                       {col.render
                         ? col.render(item)
                         : String((item as Record<string, unknown>)[String(col.key)] ?? "")}
@@ -109,7 +109,7 @@ export function MasterDataTable<T extends MasterEntity>({
                         type="button"
                         title="Editar"
                         onClick={() => onEdit(item)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 transition hover:bg-zinc-100 dark:hover:bg-white/8 hover:text-zinc-900 dark:hover:text-foreground"
                       >
                         <Pencil size={14} />
                       </button>
@@ -120,7 +120,7 @@ export function MasterDataTable<T extends MasterEntity>({
                         className={cn(
                           "flex h-8 w-8 items-center justify-center rounded-lg transition",
                           item.active
-                            ? "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900"
+                            ? "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/8 hover:text-zinc-900 dark:hover:text-foreground"
                             : "text-ok hover:bg-ok/10",
                         )}
                       >

@@ -39,8 +39,8 @@ export function SidebarNavItem({ item, collapsed }: Props) {
         "group relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150",
         collapsed ? "justify-center px-0" : "",
         isActive
-          ? "bg-brand/8 text-brand"
-          : "text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800",
+          ? "bg-brand/8 dark:bg-brand/15 text-brand"
+          : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-white/5 hover:text-zinc-800 dark:hover:text-zinc-200",
       )}
       aria-current={isActive ? "page" : undefined}
     >
@@ -52,7 +52,7 @@ export function SidebarNavItem({ item, collapsed }: Props) {
         size={17}
         className={cn(
           "shrink-0 transition-colors",
-          isActive ? "text-brand" : "text-zinc-400 group-hover:text-zinc-600",
+          isActive ? "text-brand" : "text-zinc-400 dark:text-zinc-500 group-hover:text-zinc-600 dark:group-hover:text-zinc-300",
         )}
       />
       {!collapsed && (

@@ -89,13 +89,13 @@ export function ProjectsTable({
 
   if (state === "loading") {
     return (
-      <div className="grid gap-2 rounded-3xl border border-line bg-white p-4 shadow-[0_16px_30px_-24px_rgba(0,0,0,0.4)]">
-        <p className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-700">
+      <div className="grid gap-2 rounded-3xl border border-line bg-white dark:bg-panel p-4 shadow-[0_16px_30px_-24px_rgba(0,0,0,0.4)]">
+        <p className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-foreground">
           <LoaderCircle size={16} className="animate-spin" />
           Carregando pipeline...
         </p>
         {Array.from({ length: 5 }).map((_, index) => (
-          <div key={index} className="h-12 animate-pulse rounded-xl bg-zinc-100" />
+          <div key={index} className="h-12 animate-pulse rounded-xl bg-zinc-100 dark:bg-white/8" />
         ))}
       </div>
     );
@@ -113,7 +113,7 @@ export function ProjectsTable({
           <button
             type="button"
             onClick={onRetry}
-            className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700"
+            className="inline-flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-700/50 bg-white dark:bg-panel px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-300"
           >
             <RotateCcw size={14} />
             Tentar novamente
@@ -125,14 +125,14 @@ export function ProjectsTable({
 
   if (projects.length === 0) {
     return (
-      <div className="rounded-3xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500">
-        <p className="font-semibold text-zinc-700">Nenhum projeto corresponde aos filtros aplicados.</p>
+      <div className="rounded-3xl border border-dashed border-zinc-300 dark:border-white/15 bg-white dark:bg-panel p-10 text-center text-sm text-zinc-500 dark:text-muted">
+        <p className="font-semibold text-zinc-700 dark:text-foreground">Nenhum projeto corresponde aos filtros aplicados.</p>
         <p className="mt-1">Ajuste os filtros ou crie um novo projeto.</p>
         {onClearFilters && (
           <button
             type="button"
             onClick={onClearFilters}
-            className="mt-3 rounded-lg border border-line bg-white px-3 py-2 text-sm font-semibold text-zinc-700"
+            className="mt-3 rounded-lg border border-line bg-white dark:bg-panel-soft px-3 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300"
           >
             Limpar filtros
           </button>
@@ -143,7 +143,7 @@ export function ProjectsTable({
 
   return (
     <>
-      <div className="overflow-x-auto lg:overflow-visible rounded-3xl border border-line bg-white shadow-[0_18px_32px_-28px_rgba(0,0,0,0.6)]">
+      <div className="overflow-x-auto lg:overflow-visible rounded-3xl border border-line bg-white dark:bg-panel shadow-[0_18px_32px_-28px_rgba(0,0,0,0.6)]">
         <table className="w-full table-fixed text-sm">
           <colgroup>
             <col style={{ width: "150px" }} />
@@ -155,17 +155,17 @@ export function ProjectsTable({
             <col style={{ width: "190px" }} />
             <col style={{ width: "60px" }} />
           </colgroup>
-          <thead className="sticky top-0 z-10 bg-zinc-100/90 text-left text-xs tracking-wide text-zinc-600 uppercase backdrop-blur-sm">
+          <thead className="sticky top-0 z-10 bg-zinc-100/90 dark:bg-zinc-800/90 text-left text-xs tracking-wide text-zinc-600 dark:text-zinc-400 uppercase backdrop-blur-sm">
             <tr>
               {sortableHeaders.map((header) => (
                 <th key={header.key} className="px-3 py-2.5 whitespace-nowrap">
                   <button
                     type="button"
                     onClick={() => toggleSort(header.key)}
-                    className="inline-flex items-center gap-1 font-semibold text-zinc-600 transition hover:text-zinc-900"
+                    className="inline-flex items-center gap-1 font-semibold text-zinc-600 dark:text-zinc-400 transition hover:text-zinc-900 dark:hover:text-zinc-200"
                   >
                     {header.label}
-                    <ArrowDownWideNarrow size={13} className={sortKey === header.key ? "text-brand" : "text-zinc-400"} />
+                    <ArrowDownWideNarrow size={13} className={sortKey === header.key ? "text-brand" : "text-zinc-400 dark:text-zinc-600"} />
                   </button>
                 </th>
               ))}
@@ -178,12 +178,12 @@ export function ProjectsTable({
             {pageRows.map((project, index) => (
               <tr
                 key={project.id}
-                className={`group cursor-pointer border-t border-zinc-100 transition hover:bg-zinc-50 ${project.urgente ? "bg-red-50/40" : index % 2 === 0 ? "bg-white" : "bg-zinc-50/35"}`}
+                className={`group cursor-pointer border-t border-zinc-100 dark:border-white/5 transition hover:bg-zinc-50 dark:hover:bg-white/5 ${project.urgente ? "bg-red-50/40 dark:bg-red-900/10" : index % 2 === 0 ? "bg-white dark:bg-panel" : "bg-zinc-50/35 dark:bg-white/[0.02]"}`}
                 onClick={() => onViewDetails(project)}
               >
-                <td className="relative px-3 py-3 font-semibold text-zinc-900 whitespace-nowrap">
+                <td className="relative px-3 py-3 font-semibold text-zinc-900 dark:text-foreground whitespace-nowrap">
                   {project.urgente && <span className="absolute top-0 left-0 h-full w-[3px] rounded-r-full bg-[#9e0b0f]" />}
-                  <div title={project.codigo_projeto} className="inline-flex max-w-full items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 font-mono text-xs">
+                  <div title={project.codigo_projeto} className="inline-flex max-w-full items-center gap-2 rounded-lg border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-2 py-1 font-mono text-xs">
                     <span className="truncate">{project.codigo_projeto}</span>
                     <button
                       type="button"
@@ -192,17 +192,17 @@ export function ProjectsTable({
                         event.stopPropagation();
                         copyText(project.codigo_projeto);
                       }}
-                      className="rounded p-1 text-zinc-500 transition hover:bg-white hover:text-zinc-900"
+                      className="rounded p-1 text-zinc-500 dark:text-zinc-500 transition hover:bg-white dark:hover:bg-white/10 hover:text-zinc-900 dark:hover:text-zinc-200"
                     >
                       <Copy size={12} />
                     </button>
                   </div>
                 </td>
                 <td className="px-3 py-3 overflow-hidden">
-                  <div title={project.construtora} className="truncate font-semibold text-zinc-800">{project.construtora}</div>
-                  <div title={project.obra} className="truncate text-xs text-zinc-500">{project.obra}</div>
+                  <div title={project.construtora} className="truncate font-semibold text-zinc-800 dark:text-foreground">{project.construtora}</div>
+                  <div title={project.obra} className="truncate text-xs text-zinc-500 dark:text-muted">{project.obra}</div>
                 </td>
-                <td title={project.vendedor} className="px-3 py-3 text-zinc-700 whitespace-nowrap truncate">{project.vendedor}</td>
+                <td title={project.vendedor} className="px-3 py-3 text-zinc-700 dark:text-zinc-300 whitespace-nowrap truncate">{project.vendedor}</td>
                 <td className="px-3 py-3 whitespace-nowrap">
                   <StatusBadge status={project.status_atual} />
                 </td>
@@ -213,11 +213,11 @@ export function ProjectsTable({
                   {project.urgente ? (
                     <UrgenteBadge urgente={true} />
                   ) : (
-                    <span className="inline-flex h-7 items-center rounded-full border border-zinc-200 bg-zinc-50 px-2.5 text-[11px] font-semibold tracking-wide text-zinc-600 whitespace-nowrap">Normal</span>
+                    <span className="inline-flex h-7 items-center rounded-full border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-2.5 text-[11px] font-semibold tracking-wide text-zinc-600 dark:text-zinc-400 whitespace-nowrap">Normal</span>
                   )}
                 </td>
                 <td className="px-3 py-3 whitespace-nowrap">
-                  <span title={computeNextAction(project)} className="inline-flex h-7 max-w-[180px] items-center rounded-full border border-zinc-200 bg-zinc-50 px-2.5 text-[11px] font-semibold tracking-wide text-zinc-700 whitespace-nowrap overflow-hidden text-ellipsis">
+                  <span title={computeNextAction(project)} className="inline-flex h-7 max-w-[180px] items-center rounded-full border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-2.5 text-[11px] font-semibold tracking-wide text-zinc-700 dark:text-zinc-300 whitespace-nowrap overflow-hidden text-ellipsis">
                     {computeNextAction(project)}
                   </span>
                 </td>
@@ -229,7 +229,7 @@ export function ProjectsTable({
                           type="button"
                           aria-label="Abrir acoes do projeto"
                           onClick={(event) => event.stopPropagation()}
-                          className="rounded-lg border border-zinc-200 bg-white p-1.5 text-zinc-600 transition hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+                          className="rounded-lg border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel-soft p-1.5 text-zinc-600 dark:text-zinc-400 transition hover:text-zinc-900 dark:hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
                           title="Mais acoes"
                         >
                           <MoreHorizontal size={14} />
@@ -243,32 +243,32 @@ export function ProjectsTable({
                           collisionPadding={16}
                           avoidCollisions={true}
                           sticky="always"
-                          className="z-[120] min-w-[190px] rounded-xl border border-zinc-200 bg-white p-1 shadow-[0_20px_45px_-24px_rgba(0,0,0,0.45)]"
+                          className="z-[120] min-w-[190px] rounded-xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-1 shadow-[0_20px_45px_-24px_rgba(0,0,0,0.45)]"
                         >
                           <DropdownMenu.Group>
                             <DropdownMenu.Item
                               onSelect={() => onViewDetails(project)}
-                              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 outline-none hover:bg-zinc-100"
+                              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 dark:text-zinc-300 outline-none hover:bg-zinc-100 dark:hover:bg-white/8"
                             >
-                              <Eye size={14} className="text-zinc-500" />
+                              <Eye size={14} className="text-zinc-500 dark:text-zinc-500" />
                               Ver detalhes
                             </DropdownMenu.Item>
                             <DropdownMenu.Item
                               onSelect={() => onEditProject(project)}
-                              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 outline-none hover:bg-zinc-100"
+                              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 dark:text-zinc-300 outline-none hover:bg-zinc-100 dark:hover:bg-white/8"
                             >
-                              <PencilLine size={14} className="text-zinc-500" />
+                              <PencilLine size={14} className="text-zinc-500 dark:text-zinc-500" />
                               Editar projeto
                             </DropdownMenu.Item>
                           </DropdownMenu.Group>
-                          <DropdownMenu.Separator className="my-1 h-px bg-zinc-100" />
+                          <DropdownMenu.Separator className="my-1 h-px bg-zinc-100 dark:bg-white/8" />
                           <DropdownMenu.Group>
                             <DropdownMenu.Item
                               disabled={project.status_atual === "PROJETO FINAL ENVIADO"}
                               onSelect={() => onChangeStatus(project)}
-                              className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 outline-none hover:bg-zinc-100 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+                              className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 dark:text-zinc-300 outline-none hover:bg-zinc-100 dark:hover:bg-white/8 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
                             >
-                              <Workflow size={14} className="text-zinc-500" />
+                              <Workflow size={14} className="text-zinc-500 dark:text-zinc-500" />
                               Alterar status
                             </DropdownMenu.Item>
                             <DropdownMenu.Item
@@ -280,19 +280,19 @@ export function ProjectsTable({
                                 }
                                 setUrgencyDialogProject(project);
                               }}
-                              className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none hover:bg-zinc-100 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+                              className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none hover:bg-zinc-100 dark:hover:bg-white/8 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
                             >
                               <CircleDot size={14} className={project.urgente ? "text-amber-600" : "text-zinc-500"} />
                               {project.urgente ? "Remover urgencia" : "Marcar como urgente"}
                             </DropdownMenu.Item>
                           </DropdownMenu.Group>
-                          <DropdownMenu.Separator className="my-1 h-px bg-zinc-100" />
+                          <DropdownMenu.Separator className="my-1 h-px bg-zinc-100 dark:bg-white/8" />
                           <DropdownMenu.Group>
                             <DropdownMenu.Item
                               onSelect={() => onViewHistory(project)}
-                              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 outline-none hover:bg-zinc-100"
+                              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 dark:text-zinc-300 outline-none hover:bg-zinc-100 dark:hover:bg-white/8"
                             >
-                              <History size={14} className="text-zinc-500" />
+                              <History size={14} className="text-zinc-500 dark:text-zinc-500" />
                               Ver historico
                             </DropdownMenu.Item>
                           </DropdownMenu.Group>
@@ -306,10 +306,10 @@ export function ProjectsTable({
           </tbody>
         </table>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 px-3 py-3 text-sm">
-          <p className="text-zinc-600">Exibindo {start + 1}-{end} de {total} registros</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 dark:border-white/8 px-3 py-3 text-sm">
+          <p className="text-zinc-600 dark:text-zinc-400">Exibindo {start + 1}-{end} de {total} registros</p>
           <div className="flex items-center gap-2">
-            <label className="inline-flex items-center gap-2 text-zinc-600">
+            <label className="inline-flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
               Itens por pagina
               <select
                 value={pageSize}
@@ -317,7 +317,7 @@ export function ProjectsTable({
                   setPageSize(Number(event.target.value));
                   setPage(1);
                 }}
-                className="h-9 rounded-lg border border-line bg-white px-2"
+                className="h-9 rounded-lg border border-line bg-white dark:bg-panel-soft px-2 dark:text-foreground"
               >
                 {[10, 20, 30].map((size) => (
                   <option key={size} value={size}>{size}</option>
@@ -328,16 +328,16 @@ export function ProjectsTable({
               type="button"
               onClick={() => setPage((current) => Math.max(current - 1, 1))}
               disabled={safePage <= 1}
-              className="rounded-lg border border-line bg-white p-2 text-zinc-700 disabled:opacity-40"
+              className="rounded-lg border border-line bg-white dark:bg-panel-soft p-2 text-zinc-700 dark:text-zinc-400 disabled:opacity-40"
             >
               <ChevronLeft size={14} />
             </button>
-            <span className="min-w-12 text-center text-zinc-700">{safePage}/{totalPages}</span>
+            <span className="min-w-12 text-center text-zinc-700 dark:text-zinc-400">{safePage}/{totalPages}</span>
             <button
               type="button"
               onClick={() => setPage((current) => Math.min(current + 1, totalPages))}
               disabled={safePage >= totalPages}
-              className="rounded-lg border border-line bg-white p-2 text-zinc-700 disabled:opacity-40"
+              className="rounded-lg border border-line bg-white dark:bg-panel-soft p-2 text-zinc-700 dark:text-zinc-400 disabled:opacity-40"
             >
               <ChevronRight size={14} />
             </button>

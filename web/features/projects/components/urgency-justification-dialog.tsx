@@ -96,7 +96,7 @@ export function UrgencyJustificationDialog({
         aria-modal="true"
         aria-labelledby="urgency-title"
         aria-describedby="urgency-description"
-        className="w-full max-w-[640px] animate-[fadeScaleIn_150ms_ease-out] rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_32px_64px_-20px_rgba(0,0,0,0.35)]"
+        className="w-full max-w-[640px] animate-[fadeScaleIn_150ms_ease-out] rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-6 shadow-[0_32px_64px_-20px_rgba(0,0,0,0.35)]"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="mb-4 flex items-start gap-3">
@@ -104,20 +104,20 @@ export function UrgencyJustificationDialog({
             <AlertTriangle size={18} />
           </span>
           <div>
-            <h2 id="urgency-title" className="text-lg font-bold text-zinc-900">Justificar urgencia do projeto</h2>
-            <p id="urgency-description" className="mt-1 text-sm leading-relaxed text-zinc-600">
+            <h2 id="urgency-title" className="text-lg font-bold text-zinc-900 dark:text-foreground">Justificar urgencia do projeto</h2>
+            <p id="urgency-description" className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
               Informe o motivo pelo qual este projeto deve ser tratado como urgente. Essa justificativa ficara registrada no historico do projeto.
             </p>
           </div>
         </header>
 
-        <div className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50/70 p-3 text-sm">
-          <p><span className="font-semibold text-zinc-700">Projeto:</span> <span className="font-mono text-zinc-900">{project.codigo_projeto}</span></p>
-          <p><span className="font-semibold text-zinc-700">Construtora / Obra:</span> <span className="text-zinc-900">{project.construtora} / {project.obra}</span></p>
+        <div className="grid gap-3 rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50/70 dark:bg-panel-soft p-3 text-sm">
+          <p><span className="font-semibold text-zinc-700 dark:text-zinc-300">Projeto:</span> <span className="font-mono text-zinc-900 dark:text-foreground">{project.codigo_projeto}</span></p>
+          <p><span className="font-semibold text-zinc-700 dark:text-zinc-300">Construtora / Obra:</span> <span className="text-zinc-900 dark:text-foreground">{project.construtora} / {project.obra}</span></p>
         </div>
 
         <div className="mt-4">
-          <label htmlFor="urgency-reason" className="mb-1 block text-sm font-semibold text-zinc-800">Justificativa da urgencia</label>
+          <label htmlFor="urgency-reason" className="mb-1 block text-sm font-semibold text-zinc-800 dark:text-zinc-200">Justificativa da urgencia</label>
           <textarea
             id="urgency-reason"
             ref={textAreaRef}
@@ -125,7 +125,7 @@ export function UrgencyJustificationDialog({
             onBlur={() => setTouched(true)}
             onChange={(event) => setReason(event.target.value)}
             placeholder="Exemplo: cliente solicitou prioridade, obra com prazo critico, necessidade comercial, pendencia tecnica urgente..."
-            className={`min-h-28 w-full rounded-xl border bg-white p-3 text-sm outline-none transition ${showError ? "border-brand" : "border-zinc-300 focus:border-brand"}`}
+            className={`min-h-28 w-full rounded-xl border bg-white dark:bg-panel-soft dark:text-foreground dark:placeholder:text-zinc-600 p-3 text-sm outline-none transition ${showError ? "border-brand" : "border-zinc-300 dark:border-white/8 focus:border-brand"}`}
           />
           {showError && <p className="mt-1 text-xs font-medium text-brand">{helperText}</p>}
         </div>
@@ -135,7 +135,7 @@ export function UrgencyJustificationDialog({
             ref={cancelRef}
             type="button"
             onClick={handleCancel}
-            className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+            className="rounded-xl border border-zinc-300 dark:border-white/15 bg-white dark:bg-panel-soft px-4 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-50 dark:hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
           >
             Cancelar
           </button>

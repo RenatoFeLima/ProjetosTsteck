@@ -760,62 +760,62 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
 
   return (
     <div className="space-y-4">
-      <section className="rounded-3xl border border-line bg-white p-5 shadow-[0_16px_30px_-24px_rgba(0,0,0,0.4)]">
+      <section className="rounded-3xl border border-line bg-white dark:bg-panel p-5 shadow-[0_16px_30px_-24px_rgba(0,0,0,0.4)]">
         <div className="flex flex-wrap items-start gap-3">
           <div>
-            <h2 className="font-display text-2xl font-bold tracking-tight text-zinc-900">Dashboard de Projetos</h2>
-            <p className="mt-1 text-sm text-zinc-600">
+            <h2 className="font-display text-2xl font-bold tracking-tight text-zinc-900 dark:text-foreground">Dashboard de Projetos</h2>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               Acompanhamento de produtividade, prazos, status, urgencias e desempenho do fluxo de projetos.
             </p>
           </div>
-          <div className="ml-auto grid gap-1 text-xs text-zinc-600">
-            <p className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-1 font-semibold">
+          <div className="ml-auto grid gap-1 text-xs text-zinc-600 dark:text-zinc-400">
+            <p className="inline-flex items-center gap-1 rounded-full bg-zinc-100 dark:bg-white/8 px-2 py-1 font-semibold">
               <RefreshCcw size={12} /> Ultima atualizacao: {new Date().toLocaleString()}
             </p>
-            <p className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-1 font-semibold">
+            <p className="inline-flex items-center gap-1 rounded-full bg-zinc-100 dark:bg-white/8 px-2 py-1 font-semibold">
               <CalendarRange size={12} /> Periodo analisado: {periodLabel}
             </p>
-            <p className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-1 font-semibold">
+            <p className="inline-flex items-center gap-1 rounded-full bg-zinc-100 dark:bg-white/8 px-2 py-1 font-semibold">
               <BarChart3 size={12} /> Projetos considerados: {filteredProjects.length}
             </p>
           </div>
         </div>
       </section>
 
-      <section className="rounded-3xl border border-line bg-white p-5 shadow-[0_16px_30px_-24px_rgba(0,0,0,0.4)]">
+      <section className="rounded-3xl border border-line bg-white dark:bg-panel p-5 shadow-[0_16px_30px_-24px_rgba(0,0,0,0.4)]">
         <header className="mb-4 flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-bold text-zinc-900">Filtros analiticos</h3>
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-700">{filterCount} filtros aplicados</span>
-          <button type="button" onClick={clearFilters} className="ml-auto rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:border-zinc-300 hover:text-zinc-900">
+          <h3 className="text-sm font-bold text-zinc-900 dark:text-foreground">Filtros analiticos</h3>
+          <span className="rounded-full bg-zinc-100 dark:bg-white/8 px-2 py-0.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">{filterCount} filtros aplicados</span>
+          <button type="button" onClick={clearFilters} className="ml-auto rounded-lg border border-line bg-white dark:bg-panel-soft px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 transition hover:border-zinc-300 dark:hover:border-white/15 hover:text-zinc-900 dark:hover:text-foreground">
             Limpar filtros
           </button>
-          <button type="button" onClick={exportReport} className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand">
+          <button type="button" onClick={exportReport} className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 dark:bg-zinc-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand">
             <Download size={13} /> Exportar relatorio
           </button>
         </header>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <label className="rounded-2xl border border-line bg-zinc-50 p-3 text-xs">
-            <span className="mb-1 block font-semibold text-zinc-700">Periodo inicial</span>
+          <label className="rounded-2xl border border-line bg-zinc-50 dark:bg-panel-soft p-3 text-xs">
+            <span className="mb-1 block font-semibold text-zinc-700 dark:text-zinc-300">Periodo inicial</span>
             <div className="space-y-1">
               <input
                 type="date"
                 value={formatDateForInput(filters.periodStart)}
                 onChange={(event) => setFilters((prev) => ({ ...prev, periodStart: parseInputDate(event.target.value) }))}
-                className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+                className="h-11 w-full rounded-xl border border-line bg-white dark:bg-panel dark:text-foreground dark:placeholder:text-zinc-600 px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
               />
               <div className="flex gap-1.5 pt-0.5">
                 <button
                   type="button"
                   onClick={() => setFilters((prev) => ({ ...prev, periodStart: new Date() }))}
-                  className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-700 transition hover:border-zinc-300 hover:text-zinc-900"
+                  className="rounded-md border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel px-2.5 py-1 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 transition hover:border-zinc-300 dark:hover:border-white/15 hover:text-zinc-900 dark:hover:text-foreground"
                 >
                   Hoje
                 </button>
                 <button
                   type="button"
                   onClick={() => setFilters((prev) => ({ ...prev, periodStart: null }))}
-                  className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-700 transition hover:border-zinc-300 hover:text-zinc-900"
+                  className="rounded-md border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel px-2.5 py-1 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 transition hover:border-zinc-300 dark:hover:border-white/15 hover:text-zinc-900 dark:hover:text-foreground"
                 >
                   Limpar data
                 </button>
@@ -823,27 +823,27 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             </div>
           </label>
 
-          <label className="rounded-2xl border border-line bg-zinc-50 p-3 text-xs">
-            <span className="mb-1 block font-semibold text-zinc-700">Periodo final</span>
+          <label className="rounded-2xl border border-line bg-zinc-50 dark:bg-panel-soft p-3 text-xs">
+            <span className="mb-1 block font-semibold text-zinc-700 dark:text-zinc-300">Periodo final</span>
             <div className="space-y-1">
               <input
                 type="date"
                 value={formatDateForInput(filters.periodEnd)}
                 onChange={(event) => setFilters((prev) => ({ ...prev, periodEnd: parseInputDate(event.target.value) }))}
-                className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
+                className="h-11 w-full rounded-xl border border-line bg-white dark:bg-panel dark:text-foreground px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15"
               />
               <div className="flex gap-1.5 pt-0.5">
                 <button
                   type="button"
                   onClick={() => setFilters((prev) => ({ ...prev, periodEnd: new Date() }))}
-                  className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-700 transition hover:border-zinc-300 hover:text-zinc-900"
+                  className="rounded-md border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel px-2.5 py-1 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 transition hover:border-zinc-300 dark:hover:border-white/15 hover:text-zinc-900 dark:hover:text-foreground"
                 >
                   Hoje
                 </button>
                 <button
                   type="button"
                   onClick={() => setFilters((prev) => ({ ...prev, periodEnd: null }))}
-                  className="rounded-md border border-zinc-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-zinc-700 transition hover:border-zinc-300 hover:text-zinc-900"
+                  className="rounded-md border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel px-2.5 py-1 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 transition hover:border-zinc-300 dark:hover:border-white/15 hover:text-zinc-900 dark:hover:text-foreground"
                 >
                   Limpar data
                 </button>
@@ -851,8 +851,8 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             </div>
           </label>
 
-          <label className="rounded-2xl border border-line bg-zinc-50 p-3 text-xs">
-            <span className="mb-1 block font-semibold text-zinc-700">Status</span>
+          <label className="rounded-2xl border border-line bg-zinc-50 dark:bg-panel-soft p-3 text-xs">
+            <span className="mb-1 block font-semibold text-zinc-700 dark:text-zinc-300">Status</span>
             <SearchableCombobox
               value={filters.status}
               options={[{ value: "all", label: "Todos status" }, ...PROJECT_STATUSES.map((status) => ({ value: status, label: status }))]}
@@ -864,8 +864,8 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             />
           </label>
 
-          <label className="rounded-2xl border border-line bg-zinc-50 p-3 text-xs">
-            <span className="mb-1 block font-semibold text-zinc-700">Vendedor</span>
+          <label className="rounded-2xl border border-line bg-zinc-50 dark:bg-panel-soft p-3 text-xs">
+            <span className="mb-1 block font-semibold text-zinc-700 dark:text-zinc-300">Vendedor</span>
             <SearchableCombobox
               value={filters.vendedor}
               options={baseOptions.vendedores}
@@ -877,8 +877,8 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             />
           </label>
 
-          <label className="rounded-2xl border border-line bg-zinc-50 p-3 text-xs">
-            <span className="mb-1 block font-semibold text-zinc-700">Construtora</span>
+          <label className="rounded-2xl border border-line bg-zinc-50 dark:bg-panel-soft p-3 text-xs">
+            <span className="mb-1 block font-semibold text-zinc-700 dark:text-zinc-300">Construtora</span>
             <SearchableCombobox
               value={filters.construtora}
               options={baseOptions.construtoras}
@@ -890,8 +890,8 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             />
           </label>
 
-          <label className="rounded-2xl border border-line bg-zinc-50 p-3 text-xs">
-            <span className="mb-1 block font-semibold text-zinc-700">Obra</span>
+          <label className="rounded-2xl border border-line bg-zinc-50 dark:bg-panel-soft p-3 text-xs">
+            <span className="mb-1 block font-semibold text-zinc-700 dark:text-zinc-300">Obra</span>
             <SearchableCombobox
               value={filters.obra}
               options={baseOptions.obras}
@@ -903,8 +903,8 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             />
           </label>
 
-          <label className="rounded-2xl border border-line bg-zinc-50 p-3 text-xs">
-            <span className="mb-1 block font-semibold text-zinc-700">Equipamento</span>
+          <label className="rounded-2xl border border-line bg-zinc-50 dark:bg-panel-soft p-3 text-xs">
+            <span className="mb-1 block font-semibold text-zinc-700 dark:text-zinc-300">Equipamento</span>
             <SearchableCombobox
               value={filters.equipamento}
               options={baseOptions.equipamentos}
@@ -916,18 +916,18 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             />
           </label>
 
-          <label className="rounded-2xl border border-line bg-zinc-50 p-3 text-xs">
-            <span className="mb-1 block font-semibold text-zinc-700">Prioridade</span>
-            <select value={filters.prioridade} onChange={(event) => setFilters((prev) => ({ ...prev, prioridade: event.target.value as KpiFilterState["prioridade"] }))} className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15">
+          <label className="rounded-2xl border border-line bg-zinc-50 dark:bg-panel-soft p-3 text-xs">
+            <span className="mb-1 block font-semibold text-zinc-700 dark:text-zinc-300">Prioridade</span>
+            <select value={filters.prioridade} onChange={(event) => setFilters((prev) => ({ ...prev, prioridade: event.target.value as KpiFilterState["prioridade"] }))} className="h-11 w-full rounded-xl border border-line bg-white dark:bg-panel dark:text-foreground px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15">
               <option value="all">Todos</option>
               <option value="normal">Normal</option>
               <option value="urgente">Urgente</option>
             </select>
           </label>
 
-          <label className="rounded-2xl border border-line bg-zinc-50 p-3 text-xs">
-            <span className="mb-1 block font-semibold text-zinc-700">Situacao</span>
-            <select value={filters.situacao} onChange={(event) => setFilters((prev) => ({ ...prev, situacao: event.target.value as KpiFilterState["situacao"] }))} className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15">
+          <label className="rounded-2xl border border-line bg-zinc-50 dark:bg-panel-soft p-3 text-xs">
+            <span className="mb-1 block font-semibold text-zinc-700 dark:text-zinc-300">Situacao</span>
+            <select value={filters.situacao} onChange={(event) => setFilters((prev) => ({ ...prev, situacao: event.target.value as KpiFilterState["situacao"] }))} className="h-11 w-full rounded-xl border border-line bg-white dark:bg-panel dark:text-foreground px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15">
               <option value="all">Todos</option>
               <option value="dentro_prazo">Dentro do prazo</option>
               <option value="atrasado">Atrasado</option>
@@ -935,9 +935,9 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             </select>
           </label>
 
-          <label className="rounded-2xl border border-line bg-zinc-50 p-3 text-xs">
-            <span className="mb-1 block font-semibold text-zinc-700">Finalizados / Abertos</span>
-            <select value={filters.abertoFinalizado} onChange={(event) => setFilters((prev) => ({ ...prev, abertoFinalizado: event.target.value as KpiFilterState["abertoFinalizado"] }))} className="h-11 w-full rounded-xl border border-line bg-white px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15">
+          <label className="rounded-2xl border border-line bg-zinc-50 dark:bg-panel-soft p-3 text-xs">
+            <span className="mb-1 block font-semibold text-zinc-700 dark:text-zinc-300">Finalizados / Abertos</span>
+            <select value={filters.abertoFinalizado} onChange={(event) => setFilters((prev) => ({ ...prev, abertoFinalizado: event.target.value as KpiFilterState["abertoFinalizado"] }))} className="h-11 w-full rounded-xl border border-line bg-white dark:bg-panel dark:text-foreground px-3 text-sm outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15">
               <option value="all">Todos</option>
               <option value="abertos">Em aberto</option>
               <option value="finalizados">Finalizados</option>
@@ -974,21 +974,21 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       </section>
 
       {analytics.estimatedByFallback > 0 && (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+        <p className="rounded-xl border border-amber-200 dark:border-amber-700/40 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-300">
           Calculo estimado por ausencia de historico completo ({analytics.estimatedByFallback} projeto(s)).
         </p>
       )}
 
       <section className="grid gap-3 xl:grid-cols-2">
-        <article className="rounded-2xl border border-line bg-white p-3">
-          <h3 className="mb-2 text-sm font-bold text-zinc-900">Projetos por Status</h3>
-          <div className="h-72">
+        <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
+          <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Projetos por Status</h3>
+          <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={analytics.statusCounts}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="status" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={60} />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" className="[.light_&]:stroke-gray-200" />
+                <XAxis dataKey="status" tick={{ fontSize: 10, fill: 'currentColor' }} interval={0} angle={-15} textAnchor="end" height={60} />
+                <YAxis allowDecimals={false} tick={{ fill: 'currentColor' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--panel)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: 'var(--foreground)' }} />
                 <Bar
                   dataKey="total"
                   onClick={(entry) => {
@@ -1005,112 +1005,112 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
           </div>
         </article>
 
-        <article className="rounded-2xl border border-line bg-white p-3">
-          <h3 className="mb-2 text-sm font-bold text-zinc-900">Tempo Medio por Status (dias)</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+        <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
+          <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Tempo Medio por Status (dias)</h3>
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={analytics.avgByStatus} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis type="number" allowDecimals={false} />
-                <YAxis type="category" dataKey="status" width={150} tick={{ fontSize: 10 }} />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis type="number" allowDecimals={false} tick={{ fill: 'currentColor' }} />
+                <YAxis type="category" dataKey="status" width={150} tick={{ fontSize: 10, fill: 'currentColor' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--panel)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: 'var(--foreground)' }} />
                 <Bar dataKey="dias" fill="#262626" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </article>
 
-        <article className="rounded-2xl border border-line bg-white p-3">
-          <h3 className="mb-2 text-sm font-bold text-zinc-900">Evolucao Mensal (Criados vs Finalizados)</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+        <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
+          <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Evolucao Mensal (Criados vs Finalizados)</h3>
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <AreaChart data={analytics.monthly}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="mes" />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="mes" tick={{ fill: 'currentColor' }} />
+                <YAxis allowDecimals={false} tick={{ fill: 'currentColor' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--panel)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: 'var(--foreground)' }} />
                 <Legend />
-                <Area type="monotone" dataKey="criados" name="Criados" stroke="#262626" fill="#d4d4d8" />
-                <Area type="monotone" dataKey="finalizados" name="Finalizados" stroke="#9e0b0f" fill="#fecaca" />
+                <Area type="monotone" dataKey="criados" name="Criados" stroke="#a1a1aa" fill="rgba(161,161,170,0.25)" />
+                <Area type="monotone" dataKey="finalizados" name="Finalizados" stroke="#9e0b0f" fill="rgba(158,11,15,0.2)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </article>
 
-        <article className="rounded-2xl border border-line bg-white p-3">
-          <h3 className="mb-2 text-sm font-bold text-zinc-900">Projetos por Vendedor</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+        <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
+          <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Projetos por Vendedor</h3>
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={analytics.bySeller} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis type="number" allowDecimals={false} />
-                <YAxis dataKey="nome" type="category" width={100} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="totalProjetos" fill="#262626" radius={[0, 6, 6, 0]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis type="number" allowDecimals={false} tick={{ fill: 'currentColor' }} />
+                <YAxis dataKey="nome" type="category" width={100} tick={{ fontSize: 11, fill: 'currentColor' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--panel)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: 'var(--foreground)' }} />
+                <Bar dataKey="totalProjetos" fill="#6366f1" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </article>
 
-        <article className="rounded-2xl border border-line bg-white p-3">
-          <h3 className="mb-2 text-sm font-bold text-zinc-900">Projetos por Construtora</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+        <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
+          <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Projetos por Construtora</h3>
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={analytics.byConstrutora} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis type="number" allowDecimals={false} />
-                <YAxis dataKey="nome" type="category" width={120} tick={{ fontSize: 10 }} />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis type="number" allowDecimals={false} tick={{ fill: 'currentColor' }} />
+                <YAxis dataKey="nome" type="category" width={120} tick={{ fontSize: 10, fill: 'currentColor' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--panel)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: 'var(--foreground)' }} />
                 <Bar dataKey="totalProjetos" fill="#9e0b0f" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </article>
 
-        <article className="rounded-2xl border border-line bg-white p-3">
-          <h3 className="mb-2 text-sm font-bold text-zinc-900">Distribuicao de Prioridade</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+        <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
+          <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Distribuicao de Prioridade</h3>
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie data={analytics.priority} dataKey="total" nameKey="nome" outerRadius={96} label>
                   {analytics.priority.map((entry) => (
                     <Cell key={entry.nome} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--panel)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: 'var(--foreground)' }} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
           </div>
         </article>
 
-        <article className="rounded-2xl border border-line bg-white p-3">
-          <h3 className="mb-2 text-sm font-bold text-zinc-900">Situacao de Prazo</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+        <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
+          <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Situacao de Prazo</h3>
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie data={analytics.deadlineSituation} dataKey="total" nameKey="nome" innerRadius={40} outerRadius={96} label>
                   {analytics.deadlineSituation.map((entry) => (
                     <Cell key={entry.nome} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--panel)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: 'var(--foreground)' }} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
           </div>
         </article>
 
-        <article className="rounded-2xl border border-line bg-white p-3">
-          <h3 className="mb-2 text-sm font-bold text-zinc-900">Funil do Fluxo de Projetos</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
+        <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
+          <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Funil do Fluxo de Projetos</h3>
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={analytics.funnel}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis dataKey="etapa" tick={{ fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={60} />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="total" fill="#262626" radius={[6, 6, 0, 0]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="etapa" tick={{ fontSize: 10, fill: 'currentColor' }} interval={0} angle={-15} textAnchor="end" height={60} />
+                <YAxis allowDecimals={false} tick={{ fill: 'currentColor' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--panel)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: 'var(--foreground)' }} />
+                <Bar dataKey="total" fill="#6366f1" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -1118,43 +1118,43 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       </section>
 
       <section className="grid gap-3 xl:grid-cols-2">
-        <article className="rounded-2xl border border-line bg-white p-3">
-          <h3 className="mb-2 text-sm font-bold text-zinc-900">Gargalos do Fluxo</h3>
+        <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
+          <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Gargalos do Fluxo</h3>
           <div className="grid gap-2 sm:grid-cols-2">
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-              <p className="text-xs font-semibold text-zinc-500 uppercase">Maior gargalo</p>
-              <p className="mt-1 text-sm font-bold text-zinc-900">{analytics.bottleneck?.status ?? "N/D"}</p>
-              <p className="text-xs text-zinc-600">Tempo medio: {analytics.bottleneck ? `${analytics.bottleneck.dias.toFixed(1)} dias` : "N/D"}</p>
+            <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+              <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Maior gargalo</p>
+              <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-foreground">{analytics.bottleneck?.status ?? "N/D"}</p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">Tempo medio: {analytics.bottleneck ? `${analytics.bottleneck.dias.toFixed(1)} dias` : "N/D"}</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-              <p className="text-xs font-semibold text-zinc-500 uppercase">Status com maior acumulacao</p>
-              <p className="mt-1 text-sm font-bold text-zinc-900">{analytics.stacked?.status ?? "N/D"}</p>
-              <p className="text-xs text-zinc-600">Projetos: {analytics.stacked?.total ?? "N/D"}</p>
+            <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+              <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Status com maior acumulacao</p>
+              <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-foreground">{analytics.stacked?.status ?? "N/D"}</p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">Projetos: {analytics.stacked?.total ?? "N/D"}</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-              <p className="text-xs font-semibold text-zinc-500 uppercase">Projetos parados</p>
-              <p className="mt-1 text-sm font-bold text-zinc-900">{analytics.stalledProjects.length}</p>
-              <p className="text-xs text-zinc-600">Parados ha 10+ dias no status atual.</p>
+            <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+              <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Projetos parados</p>
+              <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-foreground">{analytics.stalledProjects.length}</p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">Parados ha 10+ dias no status atual.</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-              <p className="text-xs font-semibold text-zinc-500 uppercase">Urgentes sem avancar</p>
-              <p className="mt-1 text-sm font-bold text-zinc-900">{analytics.urgentStalled.length}</p>
-              <p className="text-xs text-zinc-600">Atualizacao ausente ha 7+ dias.</p>
+            <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+              <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Urgentes sem avancar</p>
+              <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-foreground">{analytics.urgentStalled.length}</p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">Atualizacao ausente ha 7+ dias.</p>
             </div>
           </div>
-          <p className="mt-2 rounded-lg border border-brand/20 bg-brand/5 px-2 py-1 text-xs font-medium text-zinc-700">
+          <p className="mt-2 rounded-lg border border-brand/20 bg-brand/5 px-2 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-300">
             Acao recomendada: revisar pendencias no status mais acumulado e priorizar projetos urgentes sem atualizacao.
           </p>
         </article>
 
-        <article className="rounded-2xl border border-line bg-white p-3">
-          <h3 className="mb-2 text-sm font-bold text-zinc-900">Insights do periodo</h3>
+        <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
+          <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Insights do periodo</h3>
           <div className="space-y-2">
             {analytics.insights.map((insight, index) => (
-              <p key={index} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700">{insight}</p>
+              <p key={index} className="rounded-lg border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300">{insight}</p>
             ))}
             {!analytics.insights.length && (
-              <p className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-4 text-sm text-zinc-500">
+              <p className="rounded-lg border border-dashed border-zinc-300 dark:border-white/15 bg-zinc-50 dark:bg-panel-soft px-3 py-4 text-sm text-zinc-500 dark:text-muted">
                 Nao ha dados suficientes para gerar insights neste periodo.
               </p>
             )}
@@ -1162,15 +1162,15 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
         </article>
       </section>
 
-      <section className="rounded-2xl border border-line bg-white p-3">
+      <section className="rounded-2xl border border-line bg-white dark:bg-panel p-3">
         <header className="mb-2 flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-bold text-zinc-900">Projetos que exigem atencao</h3>
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-700">{analytics.criticalRows.length} itens</span>
+          <h3 className="text-sm font-bold text-zinc-900 dark:text-foreground">Projetos que exigem atencao</h3>
+          <span className="rounded-full bg-zinc-100 dark:bg-white/8 px-2 py-0.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">{analytics.criticalRows.length} itens</span>
         </header>
 
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-zinc-100/80 text-xs tracking-wide text-zinc-600 uppercase">
+            <thead className="bg-zinc-100/80 dark:bg-zinc-800/90 text-xs tracking-wide text-zinc-600 dark:text-zinc-400 uppercase">
               <tr>
                 <th className="px-2 py-2 text-left">Codigo</th>
                 <th className="px-2 py-2 text-left">Construtora / Obra</th>
@@ -1185,16 +1185,16 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             </thead>
             <tbody>
               {analytics.criticalRows.map((row, index) => (
-                <tr key={`${row.project.id}-${index}`} className="border-t border-zinc-100 align-top">
-                  <td className="px-2 py-2 font-mono text-xs font-semibold text-zinc-900">{row.project.codigo_projeto}</td>
-                  <td className="px-2 py-2 text-xs text-zinc-700">{row.project.construtora} - {row.project.obra}</td>
-                  <td className="px-2 py-2 text-xs text-zinc-700">{row.project.vendedor}</td>
+                <tr key={`${row.project.id}-${index}`} className="border-t border-zinc-100 dark:border-white/5 align-top">
+                  <td className="px-2 py-2 font-mono text-xs font-semibold text-zinc-900 dark:text-foreground">{row.project.codigo_projeto}</td>
+                  <td className="px-2 py-2 text-xs text-zinc-700 dark:text-zinc-300">{row.project.construtora} - {row.project.obra}</td>
+                  <td className="px-2 py-2 text-xs text-zinc-700 dark:text-zinc-300">{row.project.vendedor}</td>
                   <td className="px-2 py-2"><StatusBadge status={row.project.status_atual} /></td>
                   <td className="px-2 py-2"><PrazoBadge project={row.project} /></td>
-                  <td className="px-2 py-2 text-xs font-semibold text-zinc-800">{row.diasNoStatus}</td>
+                  <td className="px-2 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200">{row.diasNoStatus}</td>
                   <td className="px-2 py-2"><UrgenteBadge urgente={row.project.urgente} /></td>
-                  <td className="px-2 py-2 text-xs text-zinc-700">{row.motivo}</td>
-                  <td className="px-2 py-2 text-xs text-zinc-700">{row.acao}</td>
+                  <td className="px-2 py-2 text-xs text-zinc-700 dark:text-zinc-300">{row.motivo}</td>
+                  <td className="px-2 py-2 text-xs text-zinc-700 dark:text-zinc-300">{row.acao}</td>
                 </tr>
               ))}
               {!analytics.criticalRows.length && (
@@ -1209,42 +1209,42 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
 
       {selectedStatus && drilldownStats && (
         <div className="fixed inset-0 z-[96] bg-black/45" onMouseDown={(event) => event.target === event.currentTarget && setSelectedStatus(null)}>
-          <aside className="ml-auto h-full w-full max-w-[680px] overflow-y-auto border-l border-line bg-white p-4 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
-            <header className="mb-3 flex items-center gap-2 border-b border-zinc-200 pb-2">
-              <ListChecks size={16} className="text-zinc-600" />
-              <h3 className="text-base font-bold text-zinc-900">Drill-down por status: {selectedStatus}</h3>
-              <button type="button" onClick={() => setSelectedStatus(null)} className="ml-auto rounded-lg border border-zinc-300 px-2 py-1 text-xs font-semibold text-zinc-700">Fechar</button>
+          <aside className="ml-auto h-full w-full max-w-[680px] overflow-y-auto border-l border-line bg-white dark:bg-panel p-4 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
+            <header className="mb-3 flex items-center gap-2 border-b border-zinc-200 dark:border-white/8 pb-2">
+              <ListChecks size={16} className="text-zinc-600 dark:text-zinc-400" />
+              <h3 className="text-base font-bold text-zinc-900 dark:text-foreground">Drill-down por status: {selectedStatus}</h3>
+              <button type="button" onClick={() => setSelectedStatus(null)} className="ml-auto rounded-lg border border-zinc-300 dark:border-white/15 bg-white dark:bg-panel-soft px-2 py-1 text-xs font-semibold text-zinc-700 dark:text-zinc-300">Fechar</button>
             </header>
 
             <div className="grid gap-2 sm:grid-cols-2">
-              <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-2 text-xs"><span className="font-semibold">Total:</span> {drilldownStats.total}</p>
-              <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-2 text-xs"><span className="font-semibold">Tempo medio:</span> {drilldownStats.avgDays !== null ? `${drilldownStats.avgDays.toFixed(1)} dias` : "N/D"}</p>
-              <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-2 text-xs"><span className="font-semibold">Urgentes:</span> {drilldownStats.urgentCount}</p>
-              <p className="rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-2 text-xs"><span className="font-semibold">Sem prazo:</span> {drilldownStats.noDeadline}</p>
+              <p className="rounded-lg border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-2 py-2 text-xs dark:text-zinc-300"><span className="font-semibold">Total:</span> {drilldownStats.total}</p>
+              <p className="rounded-lg border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-2 py-2 text-xs dark:text-zinc-300"><span className="font-semibold">Tempo medio:</span> {drilldownStats.avgDays !== null ? `${drilldownStats.avgDays.toFixed(1)} dias` : "N/D"}</p>
+              <p className="rounded-lg border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-2 py-2 text-xs dark:text-zinc-300"><span className="font-semibold">Urgentes:</span> {drilldownStats.urgentCount}</p>
+              <p className="rounded-lg border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-2 py-2 text-xs dark:text-zinc-300"><span className="font-semibold">Sem prazo:</span> {drilldownStats.noDeadline}</p>
             </div>
 
-            <h4 className="mt-3 mb-1 text-sm font-bold text-zinc-900">Projetos deste status</h4>
+            <h4 className="mt-3 mb-1 text-sm font-bold text-zinc-900 dark:text-foreground">Projetos deste status</h4>
             <div className="space-y-2">
               {drilldownProjects.map((project) => (
-                <article key={project.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-2.5">
+                <article key={project.id} className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-2.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-xs font-semibold text-zinc-900">{project.codigo_projeto}</span>
+                    <span className="font-mono text-xs font-semibold text-zinc-900 dark:text-foreground">{project.codigo_projeto}</span>
                     <UrgenteBadge urgente={project.urgente} />
                     <StatusBadge status={project.status_atual} />
                   </div>
-                  <p className="mt-1 text-xs text-zinc-700">{project.construtora} - {project.obra}</p>
-                  <p className="text-xs text-zinc-600">Dias no status: {daysInCurrentStatus(project, historyByProject, today)}</p>
-                  <p className="mt-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-600">Proxima acao: {computeNextAction(project)}</p>
+                  <p className="mt-1 text-xs text-zinc-700 dark:text-zinc-300">{project.construtora} - {project.obra}</p>
+                  <p className="text-xs text-zinc-600 dark:text-zinc-400">Dias no status: {daysInCurrentStatus(project, historyByProject, today)}</p>
+                  <p className="mt-1 rounded-md border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel px-2 py-1 text-xs text-zinc-600 dark:text-zinc-400">Proxima acao: {computeNextAction(project)}</p>
                 </article>
               ))}
             </div>
 
             {drilldownStats.oldest.length > 0 && (
               <>
-                <h4 className="mt-3 mb-1 text-sm font-bold text-zinc-900">Projetos mais antigos no status</h4>
+                <h4 className="mt-3 mb-1 text-sm font-bold text-zinc-900 dark:text-foreground">Projetos mais antigos no status</h4>
                 <ul className="space-y-1">
                   {drilldownStats.oldest.map((project) => (
-                    <li key={project.id} className="rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs text-zinc-700">
+                    <li key={project.id} className="rounded-md border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-2 py-1 text-xs text-zinc-700 dark:text-zinc-300">
                       {project.codigo_projeto} - {daysInCurrentStatus(project, historyByProject, today)} dias
                     </li>
                   ))}

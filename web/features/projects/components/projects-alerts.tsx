@@ -86,13 +86,13 @@ export function ProjectsAlerts({ projects, onOpen }: ProjectsAlertsProps) {
   return (
     <div className="grid gap-4">
       {groups.map((group) => (
-        <section key={group.key} className="rounded-2xl border border-line bg-white p-3 shadow-[0_12px_24px_-22px_rgba(0,0,0,0.45)]">
-          <header className="mb-3 flex items-center justify-between gap-2 border-b border-zinc-100 pb-2">
+        <section key={group.key} className="rounded-2xl border border-line bg-white dark:bg-panel p-3 shadow-[0_12px_24px_-22px_rgba(0,0,0,0.45)]">
+          <header className="mb-3 flex items-center justify-between gap-2 border-b border-zinc-100 dark:border-white/8 pb-2">
             <div>
-              <h3 className="text-sm font-bold text-zinc-900">{group.title}</h3>
-              <p className="text-xs text-zinc-500">{group.helper}</p>
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-foreground">{group.title}</h3>
+              <p className="text-xs text-zinc-500 dark:text-muted">{group.helper}</p>
             </div>
-            <span className="rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-700">
+            <span className="rounded-full border border-zinc-200 dark:border-white/8 bg-zinc-100 dark:bg-white/8 px-2 py-0.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
               {group.projects.length}
             </span>
           </header>
@@ -101,38 +101,38 @@ export function ProjectsAlerts({ projects, onOpen }: ProjectsAlertsProps) {
             {group.projects.map((project) => (
               <article
                 key={`${group.key}-${project.id}`}
-                className={`cursor-pointer rounded-xl border bg-white p-3 transition hover:-translate-y-0.5 hover:shadow-[0_16px_24px_-20px_rgba(0,0,0,0.45)] ${
-                  project.urgente ? "border-red-200" : "border-line"
+                className={`cursor-pointer rounded-xl border bg-white dark:bg-panel-soft p-3 transition hover:-translate-y-0.5 hover:shadow-[0_16px_24px_-20px_rgba(0,0,0,0.45)] ${
+                  project.urgente ? "border-red-200 dark:border-red-700/50" : "border-line"
                 }`}
                 onClick={() => onOpen(project)}
               >
                 <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-zinc-100 text-zinc-700">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-zinc-100 dark:bg-white/8 text-zinc-700 dark:text-zinc-300">
                     <BellRing size={14} />
                   </span>
-                  <strong className="font-display text-base tracking-tight text-zinc-900">{project.codigo_projeto}</strong>
+                  <strong className="font-display text-base tracking-tight text-zinc-900 dark:text-foreground">{project.codigo_projeto}</strong>
                   <UrgenteBadge urgente={project.urgente} />
                   <StatusBadge status={project.status_atual} />
                 </div>
 
-                <p className="text-sm text-zinc-700">
+                <p className="text-sm text-zinc-700 dark:text-zinc-300">
                   {project.construtora} - {project.obra}
                 </p>
 
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <PrazoBadge project={project} />
-                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 dark:border-amber-700/40 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
                     <Clock3 size={12} />
                     {group.title}
                   </span>
                 </div>
 
-                <div className="mt-2 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs text-zinc-600">
-                  <span className="font-semibold text-zinc-700">Proxima acao:</span> {computeNextAction(project)}
+                <div className="mt-2 rounded-lg border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel px-2 py-1 text-xs text-zinc-600 dark:text-zinc-400">
+                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">Proxima acao:</span> {computeNextAction(project)}
                 </div>
 
                 {(group.key === "urgent" || group.key === "overdue") && (
-                  <p className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-red-700">
+                  <p className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-red-700 dark:text-red-300">
                     <AlertTriangle size={12} />
                     Acao recomendada: tratar prioridade alta imediatamente.
                   </p>
@@ -144,7 +144,7 @@ export function ProjectsAlerts({ projects, onOpen }: ProjectsAlertsProps) {
       ))}
 
       {groups.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
+        <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-white/15 bg-white dark:bg-panel p-8 text-center text-sm text-zinc-500 dark:text-muted">
           Nenhum alerta para os filtros atuais.
         </div>
       )}

@@ -241,14 +241,14 @@ export function ProjectsPageShell() {
         {/* Header compacto */}
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-[1.05rem] font-semibold tracking-tight text-zinc-900">Projetos</h1>
-            <p className="mt-0.5 text-xs text-zinc-400">
+            <h1 className="text-[1.05rem] font-semibold tracking-tight text-zinc-900 dark:text-foreground">Projetos</h1>
+            <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
               Controle operacional dos projetos de engenharia
             </p>
           </div>
           <div className="flex items-center gap-3">
             {lastUpdatedAt && (
-              <span className="hidden text-[11px] text-zinc-400 sm:block">
+              <span className="hidden text-[11px] text-zinc-400 dark:text-zinc-500 sm:block">
                 Atualizado: {lastUpdatedAt}
               </span>
             )}
@@ -276,26 +276,26 @@ export function ProjectsPageShell() {
                 />
               </button>
               {newProjectDropOpen && (
-                <div className="absolute right-0 top-full z-50 mt-1.5 w-44 overflow-hidden rounded-xl border border-zinc-200/70 bg-white shadow-[0_8px_24px_-6px_rgba(0,0,0,0.14)]">
+                <div className="absolute right-0 top-full z-50 mt-1.5 w-44 overflow-hidden rounded-xl border border-zinc-200/70 dark:border-white/8 bg-white dark:bg-panel shadow-[0_8px_24px_-6px_rgba(0,0,0,0.14)]">
                   <button
                     type="button"
                     onClick={() => {
                       openQuickCreate();
                       setNewProjectDropOpen(false);
                     }}
-                    className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-zinc-700 transition hover:bg-zinc-50"
+                    className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-50 dark:hover:bg-white/5"
                   >
                     <Zap size={13} className="text-amber-500" />
                     Cadastro rápido
                   </button>
-                  <div className="mx-3 h-px bg-zinc-100" />
+                  <div className="mx-3 h-px bg-zinc-100 dark:bg-white/8" />
                   <button
                     type="button"
                     onClick={() => {
                       openCreate();
                       setNewProjectDropOpen(false);
                     }}
-                    className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-zinc-700 transition hover:bg-zinc-50"
+                    className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-50 dark:hover:bg-white/5"
                   >
                     <ClipboardList size={13} className="text-brand" />
                     Cadastro completo
@@ -379,7 +379,7 @@ export function ProjectsPageShell() {
         </section>
 
         {tableState === "error" && (
-          <section className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <section className="mt-6 rounded-2xl border border-red-200 dark:border-red-700/50 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300">
             <p className="inline-flex items-center gap-2 font-semibold">
               <AlertTriangle size={16} />
               Erro ao sincronizar dados locais desta visualizacao.

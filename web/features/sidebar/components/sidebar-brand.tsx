@@ -61,7 +61,7 @@ export function SidebarBrand({ collapsed, onToggle }: Props) {
             >
               TSTECK
             </span>
-            <span className="mt-0.5 text-[8.5px] font-semibold uppercase tracking-[0.18em] text-zinc-400 leading-tight truncate">
+            <span className="mt-0.5 text-[8.5px] font-semibold uppercase tracking-[0.18em] text-zinc-400 dark:text-zinc-600 leading-tight truncate">
               Engenharia Operacional
             </span>
           </div>
@@ -72,7 +72,7 @@ export function SidebarBrand({ collapsed, onToggle }: Props) {
         type="button"
         onClick={onToggle}
         className={cn(
-          "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-all duration-150 hover:bg-brand/10 hover:text-brand",
+          "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-zinc-400 dark:text-zinc-600 transition-all duration-150 hover:bg-brand/10 hover:text-brand dark:hover:bg-white/8 dark:hover:text-zinc-300",
           collapsed ? "absolute right-2 top-1/2 -translate-y-1/2" : "",
         )}
         aria-label={collapsed ? "Expandir menu" : "Recolher menu"}

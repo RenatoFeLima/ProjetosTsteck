@@ -49,32 +49,32 @@ export function ProjectStatusChangeDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="status-change-title"
-        className="w-full max-w-xl rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl"
+        className="w-full max-w-xl rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-6 shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="mb-3 flex items-start gap-3">
-          <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-700">
+          <span className="mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 dark:bg-white/8 text-zinc-700 dark:text-zinc-300">
             <ArrowRightLeft size={18} />
           </span>
           <div>
-            <h2 id="status-change-title" className="text-lg font-bold text-zinc-900">Alterar status do projeto</h2>
-            <p className="mt-1 text-sm text-zinc-600">Essa alteracao sera registrada no historico operacional.</p>
+            <h2 id="status-change-title" className="text-lg font-bold text-zinc-900 dark:text-foreground">Alterar status do projeto</h2>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Essa alteracao sera registrada no historico operacional.</p>
           </div>
         </header>
 
-        <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm">
+        <div className="space-y-3 rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3 text-sm">
           <p>
-            Projeto: <span className="font-mono font-semibold text-zinc-900">{project.codigo_projeto}</span>
+            Projeto: <span className="font-mono font-semibold text-zinc-900 dark:text-foreground">{project.codigo_projeto}</span>
           </p>
           <p>
-            Status atual: <span className="font-semibold text-zinc-900">{project.status_atual}</span>
+            Status atual: <span className="font-semibold text-zinc-900 dark:text-foreground">{project.status_atual}</span>
           </p>
           <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-600">Novo status</span>
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">Novo status</span>
             <select
               value={nextStatus}
               onChange={(event) => setNextStatus(event.target.value as ProjectStatus | "")}
-              className="h-10 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm"
+              className="h-10 w-full rounded-lg border border-zinc-300 dark:border-white/8 bg-white dark:bg-panel-soft dark:text-foreground px-3 text-sm"
             >
               <option value="">Selecione...</option>
               {statusOptions.map((status) => (
@@ -87,14 +87,14 @@ export function ProjectStatusChangeDialog({
         </div>
 
         <div className="mt-3">
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-600">
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
             Observacao {requiresObservation ? "(obrigatoria, minimo 10 caracteres)" : "(opcional)"}
           </label>
           <textarea
             value={observation}
             onChange={(event) => setObservation(event.target.value)}
             onBlur={() => setTouched(true)}
-            className="min-h-24 w-full rounded-xl border border-zinc-300 bg-white p-3 text-sm outline-none transition focus:border-brand"
+            className="min-h-24 w-full rounded-xl border border-zinc-300 dark:border-white/8 bg-white dark:bg-panel-soft dark:text-foreground dark:placeholder:text-zinc-600 p-3 text-sm outline-none transition focus:border-brand"
             placeholder="Descreva o contexto desta alteracao de status..."
           />
           {requiresObservation && touched && !observationValid && (
@@ -109,7 +109,7 @@ export function ProjectStatusChangeDialog({
               resetLocalState();
               onCancel();
             }}
-            className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700"
+            className="rounded-xl border border-zinc-300 dark:border-white/15 bg-white dark:bg-panel-soft px-4 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 dark:hover:bg-white/8"
           >
             Cancelar
           </button>

@@ -114,20 +114,20 @@ function FormField({
 
 function inputCls(hasError?: boolean) {
   return [
-    "w-full rounded-xl border bg-white px-3 py-2.5 text-sm text-zinc-900",
-    "placeholder-zinc-400 outline-none transition focus:ring-2",
+    "w-full rounded-xl border bg-white dark:bg-panel-soft px-3 py-2.5 text-sm text-zinc-900 dark:text-foreground",
+    "placeholder-zinc-400 dark:placeholder:text-zinc-600 outline-none transition focus:ring-2",
     hasError
       ? "border-red-300 focus:border-red-400 focus:ring-red-100"
-      : "border-zinc-200 focus:border-[#9e0b0f] focus:ring-[#9e0b0f]/10",
+      : "border-zinc-200 dark:border-white/8 focus:border-[#9e0b0f] focus:ring-[#9e0b0f]/10",
   ].join(" ");
 }
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-4 rounded-2xl border border-zinc-100 bg-zinc-50/60 p-4">
+    <section className="space-y-4 rounded-2xl border border-zinc-100 dark:border-white/8 bg-zinc-50/60 dark:bg-panel-soft p-4">
       <div className="flex items-center gap-2">
         <div className="h-4 w-1 shrink-0 rounded-full bg-[#9e0b0f]" />
-        <h3 className="text-sm font-bold text-zinc-900">{title}</h3>
+        <h3 className="text-sm font-bold text-zinc-900 dark:text-foreground">{title}</h3>
       </div>
       {children}
     </section>
@@ -402,34 +402,34 @@ export function ProjectDetailsDrawer({
         role="dialog"
         aria-modal="true"
         aria-label={isEdit ? `Editar projeto ${project.codigo_projeto}` : `Painel operacional ${project.codigo_projeto}`}
-        className="ml-auto flex h-full w-full max-w-[700px] flex-col border-l border-zinc-200 bg-white shadow-2xl"
+        className="ml-auto flex h-full w-full max-w-[700px] flex-col border-l border-zinc-200 dark:border-white/8 bg-white dark:bg-panel shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
       >
         {/* ── HEADER ─────────────────────────────────────────────────────── */}
         <header
           className={[
             "shrink-0 border-b px-5 py-4",
-            isEdit ? "border-amber-200 bg-amber-50/50" : "border-zinc-200 bg-white",
+            isEdit ? "border-amber-200 dark:border-amber-700/40 bg-amber-50/50 dark:bg-amber-900/15" : "border-zinc-200 dark:border-white/8 bg-white dark:bg-panel",
           ].join(" ")}
         >
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
               {isEdit ? (
                 <>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 dark:border-amber-700/40 bg-amber-100 dark:bg-amber-900/15 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
                     <PencilLine size={10} />
                     Modo edição
                   </span>
-                  <h2 className="mt-1 font-display text-xl font-bold text-zinc-900">Editar Projeto</h2>
-                  <p className="truncate text-sm text-zinc-500">
+                  <h2 className="mt-1 font-display text-xl font-bold text-zinc-900 dark:text-foreground">Editar Projeto</h2>
+                  <p className="truncate text-sm text-zinc-500 dark:text-muted">
                     {editForm.codigo_projeto || project.codigo_projeto} — {project.construtora} / {project.obra}
                   </p>
                 </>
               ) : (
                 <>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Painel Operacional</p>
-                  <h2 className="font-display text-xl font-bold tracking-tight text-zinc-900">{project.codigo_projeto}</h2>
-                  <p className="text-sm text-zinc-600">{project.construtora} / {project.obra}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Painel Operacional</p>
+                  <h2 className="font-display text-xl font-bold tracking-tight text-zinc-900 dark:text-foreground">{project.codigo_projeto}</h2>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">{project.construtora} / {project.obra}</p>
                 </>
               )}
             </div>
@@ -437,7 +437,7 @@ export function ProjectDetailsDrawer({
               type="button"
               aria-label="Fechar painel"
               onClick={handleClose}
-              className="ml-1 shrink-0 rounded-lg border border-zinc-200 bg-white p-2 text-zinc-500 transition hover:border-zinc-300 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9e0b0f]/40"
+              className="ml-1 shrink-0 rounded-lg border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel-soft p-2 text-zinc-500 dark:text-zinc-400 transition hover:border-zinc-300 dark:hover:border-white/15 hover:text-zinc-900 dark:hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9e0b0f]/40"
             >
               <X size={16} />
             </button>
@@ -460,12 +460,12 @@ export function ProjectDetailsDrawer({
                   Editar projeto
                 </button>
               </div>
-              <div className="mt-3 inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-1">
+              <div className="mt-3 inline-flex rounded-lg border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-1">
                 <button
                   type="button"
                   onClick={() => setViewSection("overview")}
                   className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
-                    viewSection === "overview" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-600"
+                    viewSection === "overview" ? "bg-white dark:bg-panel text-zinc-900 dark:text-foreground shadow-sm" : "text-zinc-600 dark:text-zinc-400"
                   }`}
                 >
                   Resumo
@@ -474,7 +474,7 @@ export function ProjectDetailsDrawer({
                   type="button"
                   onClick={() => setViewSection("history")}
                   className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${
-                    viewSection === "history" ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-600"
+                    viewSection === "history" ? "bg-white dark:bg-panel text-zinc-900 dark:text-foreground shadow-sm" : "text-zinc-600 dark:text-zinc-400"
                   }`}
                 >
                   Historico
@@ -488,7 +488,7 @@ export function ProjectDetailsDrawer({
               <button
                 type="button"
                 onClick={handleCancelEdit}
-                className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                className="rounded-lg border border-zinc-300 dark:border-white/15 bg-white dark:bg-panel-soft px-3 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-50 dark:hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
               >
                 Cancelar edição
               </button>
@@ -510,7 +510,7 @@ export function ProjectDetailsDrawer({
           {isEdit ? (
             /* ─────────────── EDIT FORM ─────────────────────────────────── */
             <div className="space-y-4 p-5">
-              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-medium text-amber-800">
+              <p className="rounded-xl border border-amber-200 dark:border-amber-700/40 bg-amber-50 dark:bg-amber-900/15 px-3 py-2.5 text-xs font-medium text-amber-800 dark:text-amber-300">
                 Atualize as informações cadastrais e operacionais deste projeto. Campos marcados com{" "}
                 <span className="font-bold text-[#9e0b0f]">*</span> são obrigatórios.
               </p>
@@ -630,24 +630,24 @@ export function ProjectDetailsDrawer({
               {/* Alinhamento */}
               <SectionCard title="Alinhamento">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-zinc-200 bg-white p-3 transition hover:border-zinc-300">
+                  <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3 transition hover:border-zinc-300 dark:hover:border-white/15">
                     <input
                       type="checkbox"
                       className="mt-0.5 h-4 w-4 rounded accent-[#9e0b0f]"
                       checked={Boolean(editForm.proj_obra_recebido)}
                       onChange={(e) => patchEdit({ proj_obra_recebido: e.target.checked })}
                     />
-                    <span className="text-sm font-medium text-zinc-800">Projeto de obra recebido</span>
+                    <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Projeto de obra recebido</span>
                   </label>
 
-                  <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-zinc-200 bg-white p-3 transition hover:border-zinc-300">
+                  <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3 transition hover:border-zinc-300 dark:hover:border-white/15">
                     <input
                       type="checkbox"
                       className="mt-0.5 h-4 w-4 rounded accent-[#9e0b0f]"
                       checked={Boolean(editForm.local_cabine_definido)}
                       onChange={(e) => patchEdit({ local_cabine_definido: e.target.checked })}
                     />
-                    <span className="text-sm font-medium text-zinc-800">Local da cabine definido</span>
+                    <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Local da cabine definido</span>
                   </label>
 
                   <div
@@ -660,8 +660,8 @@ export function ProjectDetailsDrawer({
                       className={[
                         "flex items-start gap-2.5 rounded-xl border p-3 transition",
                         prerequisitesReady
-                          ? "cursor-pointer border-emerald-200 bg-emerald-50/50 hover:border-emerald-300"
-                          : "cursor-not-allowed border-zinc-200 bg-white",
+                          ? "cursor-pointer border-emerald-200 dark:border-emerald-700/40 bg-emerald-50/50 dark:bg-emerald-900/15 hover:border-emerald-300 dark:hover:border-emerald-700/60"
+                          : "cursor-not-allowed border-zinc-200 dark:border-white/8 bg-white dark:bg-panel",
                       ].join(" ")}
                     >
                       <input
@@ -683,7 +683,7 @@ export function ProjectDetailsDrawer({
                         }}
                       />
                       <div>
-                        <span className="text-sm font-medium text-zinc-800">Alinhamento concluído</span>
+                        <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Alinhamento concluído</span>
                         {editForm.alinhamento && (
                           <span className="ml-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-600">
                             <Check size={11} /> Concluído
@@ -694,7 +694,7 @@ export function ProjectDetailsDrawer({
                   </div>
 
                   {!prerequisitesReady && (
-                    <p className="sm:col-span-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-500">
+                    <p className="sm:col-span-2 rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-3 py-2 text-xs text-zinc-500 dark:text-muted">
                       Para concluir o alinhamento, confirme o recebimento do projeto e a definição do local da cabine.
                     </p>
                   )}
@@ -712,7 +712,7 @@ export function ProjectDetailsDrawer({
 
               {/* Prioridade */}
               <SectionCard title="Prioridade">
-                <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-zinc-200 bg-white p-3 transition hover:border-zinc-300">
+                <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3 transition hover:border-zinc-300 dark:hover:border-white/15">
                   <input
                     type="checkbox"
                     className="mt-0.5 h-4 w-4 rounded accent-[#9e0b0f]"
@@ -720,8 +720,8 @@ export function ProjectDetailsDrawer({
                     onChange={(e) => patchEdit({ urgente: e.target.checked })}
                   />
                   <div>
-                    <span className="text-sm font-medium text-zinc-800">Marcar como urgente</span>
-                    <p className="mt-0.5 text-xs text-zinc-500">Prioriza o projeto na fila de atendimento.</p>
+                    <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Marcar como urgente</span>
+                    <p className="mt-0.5 text-xs text-zinc-500 dark:text-muted">Prioriza o projeto na fila de atendimento.</p>
                   </div>
                 </label>
               </SectionCard>
@@ -730,22 +730,22 @@ export function ProjectDetailsDrawer({
             /* ─────────────── VIEW MODE ──────────────────────────────────── */
             <div className="space-y-3 p-5">
               {isHistoryView ? (
-                <section className="rounded-2xl border border-zinc-200 bg-white p-3">
-                  <h3 className="mb-2 text-sm font-bold text-zinc-900">Timeline operacional completa</h3>
+                <section className="rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3">
+                  <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Timeline operacional completa</h3>
                   {timeline.length === 0 && (
-                    <p className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-3 py-4 text-sm text-zinc-500">
+                    <p className="rounded-xl border border-dashed border-zinc-300 dark:border-white/15 bg-zinc-50 dark:bg-panel-soft px-3 py-4 text-sm text-zinc-500 dark:text-muted">
                       Nenhum evento registrado ainda.
                     </p>
                   )}
                   <div className="space-y-2">
                     {timeline.map((item) => (
-                      <article key={item.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                        <p className="mb-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                      <article key={item.id} className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+                        <p className="mb-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
                           {item.kind === "status" ? <FileText size={12} /> : <MessageSquare size={12} />}
                           {item.title}
                         </p>
-                        <p className="text-sm text-zinc-700">{item.description}</p>
-                        <p className="mt-1 inline-flex items-center gap-1 text-xs text-zinc-500">
+                        <p className="text-sm text-zinc-700 dark:text-zinc-300">{item.description}</p>
+                        <p className="mt-1 inline-flex items-center gap-1 text-xs text-zinc-500 dark:text-muted">
                           <Clock3 size={12} />
                           {new Date(item.when).toLocaleString()}
                         </p>
@@ -755,67 +755,67 @@ export function ProjectDetailsDrawer({
                 </section>
               ) : (
                 <>
-              <section className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
-                <h3 className="mb-2 text-sm font-bold text-zinc-900">Próxima ação recomendada</h3>
-                <p className="text-sm font-semibold text-zinc-700">{computeNextAction(project)}</p>
+              <section className="rounded-2xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+                <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Próxima ação recomendada</h3>
+                <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{computeNextAction(project)}</p>
               </section>
 
               {kpis && (
-                <section className="rounded-2xl border border-zinc-200 bg-white p-3">
-                  <h3 className="mb-2 text-sm font-bold text-zinc-900">KPIs operacionais</h3>
+                <section className="rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3">
+                  <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">KPIs operacionais</h3>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    <article className="rounded-xl border border-zinc-200 bg-zinc-50 p-2.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Tempo no status atual</p>
-                      <p className="mt-1 text-base font-bold text-zinc-900">{kpis.diasNoStatusAtual} dias</p>
-                      <p className="text-xs text-zinc-600">Meta: {kpis.slaTargetDias} dias</p>
+                    <article className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-2.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-muted">Tempo no status atual</p>
+                      <p className="mt-1 text-base font-bold text-zinc-900 dark:text-foreground">{kpis.diasNoStatusAtual} dias</p>
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400">Meta: {kpis.slaTargetDias} dias</p>
                     </article>
-                    <article className="rounded-xl border border-zinc-200 bg-zinc-50 p-2.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">SLA status</p>
+                    <article className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-2.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-muted">SLA status</p>
                       <p
                         className={[
                           "mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-bold",
                           kpis.slaState === "ok"
                             ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                             : kpis.slaState === "atencao"
-                              ? "border-amber-200 bg-amber-50 text-amber-700"
-                              : "border-red-200 bg-red-50 text-red-700",
+                              ? "border-amber-200 dark:border-amber-700/40 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300"
+                              : "border-red-200 dark:border-red-700/50 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300",
                         ].join(" ")}
                       >
                         {kpis.slaState === "ok" ? "Dentro do SLA" : kpis.slaState === "atencao" ? "SLA em atenção" : "SLA estourado"}
                       </p>
-                      <p className="mt-1 text-xs text-zinc-600">
+                      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
                         {kpis.slaRestanteDias >= 0
                           ? `${kpis.slaRestanteDias} dias restantes`
                           : `${Math.abs(kpis.slaRestanteDias)} dias de estouro`}
                       </p>
                     </article>
-                    <article className="rounded-xl border border-zinc-200 bg-zinc-50 p-2.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Dias desde cadastro</p>
-                      <p className="mt-1 text-base font-bold text-zinc-900">{kpis.diasDesdeCadastro} dias</p>
+                    <article className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-2.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-muted">Dias desde cadastro</p>
+                      <p className="mt-1 text-base font-bold text-zinc-900 dark:text-foreground">{kpis.diasDesdeCadastro} dias</p>
                     </article>
-                    <article className="rounded-xl border border-zinc-200 bg-zinc-50 p-2.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Dias sem atualização</p>
-                      <p className="mt-1 text-base font-bold text-zinc-900">{kpis.diasSemAtualizacao} dias</p>
+                    <article className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-2.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-muted">Dias sem atualização</p>
+                      <p className="mt-1 text-base font-bold text-zinc-900 dark:text-foreground">{kpis.diasSemAtualizacao} dias</p>
                     </article>
                   </div>
                 </section>
               )}
 
-              <section className="grid gap-2 rounded-2xl border border-zinc-200 bg-white p-3 text-sm md:grid-cols-2">
-                <h3 className="text-sm font-bold text-zinc-900 md:col-span-2">Resumo rápido</h3>
+              <section className="grid gap-2 rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3 text-sm dark:text-zinc-300 md:grid-cols-2">
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-foreground md:col-span-2">Resumo rápido</h3>
                 <p><span className="font-semibold">Vendedor:</span> {project.vendedor}</p>
                 <p><span className="font-semibold">Equipamento:</span> {project.equipamento}</p>
                 <p><span className="font-semibold">Engenheiro:</span> {project.engenheiro_nome || "Não informado"}</p>
                 <p><span className="font-semibold">Lançamento:</span> {new Date(project.data_lancamento).toLocaleDateString()}</p>
               </section>
 
-              <section className="rounded-2xl border border-zinc-200 bg-white p-3">
-                <h3 className="mb-2 text-sm font-bold text-zinc-900">Adicionar observação rápida</h3>
+              <section className="rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3">
+                <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Adicionar observação rápida</h3>
                 <textarea
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
                   placeholder="Registrar contexto, bloqueios ou próxima tratativa..."
-                  className="min-h-24 w-full rounded-xl border border-zinc-300 bg-white p-3 text-sm outline-none transition focus:border-[#9e0b0f]"
+                  className="min-h-24 w-full rounded-xl border border-zinc-300 dark:border-white/8 bg-white dark:bg-panel-soft dark:text-foreground dark:placeholder:text-zinc-600 p-3 text-sm outline-none transition focus:border-[#9e0b0f]"
                 />
                 <div className="mt-2 flex justify-end">
                   <button
@@ -829,22 +829,22 @@ export function ProjectDetailsDrawer({
                 </div>
               </section>
 
-              <section className="rounded-2xl border border-zinc-200 bg-white p-3">
-                <h3 className="mb-2 text-sm font-bold text-zinc-900">Timeline operacional</h3>
+              <section className="rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3">
+                <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Timeline operacional</h3>
                 {timeline.length === 0 && (
-                  <p className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-3 py-4 text-sm text-zinc-500">
+                  <p className="rounded-xl border border-dashed border-zinc-300 dark:border-white/15 bg-zinc-50 dark:bg-panel-soft px-3 py-4 text-sm text-zinc-500 dark:text-muted">
                     Nenhum evento registrado ainda.
                   </p>
                 )}
                 <div className="space-y-2">
                   {timeline.map((item) => (
-                    <article key={item.id} className="rounded-xl border border-zinc-200 bg-zinc-50 p-3">
-                      <p className="mb-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-zinc-600">
+                    <article key={item.id} className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+                      <p className="mb-1 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
                         {item.kind === "status" ? <FileText size={12} /> : <MessageSquare size={12} />}
                         {item.title}
                       </p>
-                      <p className="text-sm text-zinc-700">{item.description}</p>
-                      <p className="mt-1 inline-flex items-center gap-1 text-xs text-zinc-500">
+                      <p className="text-sm text-zinc-700 dark:text-zinc-300">{item.description}</p>
+                      <p className="mt-1 inline-flex items-center gap-1 text-xs text-zinc-500 dark:text-muted">
                         <Clock3 size={12} />
                         {new Date(item.when).toLocaleString()}
                       </p>
@@ -882,13 +882,13 @@ export function ProjectDetailsDrawer({
             role="dialog"
             aria-modal="true"
             aria-labelledby="align-confirm-title"
-            className="w-full max-w-lg animate-[fadeScaleIn_150ms_ease-out] rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl"
+            className="w-full max-w-lg animate-[fadeScaleIn_150ms_ease-out] rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-6 shadow-2xl"
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <h3 id="align-confirm-title" className="text-lg font-bold text-zinc-900">
+            <h3 id="align-confirm-title" className="text-lg font-bold text-zinc-900 dark:text-foreground">
               Confirmar alinhamento concluído?
             </h3>
-            <p className="mt-2 text-sm text-zinc-600">
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
               Ao confirmar, este projeto será liberado para a equipe de projetos e o status será alterado automaticamente para{" "}
               <strong>ELABORAR ANTE-PROJETO</strong>. Essa ação indica que a documentação e a localização da cabine foram validadas.
             </p>
@@ -896,7 +896,7 @@ export function ProjectDetailsDrawer({
               <button
                 type="button"
                 onClick={() => setConfirmAlignOpen(false)}
-                className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                className="rounded-xl border border-zinc-300 dark:border-white/15 bg-white dark:bg-panel-soft px-4 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-50 dark:hover:bg-white/8"
               >
                 Cancelar
               </button>
@@ -919,7 +919,7 @@ export function ProjectDetailsDrawer({
             aria-modal="true"
             aria-labelledby="confirm-edit-title"
             aria-describedby="confirm-edit-description"
-            className="w-full max-w-lg animate-[fadeScaleIn_150ms_ease-out] rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl"
+            className="w-full max-w-lg animate-[fadeScaleIn_150ms_ease-out] rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-6 shadow-2xl"
             onMouseDown={(e) => e.stopPropagation()}
           >
             <header className="mb-4 flex items-start gap-3">
@@ -927,16 +927,16 @@ export function ProjectDetailsDrawer({
                 <Check size={18} />
               </span>
               <div>
-                <h3 id="confirm-edit-title" className="text-lg font-bold text-zinc-900">
+                <h3 id="confirm-edit-title" className="text-lg font-bold text-zinc-900 dark:text-foreground">
                   Confirmar alterações?
                 </h3>
-                <p id="confirm-edit-description" className="mt-1 text-sm text-zinc-600">
+                <p id="confirm-edit-description" className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                   Revise os dados antes de atualizar este projeto.
                 </p>
               </div>
             </header>
 
-            <div className="space-y-1.5 rounded-xl border border-zinc-100 bg-zinc-50 p-3 text-sm">
+            <div className="space-y-1.5 rounded-xl border border-zinc-100 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3 text-sm">
               {[
                 ["Construtora", editForm.construtora],
                 ["Obra", editForm.obra],
@@ -945,8 +945,8 @@ export function ProjectDetailsDrawer({
                 ["Equipamento", editForm.equipamento],
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between gap-4">
-                  <span className="text-zinc-500">{label}</span>
-                  <span className="font-medium text-zinc-800">{value || "—"}</span>
+                  <span className="text-zinc-500 dark:text-muted">{label}</span>
+                  <span className="font-medium text-zinc-800 dark:text-zinc-200">{value || "—"}</span>
                 </div>
               ))}
             </div>
@@ -955,7 +955,7 @@ export function ProjectDetailsDrawer({
               <button
                 type="button"
                 onClick={() => setConfirmSaveOpen(false)}
-                className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+                className="rounded-xl border border-zinc-300 dark:border-white/15 bg-white dark:bg-panel-soft px-4 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-50 dark:hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
               >
                 Continuar editando
               </button>

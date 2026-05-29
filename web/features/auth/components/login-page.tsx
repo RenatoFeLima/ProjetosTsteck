@@ -5,95 +5,6 @@ import { useRouter } from "next/navigation";
 import { AlertCircle, Eye, EyeOff, Lock, LogIn, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/features/user/hooks/use-current-user";
-import { MOCK_USER, validateCredentials } from "@/features/auth/lib/mock-auth";
-
-// ─── SVG: Engineering schematic decoration ───────────────────────────────────
-function TechnicalDecoration({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 520 520"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      aria-hidden="true"
-    >
-      {/* Outer boundary */}
-      <rect x="60" y="60" width="400" height="400" stroke="rgb(158 11 15 / 0.09)" strokeWidth="1" />
-      {/* Inner rectangle */}
-      <rect x="130" y="130" width="260" height="260" stroke="rgb(158 11 15 / 0.07)" strokeWidth="0.75" />
-      {/* Cross hairlines */}
-      <line x1="60" y1="260" x2="460" y2="260" stroke="rgb(158 11 15 / 0.07)" strokeWidth="0.5" />
-      <line x1="260" y1="60" x2="260" y2="460" stroke="rgb(158 11 15 / 0.07)" strokeWidth="0.5" />
-      {/* Outer stub lines */}
-      <line x1="60" y1="160" x2="130" y2="160" stroke="rgb(158 11 15 / 0.06)" strokeWidth="0.5" />
-      <line x1="390" y1="160" x2="460" y2="160" stroke="rgb(158 11 15 / 0.06)" strokeWidth="0.5" />
-      <line x1="60" y1="360" x2="130" y2="360" stroke="rgb(158 11 15 / 0.06)" strokeWidth="0.5" />
-      <line x1="390" y1="360" x2="460" y2="360" stroke="rgb(158 11 15 / 0.06)" strokeWidth="0.5" />
-      <line x1="160" y1="60" x2="160" y2="130" stroke="rgb(158 11 15 / 0.06)" strokeWidth="0.5" />
-      <line x1="160" y1="390" x2="160" y2="460" stroke="rgb(158 11 15 / 0.06)" strokeWidth="0.5" />
-      <line x1="360" y1="60" x2="360" y2="130" stroke="rgb(158 11 15 / 0.06)" strokeWidth="0.5" />
-      <line x1="360" y1="390" x2="360" y2="460" stroke="rgb(158 11 15 / 0.06)" strokeWidth="0.5" />
-      {/* Corner brackets */}
-      <path d="M60 96 L60 60 L96 60" stroke="rgb(158 11 15 / 0.22)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      <path d="M424 60 L460 60 L460 96" stroke="rgb(158 11 15 / 0.22)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      <path d="M60 424 L60 460 L96 460" stroke="rgb(158 11 15 / 0.22)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      <path d="M424 460 L460 460 L460 424" stroke="rgb(158 11 15 / 0.22)" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      {/* Inner corner markers */}
-      <path d="M130 150 L130 130 L150 130" stroke="rgb(158 11 15 / 0.14)" strokeWidth="0.75" fill="none" strokeLinecap="round" />
-      <path d="M370 130 L390 130 L390 150" stroke="rgb(158 11 15 / 0.14)" strokeWidth="0.75" fill="none" strokeLinecap="round" />
-      <path d="M130 370 L130 390 L150 390" stroke="rgb(158 11 15 / 0.14)" strokeWidth="0.75" fill="none" strokeLinecap="round" />
-      <path d="M370 390 L390 390 L390 370" stroke="rgb(158 11 15 / 0.14)" strokeWidth="0.75" fill="none" strokeLinecap="round" />
-      {/* Quadrant intersection circles */}
-      <circle cx="160" cy="160" r="5" stroke="rgb(158 11 15 / 0.16)" strokeWidth="0.75" />
-      <circle cx="360" cy="160" r="5" stroke="rgb(158 11 15 / 0.16)" strokeWidth="0.75" />
-      <circle cx="160" cy="360" r="5" stroke="rgb(158 11 15 / 0.16)" strokeWidth="0.75" />
-      <circle cx="360" cy="360" r="5" stroke="rgb(158 11 15 / 0.16)" strokeWidth="0.75" />
-      {/* Center accent */}
-      <circle cx="260" cy="260" r="9" stroke="rgb(158 11 15 / 0.22)" strokeWidth="1" />
-      <circle cx="260" cy="260" r="3" fill="rgb(158 11 15 / 0.35)" />
-      {/* Center crosshair */}
-      <line x1="248" y1="260" x2="272" y2="260" stroke="rgb(158 11 15 / 0.18)" strokeWidth="0.5" />
-      <line x1="260" y1="248" x2="260" y2="272" stroke="rgb(158 11 15 / 0.18)" strokeWidth="0.5" />
-      {/* Inner cross grid */}
-      <line x1="130" y1="260" x2="390" y2="260" stroke="rgb(158 11 15 / 0.05)" strokeWidth="0.5" />
-      <line x1="260" y1="130" x2="260" y2="390" stroke="rgb(158 11 15 / 0.05)" strokeWidth="0.5" />
-      {/* Diagonal accent lines */}
-      <line x1="260" y1="260" x2="160" y2="160" stroke="rgb(158 11 15 / 0.05)" strokeWidth="0.5" />
-      <line x1="260" y1="260" x2="360" y2="160" stroke="rgb(158 11 15 / 0.05)" strokeWidth="0.5" />
-      <line x1="260" y1="260" x2="160" y2="360" stroke="rgb(158 11 15 / 0.05)" strokeWidth="0.5" />
-      <line x1="260" y1="260" x2="360" y2="360" stroke="rgb(158 11 15 / 0.05)" strokeWidth="0.5" />
-      {/* Dimension line */}
-      <line x1="34" y1="60" x2="34" y2="460" stroke="rgb(158 11 15 / 0.09)" strokeWidth="0.5" />
-      <line x1="28" y1="60" x2="40" y2="60" stroke="rgb(158 11 15 / 0.09)" strokeWidth="0.5" />
-      <line x1="28" y1="460" x2="40" y2="460" stroke="rgb(158 11 15 / 0.09)" strokeWidth="0.5" />
-    </svg>
-  );
-}
-
-// ─── Brand panel (left side) ──────────────────────────────────────────────────
-function BrandPanel() {
-  return (
-    <div className="hidden lg:flex lg:w-[52%] xl:w-1/2 relative flex-col overflow-hidden">
-      {/* Background image */}
-      <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
-        style={{ backgroundImage: "url('/TelaLogin.png')" }}
-      />
-
-      {/* Subtle dark overlay at the bottom for footer legibility */}
-      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/20 to-transparent" />
-
-      {/* Footer */}
-      <div className="relative z-10 flex h-full flex-col justify-end p-10 xl:p-12">
-        <div className="flex items-center gap-3 text-[11px] text-white/60">
-          <span>Pipeline de Projetos</span>
-          <span className="h-px w-5 bg-white/30" />
-          <span>v1.0.0</span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Input field ──────────────────────────────────────────────────────────────
 type InputFieldProps = {
@@ -126,7 +37,7 @@ function InputField({
   return (
     <div>
       {label && (
-        <label htmlFor={id} className="mb-1.5 block text-[13px] font-medium text-zinc-700">
+        <label htmlFor={id} className="mb-1.5 block text-[13px] font-medium text-zinc-700 dark:text-zinc-300">
           {label}
         </label>
       )}
@@ -143,11 +54,11 @@ function InputField({
           disabled={disabled}
           autoComplete={autoComplete}
           className={cn(
-            "h-[52px] w-full rounded-xl border bg-white pl-10 text-[14px] text-zinc-900 outline-none transition-all duration-150 placeholder:text-zinc-300",
+            "h-[52px] w-full rounded-xl border bg-white dark:bg-panel-soft pl-10 text-[14px] text-zinc-900 dark:text-foreground outline-none transition-all duration-150 placeholder:text-zinc-300 dark:placeholder:text-zinc-600",
             suffix ? "pr-10" : "pr-4",
             error
               ? "border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100"
-              : "border-zinc-200 focus:border-brand focus:ring-2 focus:ring-brand/10",
+              : "border-zinc-200 dark:border-white/10 focus:border-brand focus:ring-2 focus:ring-brand/10",
             disabled && "cursor-not-allowed opacity-60",
           )}
         />
@@ -208,16 +119,23 @@ export function LoginPage() {
     setLoading(true);
 
     try {
-      // Simula latência de autenticação
+      // Simulate authentication delay
       await new Promise((resolve) => setTimeout(resolve, 1200));
 
-      if (!validateCredentials(email.trim(), password)) {
-        setGlobalError("Usuário ou senha inválidos. Verifique os dados e tente novamente.");
-        setLoading(false);
-        return;
-      }
+      // Derive display name from email/username
+      const raw = email.trim();
+      const displayName = raw.includes("@")
+        ? raw
+            .split("@")[0]
+            .replace(/[._-]+/g, " ")
+            .replace(/\b\w/g, (l) => l.toUpperCase())
+            .trim()
+        : raw
+            .replace(/[._-]+/g, " ")
+            .replace(/\b\w/g, (l) => l.toUpperCase())
+            .trim();
 
-      identify({ name: MOCK_USER.displayName, role: MOCK_USER.role });
+      identify({ name: displayName || "Usuário TSTECK", role: "Admin" });
       router.push("/");
     } catch {
       setGlobalError("Não foi possível conectar. Tente novamente.");
@@ -226,49 +144,68 @@ export function LoginPage() {
   }
 
   return (
-    <div className="relative h-screen w-full overflow-hidden">
-
-      {/* ── Layer 1: Background image ── */}
+    <div className="relative min-h-screen w-full overflow-hidden">
+      {/* ── Full-screen background image ── */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/Login.png"
         alt=""
         aria-hidden="true"
-        draggable={false}
-        className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover object-[30%_top]"
+        className="absolute inset-0 h-full w-full select-none pointer-events-none object-cover object-[35%_center]"
       />
 
-      {/* ── Layer 2: Right-side strong gradient — apaga o painel Layers e cria zona limpa ── */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/45 to-white/85" />
-      {/* Extra fade no canto inferior direito (painel Layers) */}
-      <div className="pointer-events-none absolute bottom-0 right-0 h-[55%] w-[40%] bg-gradient-to-tl from-white/90 via-white/60 to-transparent" />
+      {/* ── Base dark overlay ── */}
+      <div className="absolute inset-0 bg-black/25" />
 
-      {/* ── Layer 3: Positioning shell ── */}
-      <div className="absolute inset-0 flex items-center justify-center lg:justify-end lg:pr-[8vw]">
+      {/* ── Right-side gradient — boosts contrast behind the card ── */}
+      <div className="absolute inset-y-0 right-0 hidden w-[58%] bg-gradient-to-l from-black/55 via-black/25 to-transparent lg:block" />
+
+      {/* ── Bottom vignette ── */}
+      <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-black/45 to-transparent" />
+
+      {/* ── Main layout ── */}
+      <div className="relative z-10 flex min-h-screen w-full flex-col items-center justify-center p-6 lg:flex-row lg:items-center lg:justify-end lg:pr-[9vw] xl:pr-[11vw]">
+
+        {/* ── Login card ── */}
         <div
-          className="w-full max-w-[480px] px-4 lg:px-0"
-          style={{ animation: "fadeScaleIn 280ms ease-out both", transform: "translateY(-20px)" }}
+          className="w-full max-w-[440px]"
+          style={{ animation: "fadeScaleIn 340ms cubic-bezier(0.22,1,0.36,1) both" }}
         >
-
-          {/* ── Card ── */}
-          <div className="min-h-0 rounded-[28px] border border-white/80 bg-white/[0.98] p-11 shadow-[0_20px_60px_rgba(0,0,0,0.13),0_2px_8px_rgba(0,0,0,0.06)] backdrop-blur-sm sm:min-h-[560px]">
-
-            {/* Header */}
+          <div
+            className="rounded-3xl border px-8 py-8 shadow-[0_32px_80px_rgba(0,0,0,0.45),0_4px_20px_rgba(0,0,0,0.28)]"
+            style={{
+              background: "var(--glass-bg)",
+              borderColor: "var(--glass-border)",
+              backdropFilter: "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
+            }}
+          >
+            {/* ── Card header ── */}
             <div className="mb-7">
-              <span className="block text-[11px] font-bold uppercase tracking-[0.28em] text-[#9e0b0f]">
-                TSTECK
-              </span>
-              <h1 className="mt-2 text-[1.75rem] font-bold leading-tight tracking-tight text-[#262626]">
+              <div className="mb-4 flex items-baseline gap-3">
+                <span
+                  className="text-[1.4rem] font-bold tracking-[0.22em] text-brand"
+                  style={{ fontFamily: "var(--font-rajdhani), sans-serif" }}
+                >
+                  TSTECK
+                </span>
+                <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-zinc-400 dark:text-zinc-500">
+                  Engenharia Operacional
+                </span>
+              </div>
+              <div className="mb-4 h-[2px] w-10 rounded-full bg-brand" />
+              <h1 className="text-[1.2rem] font-semibold tracking-tight text-zinc-900 dark:text-foreground">
                 Acessar sistema
               </h1>
-              <p className="mt-2 text-[13.5px] leading-relaxed text-[#6b7280]">
-                Entre com suas credenciais para acessar<br /> o Pipeline de Projetos.
+              <p className="mt-1.5 text-[13px] leading-relaxed text-zinc-400 dark:text-zinc-500">
+                Entre com suas credenciais para acessar o Pipeline de Projetos.
               </p>
             </div>
 
-            {/* Global error alert */}
+            {/* ── Global error ── */}
             {globalError && (
               <div
-                className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-[13px] text-red-600"
+                className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-100 dark:border-red-700/40 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-[13px] text-red-600 dark:text-red-300"
                 role="alert"
                 style={{ animation: "fadeScaleIn 180ms ease-out both" }}
               >
@@ -277,10 +214,10 @@ export function LoginPage() {
               </div>
             )}
 
-            {/* Form */}
+            {/* ── Form ── */}
             <form onSubmit={handleSubmit} noValidate>
               <div className="space-y-4">
-                {/* Email */}
+                {/* Email / username */}
                 <InputField
                   id="login-email"
                   label="Usuário ou e-mail"
@@ -296,10 +233,16 @@ export function LoginPage() {
                 {/* Password */}
                 <div>
                   <div className="mb-1.5 flex items-center justify-between">
-                    <label htmlFor="login-password" className="text-[13px] font-medium text-[#262626]">
+                    <label
+                      htmlFor="login-password"
+                      className="text-[13px] font-medium text-zinc-700 dark:text-zinc-300"
+                    >
                       Senha
                     </label>
-                    <button type="button" className="text-[12px] text-[#9e0b0f] transition hover:underline">
+                    <button
+                      type="button"
+                      className="text-[12px] text-zinc-400 transition hover:text-brand"
+                    >
                       Esqueci minha senha
                     </button>
                   </div>
@@ -330,12 +273,12 @@ export function LoginPage() {
               </div>
 
               {/* Remember me */}
-              <label className="mt-4 flex cursor-pointer select-none items-center gap-2.5 text-[13px] text-[#6b7280]">
+              <label className="mt-4 flex cursor-pointer select-none items-center gap-2 text-[13px] text-zinc-500 dark:text-zinc-400">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="h-4 w-4 rounded border-zinc-300 accent-[#9e0b0f]"
+                  className="h-[15px] w-[15px] rounded border-zinc-300 accent-brand"
                   disabled={loading}
                 />
                 Manter conectado
@@ -346,38 +289,44 @@ export function LoginPage() {
                 type="submit"
                 disabled={loading}
                 className={cn(
-                  "mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-xl text-[15px] font-semibold text-white transition-all duration-150",
+                  "mt-6 flex h-[52px] w-full items-center justify-center gap-2 rounded-xl text-[14px] font-semibold text-white transition-all duration-150",
                   loading
-                    ? "cursor-not-allowed bg-[#9e0b0f]/70"
-                    : "bg-[#9e0b0f] hover:bg-[#7f090c] active:scale-[0.99]",
+                    ? "cursor-not-allowed bg-brand/75"
+                    : "bg-brand hover:bg-brand-dark active:scale-[0.99]",
                 )}
               >
                 {loading ? (
                   <>
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <svg
+                      className="h-4 w-4 animate-spin"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden="true"
+                    >
                       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" strokeOpacity="0.3" />
                       <path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
                     </svg>
-                    Acessando...
+                    Entrando...
                   </>
                 ) : (
                   <>
-                    <LogIn size={16} />
+                    <LogIn size={15} />
                     Entrar
                   </>
                 )}
               </button>
             </form>
 
-            {/* Card footer */}
-            <p className="mt-7 text-center text-[12px] leading-relaxed text-[#6b7280]">
-              Acesso restrito aos usuários autorizados.<br />
+            {/* ── Card footer ── */}
+            <p className="mt-6 text-center text-[11px] leading-relaxed text-zinc-400 dark:text-zinc-500">
+              Acesso restrito aos usuários autorizados.
+              <br />
               Ambiente interno TSTECK. O acesso é monitorado.
             </p>
           </div>
 
-          {/* Version */}
-          <p className="mt-3.5 text-center text-[11px] text-zinc-500/60">
+          {/* Version tag */}
+          <p className="mt-4 text-center text-[11px] text-white/40">
             v1.0.0 — Pipeline de Projetos
           </p>
         </div>

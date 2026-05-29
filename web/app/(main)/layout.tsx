@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import { AppSidebar } from "@/features/sidebar/components/app-sidebar";
 import { useSidebar } from "@/features/sidebar/hooks/use-sidebar";
 import { useCurrentUser } from "@/features/user/hooks/use-current-user";
-import { PageTransition } from "@/features/ui/page-transition";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const { collapsed, toggle } = useSidebar();
@@ -50,8 +49,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         />
       </div>
 
-      <main className="flex flex-1 flex-col overflow-auto">
-        <PageTransition>{children}</PageTransition>
+      <main className="flex flex-1 flex-col">
+        {children}
       </main>
     </div>
   );

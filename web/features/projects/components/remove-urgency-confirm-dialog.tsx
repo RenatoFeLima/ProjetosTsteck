@@ -60,7 +60,7 @@ export function RemoveUrgencyConfirmDialog({ open, project, onCancel, onConfirm 
         aria-modal="true"
         aria-labelledby="remove-urgency-title"
         aria-describedby="remove-urgency-description"
-        className="w-full max-w-[480px] animate-[fadeScaleIn_150ms_ease-out] rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_32px_64px_-20px_rgba(0,0,0,0.35)]"
+        className="w-full max-w-[480px] animate-[fadeScaleIn_150ms_ease-out] rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-6 shadow-[0_32px_64px_-20px_rgba(0,0,0,0.35)]"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="mb-3 flex items-start gap-3">
@@ -68,15 +68,15 @@ export function RemoveUrgencyConfirmDialog({ open, project, onCancel, onConfirm 
             <AlertTriangle size={18} />
           </span>
           <div>
-            <h2 id="remove-urgency-title" className="text-lg font-bold text-zinc-900">Remover prioridade urgente?</h2>
-            <p id="remove-urgency-description" className="mt-1 text-sm text-zinc-600">
+            <h2 id="remove-urgency-title" className="text-lg font-bold text-zinc-900 dark:text-foreground">Remover prioridade urgente?</h2>
+            <p id="remove-urgency-description" className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               Este projeto deixara de ser tratado como urgente, mas continuara no fluxo normal de acompanhamento.
             </p>
           </div>
         </header>
 
-        <p className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-700">
-          Projeto: <span className="font-mono font-semibold text-zinc-900">{project.codigo_projeto}</span>
+        <p className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300">
+          Projeto: <span className="font-mono font-semibold text-zinc-900 dark:text-foreground">{project.codigo_projeto}</span>
         </p>
 
         <footer className="mt-5 flex flex-wrap justify-end gap-2">
@@ -84,7 +84,7 @@ export function RemoveUrgencyConfirmDialog({ open, project, onCancel, onConfirm 
             ref={cancelRef}
             type="button"
             onClick={onCancel}
-            className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+            className="rounded-xl border border-zinc-300 dark:border-white/15 bg-white dark:bg-panel-soft px-4 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-50 dark:hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
           >
             Cancelar
           </button>

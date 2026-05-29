@@ -41,7 +41,7 @@ export function MissingRequiredFieldsDialog({ open, fields, onClose }: MissingRe
         aria-modal="true"
         aria-labelledby="missing-required-title"
         aria-describedby="missing-required-description"
-        className="w-full max-w-[480px] animate-[fadeScaleIn_150ms_ease-out] rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_32px_64px_-20px_rgba(0,0,0,0.35)]"
+        className="w-full max-w-[480px] animate-[fadeScaleIn_150ms_ease-out] rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-6 shadow-[0_32px_64px_-20px_rgba(0,0,0,0.35)]"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="mb-3 flex items-start gap-3">
@@ -49,16 +49,16 @@ export function MissingRequiredFieldsDialog({ open, fields, onClose }: MissingRe
             <AlertCircle size={18} />
           </span>
           <div>
-            <h2 id="missing-required-title" className="text-lg font-bold text-zinc-900">
+            <h2 id="missing-required-title" className="text-lg font-bold text-zinc-900 dark:text-foreground">
               Campos obrigatorios pendentes
             </h2>
-            <p id="missing-required-description" className="mt-1 text-sm text-zinc-600">
+            <p id="missing-required-description" className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
               Preencha os campos abaixo para continuar com o salvamento do projeto.
             </p>
           </div>
         </header>
 
-        <ul className="space-y-1 rounded-xl border border-zinc-200 bg-zinc-50/80 p-3 text-sm text-zinc-800">
+        <ul className="space-y-1 rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50/80 dark:bg-panel-soft p-3 text-sm text-zinc-800 dark:text-zinc-200">
           {fields.map((field) => (
             <li key={field} className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-brand" />

@@ -14,14 +14,14 @@ export function SidebarNavGroup({ group, collapsed }: Props) {
     <div className="flex flex-col gap-0.5">
       {group.title && !collapsed && (
         <div className="mb-1 flex items-center gap-2 px-3">
-          <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-400">
+          <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-400 dark:text-zinc-600">
             {group.title}
           </span>
-          <div className="h-px flex-1 bg-zinc-100" />
+          <div className="h-px flex-1 bg-zinc-100 dark:bg-white/8" />
         </div>
       )}
       {group.title && collapsed && (
-        <div className={cn("mx-auto my-1 h-px w-6 bg-zinc-150")} />
+        <div className={cn("mx-auto my-1 h-px w-6 bg-zinc-100 dark:bg-white/8")} />
       )}
       {group.items.map((item) => (
         <SidebarNavItem key={item.label} item={item} collapsed={collapsed} />

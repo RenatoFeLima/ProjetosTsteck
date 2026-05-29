@@ -18,6 +18,7 @@ type SearchableComboboxProps = {
   ariaLabel: string;
   error?: string;
   disabled?: boolean;
+  leftIcon?: React.ReactNode;
 };
 
 const ITEM_HEIGHT = 42;
@@ -67,6 +68,7 @@ export function SearchableCombobox({
   ariaLabel,
   error,
   disabled,
+  leftIcon,
 }: SearchableComboboxProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -196,15 +198,20 @@ export function SearchableCombobox({
 
   return (
     <div ref={rootRef} className="relative">
+      {leftIcon && (
+        <span className="pointer-events-none absolute top-1/2 left-3 z-[1] -translate-y-1/2 text-zinc-400 dark:text-muted">
+          {leftIcon}
+        </span>
+      )}
       <button
         type="button"
         disabled={disabled}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className={`flex h-11 w-full items-center justify-between rounded-lg border bg-white px-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 ${
-          error ? "border-brand" : "border-line hover:border-zinc-300"
-        } ${disabled ? "cursor-not-allowed bg-zinc-100 text-zinc-500" : ""}`}
+        className={`flex h-11 w-full items-center justify-between rounded-lg border bg-white dark:bg-panel-soft ${leftIcon ? "pl-9" : "pl-3"} pr-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 ${
+          error ? "border-brand" : "border-line hover:border-zinc-300 dark:hover:border-white/15"
+        } ${disabled ? "cursor-not-allowed bg-zinc-100 dark:bg-panel text-zinc-500 dark:text-muted" : ""}`}
         onClick={() => {
           if (disabled) return;
           if (open) {
@@ -214,7 +221,7 @@ export function SearchableCombobox({
           openDropdown();
         }}
       >
-        <span className={selectedOption ? "text-zinc-800" : "text-zinc-500"}>
+        <span className={selectedOption ? "text-zinc-800 dark:text-foreground" : "text-zinc-500 dark:text-muted"}>
           {selectedOption?.label ?? placeholder}
         </span>
         <span className="ml-2 inline-flex items-center gap-1">
@@ -223,7 +230,7 @@ export function SearchableCombobox({
               role="button"
               tabIndex={0}
               aria-label="Limpar selecao"
-              className="rounded p-1 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800"
+              className="rounded p-1 text-zinc-500 dark:text-muted transition hover:bg-zinc-100 dark:hover:bg-white/8 hover:text-zinc-800 dark:hover:text-foreground"
               onClick={(event) => {
                 event.stopPropagation();
                 onChange("");
@@ -240,7 +247,7 @@ export function SearchableCombobox({
               <X size={14} />
             </span>
           )}
-          <ChevronDown size={16} className={`text-zinc-500 transition ${open ? "rotate-180" : ""}`} />
+          <ChevronDown size={16} className={`text-zinc-500 dark:text-muted transition ${open ? "rotate-180" : ""}`} />
         </span>
       </button>
 
@@ -248,11 +255,11 @@ export function SearchableCombobox({
 
       {open && (
         <div
-          className={`absolute z-[80] mt-2 w-full rounded-xl border border-line bg-white shadow-[0_16px_30px_-18px_rgba(0,0,0,0.35)] ${openUpwards ? "bottom-[calc(100%+8px)] mt-0" : "top-full"}`}
+          className={`absolute z-[80] mt-2 w-full rounded-xl border border-line bg-white dark:bg-panel shadow-[0_16px_30px_-18px_rgba(0,0,0,0.35)] ${openUpwards ? "bottom-[calc(100%+8px)] mt-0" : "top-full"}`}
         >
-          <div className="border-b border-zinc-100 p-2">
+          <div className="border-b border-zinc-100 dark:border-white/8 p-2">
             <label className="relative block">
-              <Search size={14} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-zinc-500" />
+              <Search size={14} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-zinc-500 dark:text-muted" />
               <input
                 ref={searchRef}
                 value={query}
@@ -262,7 +269,7 @@ export function SearchableCombobox({
                 }}
                 onKeyDown={onKeyDown}
                 placeholder={searchPlaceholder}
-                className="h-9 w-full rounded-lg border border-line bg-zinc-50 pr-2 pl-8 text-sm outline-none transition focus:border-brand focus:bg-white"
+                className="h-9 w-full rounded-lg border border-line bg-zinc-50 dark:bg-panel-soft pr-2 pl-8 text-sm outline-none transition focus:border-brand focus:bg-white dark:focus:bg-panel"
                 role="combobox"
                 aria-label={searchPlaceholder}
                 aria-autocomplete="list"
@@ -282,7 +289,7 @@ export function SearchableCombobox({
             onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
           >
             {filtered.length === 0 ? (
-              <div className="grid h-full place-items-center px-3 text-sm text-zinc-500">{emptyMessage}</div>
+              <div className="grid h-full place-items-center px-3 text-sm text-zinc-500 dark:text-muted">{emptyMessage}</div>
             ) : (
               <div style={{ height: filtered.length * ITEM_HEIGHT, position: "relative" }}>
                 {virtualSlice.map((option, idx) => {
@@ -300,8 +307,8 @@ export function SearchableCombobox({
                         selected
                           ? "bg-brand/10 font-semibold text-brand"
                           : active
-                            ? "bg-zinc-100 text-zinc-900"
-                            : "text-zinc-700 hover:bg-zinc-100"
+                            ? "bg-zinc-100 dark:bg-white/8 text-zinc-900 dark:text-foreground"
+                            : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-white/8"
                       }`}
                       style={{ top: realIndex * ITEM_HEIGHT }}
                       onMouseEnter={() => setActiveIndex(realIndex)}

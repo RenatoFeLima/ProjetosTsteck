@@ -1,6 +1,10 @@
 @import "tailwindcss";
 
+/* Enable class-based dark mode: applies when any ancestor has the `.dark` class */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
+  color-scheme: light;
   --background: #f4f5f7;
   --foreground: #262626;
   --panel: #ffffff;
@@ -13,6 +17,26 @@
   --ok: #027a48;
   --ring: #9e0b0f;
   --line: #e4e7ec;
+  --glass-bg: rgba(255, 255, 255, 0.93);
+  --glass-border: rgba(255, 255, 255, 0.25);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #0f1115;
+  --foreground: #f4f4f5;
+  --panel: #181b23;
+  --panel-soft: #1b1f2a;
+  --muted: #a1a1aa;
+  --brand: #c1121f;
+  --brand-dark: #e11d2e;
+  --danger: #f87171;
+  --warn: #fb923c;
+  --ok: #4ade80;
+  --ring: #c1121f;
+  --line: rgba(255, 255, 255, 0.08);
+  --glass-bg: rgba(24, 27, 35, 0.92);
+  --glass-border: rgba(255, 255, 255, 0.10);
 }
 
 @theme inline {
@@ -41,6 +65,24 @@ body {
     linear-gradient(165deg, #f9fafb 0%, #f5f6f8 45%, #eef0f3 100%);
   color: var(--foreground);
   font-family: var(--font-sans), "Segoe UI", sans-serif;
+}
+
+.dark body {
+  background:
+    radial-gradient(circle at 2% -8%, rgb(193 18 31 / 5%) 0%, transparent 30%),
+    radial-gradient(circle at 98% 2%, rgb(255 255 255 / 1%) 0%, transparent 22%),
+    linear-gradient(165deg, #111318 0%, #0f1115 45%, #0c0e12 100%);
+}
+
+/* ─── Smooth theme transitions ────────────────────────────────────────────── */
+/* Applied to all elements so background/border colors animate when toggling theme.
+   Interactive elements (button, a, etc.) override below with their own transitions. */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color;
+  transition-duration: 200ms;
+  transition-timing-function: ease;
 }
 
 * {

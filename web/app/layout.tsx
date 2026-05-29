@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Rajdhani } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "@/features/ui/theme/theme-provider";
+import { ThemeScript } from "@/features/ui/theme/theme-script";
 
 const plexSans = IBM_Plex_Sans({
   variable: "--font-plex-sans",
@@ -34,8 +36,12 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       className={`${plexSans.variable} ${plexMono.variable} ${rajdhani.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full bg-background text-foreground">{children}</body>
+      <body className="min-h-full bg-background text-foreground">
+        <ThemeScript />
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }

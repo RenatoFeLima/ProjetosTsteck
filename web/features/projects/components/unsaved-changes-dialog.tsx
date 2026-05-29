@@ -69,7 +69,7 @@ export function UnsavedChangesDialog({
         aria-modal="true"
         aria-labelledby="ucd-title"
         aria-describedby="ucd-description"
-        className="w-full max-w-[420px] animate-[fadeScaleIn_150ms_ease-out] rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_32px_64px_-20px_rgba(0,0,0,0.35)]"
+        className="w-full max-w-[420px] animate-[fadeScaleIn_150ms_ease-out] rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-6 shadow-[0_32px_64px_-20px_rgba(0,0,0,0.35)]"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start gap-3">
@@ -79,11 +79,11 @@ export function UnsavedChangesDialog({
           <div>
             <h2
               id="ucd-title"
-              className="text-base font-bold tracking-tight text-zinc-900"
+              className="text-base font-bold tracking-tight text-zinc-900 dark:text-foreground"
             >
               Descartar alteracoes?
             </h2>
-            <p id="ucd-description" className="mt-1 text-sm leading-relaxed text-zinc-500">
+            <p id="ucd-description" className="mt-1 text-sm leading-relaxed text-zinc-500 dark:text-muted">
               Voce possui informacoes preenchidas neste novo projeto. Se sair agora, os dados nao salvos serao perdidos.
             </p>
           </div>
@@ -94,7 +94,7 @@ export function UnsavedChangesDialog({
             ref={continueRef}
             type="button"
             onClick={onContinueEditing}
-            className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+            className="rounded-xl border border-zinc-300 dark:border-white/15 bg-white dark:bg-panel-soft px-4 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-50 dark:hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
           >
             Continuar editando
           </button>

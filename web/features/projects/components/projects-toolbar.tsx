@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, BarChart3, Building2, ChevronDown, Filter, Kanban, Search, Table2, UserRound, Wrench } from "lucide-react";
+import { AlertTriangle, BarChart3, Building2, ChevronDown, Filter, Kanban, Search, Table2, UserRound, Wrench, X } from "lucide-react";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import type { ProjectStatus } from "@/features/projects/domain/project-types";
 import type { ProjectsView } from "@/features/projects/state/projects-store";
@@ -109,7 +109,7 @@ export function ProjectsToolbar({
   return (
     <div className="space-y-2.5">
       {/* Abas de navegação */}
-      <div className="flex items-center gap-0.5 overflow-x-auto rounded-xl border border-zinc-200/60 bg-zinc-50/70 p-0.5">
+      <div className="flex items-center gap-0.5 overflow-x-auto rounded-xl border border-zinc-200/60 dark:border-white/8 bg-zinc-50/70 dark:bg-panel-soft/60 p-0.5">
         {viewButtons.map((item) => {
           const Icon = item.icon;
           const active = view === item.value;
@@ -122,8 +122,8 @@ export function ProjectsToolbar({
               onClick={() => onViewChange(item.value)}
               className={`inline-flex shrink-0 items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-[13px] font-medium transition-all duration-150 ${
                 active
-                  ? "bg-white text-zinc-900 shadow-[0_1px_4px_rgba(0,0,0,0.10)]"
-                  : "text-zinc-500 hover:text-zinc-700"
+                  ? "bg-white dark:bg-panel text-zinc-900 dark:text-foreground shadow-[0_1px_4px_rgba(0,0,0,0.10)] dark:shadow-none"
+                  : "text-zinc-500 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
               }`}
             >
               <Icon
@@ -133,7 +133,7 @@ export function ProjectsToolbar({
               {item.label}
               <span
                 className={`tabular-nums text-[11px] ${
-                  active ? "font-bold text-brand" : "text-zinc-400"
+                  active ? "font-bold text-brand" : "text-zinc-400 dark:text-zinc-600"
                 }`}
               >
                 {count}
@@ -144,9 +144,9 @@ export function ProjectsToolbar({
       </div>
 
       {/* Filtros */}
-      <div className="rounded-xl border border-zinc-100 bg-zinc-50/40 p-3">
-        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_200px_auto]">
-          <label className="group relative block">
+      <div className="rounded-xl border border-zinc-100 dark:border-white/8 bg-zinc-50/40 dark:bg-panel-soft/40 p-3">
+        <div className="flex flex-wrap gap-2">
+          <label className="group relative block min-w-0 flex-1">
             <Search
               size={14}
               className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-zinc-400 transition group-focus-within:text-brand"
@@ -156,10 +156,11 @@ export function ProjectsToolbar({
               onChange={(event) => onFiltersChange({ search: event.target.value })}
               aria-label="Buscar por codigo, construtora ou obra"
               placeholder="Buscar por codigo, construtora ou obra"
-              className="h-9 w-full rounded-xl border border-zinc-200/70 bg-white pr-3 pl-9 text-[13px] outline-none transition placeholder:text-zinc-400 focus:border-brand focus:ring-2 focus:ring-brand/10"
+              className="h-9 w-full rounded-xl border border-zinc-200/70 dark:border-white/8 bg-white dark:bg-panel-soft pr-3 pl-9 text-[13px] outline-none transition placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:border-brand focus:ring-2 focus:ring-brand/10 dark:text-foreground"
             />
           </label>
 
+          <div className="w-48 shrink-0">
           <SearchableCombobox
             value={filters.status}
             options={statusOptions}
@@ -169,6 +170,7 @@ export function ProjectsToolbar({
             emptyMessage="Nenhum status encontrado."
             ariaLabel="Filtrar por status"
           />
+          </div>
 
           <button
             type="button"
@@ -176,7 +178,7 @@ export function ProjectsToolbar({
             className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 text-[13px] font-medium transition ${
               quickFilterCount > 0
                 ? "border-brand/30 bg-brand/5 text-brand hover:bg-brand/10"
-                : "border-zinc-200/70 bg-white text-zinc-600 hover:text-zinc-900"
+                : "border-zinc-200/70 dark:border-white/8 bg-white dark:bg-panel-soft text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
             }`}
           >
             <Filter size={13} />
@@ -188,86 +190,66 @@ export function ProjectsToolbar({
             )}
             <ChevronDown size={13} className={`transition ${advancedOpen ? "rotate-180" : ""}`} />
           </button>
-        </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {quickFilterCount > 0 && (
-            <>
-              <span className="text-[11px] text-zinc-400">{quickFilterCount} filtro{quickFilterCount !== 1 ? "s" : ""} ativo{quickFilterCount !== 1 ? "s" : ""}</span>
-              <button
-                type="button"
-                onClick={onClearFilters}
-                className="rounded-lg px-2 py-0.5 text-[11px] font-medium text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-800"
-              >
-                Limpar
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={onClearFilters}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-zinc-200/70 dark:border-white/8 bg-white dark:bg-panel-soft px-3 text-[13px] font-medium text-zinc-500 dark:text-zinc-400 transition hover:border-red-200 dark:hover:border-red-700/40 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400"
+            >
+              <X size={13} />
+              Limpar filtros
+            </button>
           )}
         </div>
 
         {advancedOpen && (
-          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-            <div className="relative">
-              <Building2 size={15} className="pointer-events-none absolute top-1/2 left-3 z-[1] -translate-y-1/2 text-zinc-500" />
-              <div className="pl-6">
-                <SearchableCombobox
-                  value={filters.construtora}
-                  options={construtoraOptions}
-                  onChange={(value) => onFiltersChange({ construtora: value })}
-                  placeholder="Filtrar por construtora"
-                  searchPlaceholder="Buscar construtora..."
-                  emptyMessage="Nenhuma construtora encontrada."
-                  ariaLabel="Filtrar por construtora"
-                />
-              </div>
-            </div>
+          <div className="md:grid-cols-2 xl:grid-cols-4 mt-3 grid gap-2">
+            <SearchableCombobox
+              value={filters.construtora}
+              options={construtoraOptions}
+              onChange={(value) => onFiltersChange({ construtora: value })}
+              placeholder="Filtrar por construtora"
+              searchPlaceholder="Buscar construtora..."
+              emptyMessage="Nenhuma construtora encontrada."
+              ariaLabel="Filtrar por construtora"
+              leftIcon={<Building2 size={15} />}
+            />
 
-            <div className="relative">
-              <Building2 size={15} className="pointer-events-none absolute top-1/2 left-3 z-[1] -translate-y-1/2 text-zinc-500" />
-              <div className="pl-6">
-                <SearchableCombobox
-                  value={filters.obra}
-                  options={obraOptions}
-                  onChange={(value) => onFiltersChange({ obra: value })}
-                  placeholder="Filtrar por obra"
-                  searchPlaceholder="Buscar obra..."
-                  emptyMessage="Nenhuma obra encontrada."
-                  ariaLabel="Filtrar por obra"
-                />
-              </div>
-            </div>
+            <SearchableCombobox
+              value={filters.obra}
+              options={obraOptions}
+              onChange={(value) => onFiltersChange({ obra: value })}
+              placeholder="Filtrar por obra"
+              searchPlaceholder="Buscar obra..."
+              emptyMessage="Nenhuma obra encontrada."
+              ariaLabel="Filtrar por obra"
+              leftIcon={<Building2 size={15} />}
+            />
 
-            <div className="relative">
-              <UserRound size={15} className="pointer-events-none absolute top-1/2 left-3 z-[1] -translate-y-1/2 text-zinc-500" />
-              <div className="pl-6">
-                <SearchableCombobox
-                  value={filters.vendedor}
-                  options={vendedorOptions}
-                  onChange={(value) => onFiltersChange({ vendedor: value })}
-                  placeholder="Filtrar por vendedor"
-                  searchPlaceholder="Buscar vendedor..."
-                  emptyMessage="Nenhum vendedor encontrado."
-                  ariaLabel="Filtrar por vendedor"
-                />
-              </div>
-            </div>
+            <SearchableCombobox
+              value={filters.vendedor}
+              options={vendedorOptions}
+              onChange={(value) => onFiltersChange({ vendedor: value })}
+              placeholder="Filtrar por vendedor"
+              searchPlaceholder="Buscar vendedor..."
+              emptyMessage="Nenhum vendedor encontrado."
+              ariaLabel="Filtrar por vendedor"
+              leftIcon={<UserRound size={15} />}
+            />
 
-            <div className="relative">
-              <Wrench size={15} className="pointer-events-none absolute top-1/2 left-3 z-[1] -translate-y-1/2 text-zinc-500" />
-              <div className="pl-6">
-                <SearchableCombobox
-                  value={filters.equipamento}
-                  options={equipamentoOptions}
-                  onChange={(value) => onFiltersChange({ equipamento: value })}
-                  placeholder="Filtrar por equipamento"
-                  searchPlaceholder="Buscar equipamento..."
-                  emptyMessage="Nenhum equipamento encontrado."
-                  ariaLabel="Filtrar por equipamento"
-                />
-              </div>
-            </div>
+            <SearchableCombobox
+              value={filters.equipamento}
+              options={equipamentoOptions}
+              onChange={(value) => onFiltersChange({ equipamento: value })}
+              placeholder="Filtrar por equipamento"
+              searchPlaceholder="Buscar equipamento..."
+              emptyMessage="Nenhum equipamento encontrado."
+              ariaLabel="Filtrar por equipamento"
+              leftIcon={<Wrench size={15} />}
+            />
 
-            <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white px-3 text-sm font-medium text-zinc-700">
+            <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white dark:bg-panel-soft px-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
               <input
                 type="checkbox"
                 checked={filters.atrasadoOnly}
@@ -277,7 +259,7 @@ export function ProjectsToolbar({
               Apenas atrasados
             </label>
 
-            <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white px-3 text-sm font-medium text-zinc-700">
+            <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white dark:bg-panel-soft px-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">
               <input
                 type="checkbox"
                 checked={filters.urgenteOnly}

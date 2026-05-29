@@ -83,7 +83,7 @@ export function ConfirmProjectCreateDialog({
         aria-modal="true"
         aria-labelledby="confirm-create-title"
         aria-describedby="confirm-create-description"
-        className="w-full max-w-[760px] animate-[fadeScaleIn_150ms_ease-out] rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_32px_64px_-20px_rgba(0,0,0,0.35)]"
+        className="w-full max-w-[760px] animate-[fadeScaleIn_150ms_ease-out] rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-6 shadow-[0_32px_64px_-20px_rgba(0,0,0,0.35)]"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="mb-4 flex items-start gap-3">
@@ -91,49 +91,49 @@ export function ConfirmProjectCreateDialog({
             <ClipboardCheck size={18} />
           </span>
           <div>
-            <h2 id="confirm-create-title" className="text-lg font-bold text-zinc-900">
+            <h2 id="confirm-create-title" className="text-lg font-bold text-zinc-900 dark:text-foreground">
               Confirmar cadastro do projeto?
             </h2>
-            <p id="confirm-create-description" className="mt-1 text-sm leading-relaxed text-zinc-600">
+            <p id="confirm-create-description" className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
               Revise as informacoes abaixo antes de salvar. Se estiver tudo correto, confirme o cadastro. Caso precise alterar algo, volte para edicao.
             </p>
           </div>
         </header>
 
         <div className="grid gap-3 md:grid-cols-2">
-          <section className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-3">
-            <h3 className="text-sm font-semibold text-zinc-900">Identificacao</h3>
+          <section className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50/70 dark:bg-panel-soft p-3">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-foreground">Identificacao</h3>
             <dl className="mt-2 grid gap-1 text-sm">
-              <div className="flex justify-between gap-4"><dt className="text-zinc-500">Construtora</dt><dd className="text-zinc-800">{textOrDash(projectData.construtora)}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-zinc-500">Obra</dt><dd className="text-zinc-800">{textOrDash(projectData.obra)}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-zinc-500">Codigo</dt><dd className="text-zinc-800">{textOrDash(projectData.codigo_projeto)}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-zinc-500">Vendedor</dt><dd className="text-zinc-800">{textOrDash(projectData.vendedor)}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-zinc-500">Equipamento</dt><dd className="text-zinc-800">{textOrDash(projectData.equipamento)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-zinc-500 dark:text-zinc-400">Construtora</dt><dd className="text-zinc-800 dark:text-zinc-200">{textOrDash(projectData.construtora)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-zinc-500 dark:text-zinc-400">Obra</dt><dd className="text-zinc-800 dark:text-zinc-200">{textOrDash(projectData.obra)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-zinc-500 dark:text-zinc-400">Codigo</dt><dd className="text-zinc-800 dark:text-zinc-200">{textOrDash(projectData.codigo_projeto)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-zinc-500 dark:text-zinc-400">Vendedor</dt><dd className="text-zinc-800 dark:text-zinc-200">{textOrDash(projectData.vendedor)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-zinc-500 dark:text-zinc-400">Equipamento</dt><dd className="text-zinc-800 dark:text-zinc-200">{textOrDash(projectData.equipamento)}</dd></div>
             </dl>
           </section>
 
-          <section className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-3">
-            <h3 className="text-sm font-semibold text-zinc-900">Contato tecnico</h3>
+          <section className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50/70 dark:bg-panel-soft p-3">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-foreground">Contato tecnico</h3>
             <dl className="mt-2 grid gap-1 text-sm">
-              <div className="flex justify-between gap-4"><dt className="text-zinc-500">Engenheiro</dt><dd className="text-zinc-800">{textOrDash(projectData.engenheiro_nome)}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-zinc-500">Telefone do engenheiro</dt><dd className="text-zinc-800">{textOrDash(projectData.engenheiro_celular)}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-zinc-500">Tipo de cabine</dt><dd className="text-zinc-800">{textOrDash(projectData.tipo_cabine)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-zinc-500 dark:text-zinc-400">Engenheiro</dt><dd className="text-zinc-800 dark:text-zinc-200">{textOrDash(projectData.engenheiro_nome)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-zinc-500 dark:text-zinc-400">Telefone do engenheiro</dt><dd className="text-zinc-800 dark:text-zinc-200">{textOrDash(projectData.engenheiro_celular)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-zinc-500 dark:text-zinc-400">Tipo de cabine</dt><dd className="text-zinc-800 dark:text-zinc-200">{textOrDash(projectData.tipo_cabine)}</dd></div>
             </dl>
           </section>
 
-          <section className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-3">
-            <h3 className="text-sm font-semibold text-zinc-900">Alinhamento</h3>
+          <section className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50/70 dark:bg-panel-soft p-3">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-foreground">Alinhamento</h3>
             <dl className="mt-2 grid gap-1 text-sm">
-              <div className="flex justify-between gap-4"><dt className="text-zinc-500">Projeto de obra recebido</dt><dd className="text-zinc-800">{boolLabel(projectData.proj_obra_recebido)}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-zinc-500">Local da cabine definido</dt><dd className="text-zinc-800">{boolLabel(projectData.local_cabine_definido)}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-zinc-500">{dateLabel}</dt><dd className="text-zinc-800">{textOrDash(dateValue)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-zinc-500 dark:text-zinc-400">Projeto de obra recebido</dt><dd className="text-zinc-800 dark:text-zinc-200">{boolLabel(projectData.proj_obra_recebido)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-zinc-500 dark:text-zinc-400">Local da cabine definido</dt><dd className="text-zinc-800 dark:text-zinc-200">{boolLabel(projectData.local_cabine_definido)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-zinc-500 dark:text-zinc-400">{dateLabel}</dt><dd className="text-zinc-800 dark:text-zinc-200">{textOrDash(dateValue)}</dd></div>
             </dl>
           </section>
 
-          <section className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-3">
-            <h3 className="text-sm font-semibold text-zinc-900">Prioridade</h3>
+          <section className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50/70 dark:bg-panel-soft p-3">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-foreground">Prioridade</h3>
             <dl className="mt-2 grid gap-1 text-sm">
-              <div className="flex justify-between gap-4"><dt className="text-zinc-500">Urgente</dt><dd className="text-zinc-800">{boolLabel(projectData.urgente)}</dd></div>
+              <div className="flex justify-between gap-4"><dt className="text-zinc-500 dark:text-zinc-400">Urgente</dt><dd className="text-zinc-800 dark:text-zinc-200">{boolLabel(projectData.urgente)}</dd></div>
             </dl>
           </section>
         </div>
@@ -143,7 +143,7 @@ export function ConfirmProjectCreateDialog({
             ref={reviewRef}
             type="button"
             onClick={onReview}
-            className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+            className="rounded-xl border border-zinc-300 dark:border-white/15 bg-white dark:bg-panel-soft px-4 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-50 dark:hover:bg-white/8 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
           >
             Revisar informacoes
           </button>
