@@ -1,0 +1,630 @@
+﻿"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ChevronDown, ClipboardList, Plus, Zap } from "lucide-react";
+import { ProjectsAlerts } from "./projects-alerts";
+import { ProjectFormModal } from "./project-form-modal";
+import { ProjectsKanban } from "./projects-kanban";
+import { ProjectsKpiCards } from "./projects-kpi-cards";
+import { ProjectsTable } from "./projects-table";
+import { ProjectsToolbar } from "./projects-toolbar";
+import { ProjectDetailsDrawer } from "./project-details-drawer";
+import { ProjectsKpiDashboard } from "./projects-kpi-dashboard";
+import { ProjectStatusChangeDialog } from "./project-status-change-dialog";
+import { KpiDashboardErrorBoundary } from "./kpi-dashboard-error-boundary";
+import { PageContainer } from "./page-container";
+import { useProjectsStore } from "@/features/projects/state/projects-store";
+import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
+import { useAuth } from "@/features/auth/hooks/use-auth";
+import { getCurrentStatusDeadline } from "@/features/projects/domain/project-rules";
+import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
+import {
+  sendProjectNotification,
+  sendProjectCreatedNotification,
+} from "@/features/projects/services/project-notification-service";
+import type { ProjectNotificationEventType } from "@/features/projects/services/project-notification-service";
+
+export function ProjectsPageShell() {
+  const {
+    projects: allProjects,
+    activeView,
+    setActiveView,
+    filters,
+    setFilters,
+    filteredProjects,
+    createProject,
+    updateProject,
+    deleteProject,
+    toggleUrgente,
+    moveStatus,
+    statusHistory,
+    getProjectStatusHistory,
+    getProjectObservations,
+    isCodigoProjetoDuplicado,
+    addObservation,
+  } = useProjectsStore();
+
+  const { vendedores } = useMasterDataStore();
+
+  const { session } = useAuth();
+  const currentUsername = session?.user.username ?? "usuario.local";
+  const perms = session?.user.permissions;
+
+  /** Retorna e-mail do vendedor pelo nome cadastrado. */
+  function getVendorEmail(vendedorName: string): string | undefined {
+    const found = vendedores.find(
+      (v) => v.name.toLowerCase().trim() === vendedorName.toLowerCase().trim() && v.active,
+    );
+    return found?.email?.trim() || undefined;
+  }
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [quickCreate, setQuickCreate] = useState(false);
+  const [drawerContext, setDrawerContext] = useState<{
+    projectId: string;
+    mode: "view" | "edit";
+    section: "overview" | "history";
+  } | null>(null);
+  const [statusChangeProject, setStatusChangeProject] = useState<Project | undefined>(undefined);
+  const [toast, setToast] = useState<string>("");
+  const [tableState, setTableState] = useState<"loading" | "ready" | "error">("loading");
+  const [kpiFilter, setKpiFilter] = useState<"all" | "total" | "andamento" | "atrasados" | "urgentes" | "finalizados">("all");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string>("");
+  const [newProjectDropOpen, setNewProjectDropOpen] = useState(false);
+
+  const baseProjects = filteredProjects();
+  const detailsProject = useMemo(
+    () => (drawerContext ? allProjects.find((project) => project.id === drawerContext.projectId) : undefined),
+    [drawerContext, allProjects],
+  );
+
+  const history = useMemo(
+    () => (drawerContext ? getProjectStatusHistory(drawerContext.projectId) : []),
+    [drawerContext, getProjectStatusHistory],
+  );
+
+  const observations = useMemo(
+    () => (drawerContext ? getProjectObservations(drawerContext.projectId) : []),
+    [drawerContext, getProjectObservations],
+  );
+
+  const kpis = useMemo(() => {
+    const total = baseProjects.length;
+    const atrasados = baseProjects.filter((project) => getCurrentStatusDeadline(project).isOverdue).length;
+    const urgentes = baseProjects.filter((project) => project.urgente).length;
+    const finalizados = baseProjects.filter((project) => project.status_atual === "PROJETO FINAL ENVIADO").length;
+    const andamento = Math.max(total - finalizados, 0);
+
+    return { total, atrasados, urgentes, finalizados, andamento };
+  }, [baseProjects]);
+
+  const projects = useMemo(() => {
+    if (kpiFilter === "all" || kpiFilter === "total") return baseProjects;
+    if (kpiFilter === "urgentes") return baseProjects.filter((project) => project.urgente);
+    if (kpiFilter === "finalizados") return baseProjects.filter((project) => project.status_atual === "PROJETO FINAL ENVIADO");
+    if (kpiFilter === "atrasados") {
+      return baseProjects.filter((project) => getCurrentStatusDeadline(project).isOverdue);
+    }
+    return baseProjects.filter((project) => project.status_atual !== "PROJETO FINAL ENVIADO");
+  }, [baseProjects, kpiFilter]);
+
+  const alerts = useMemo(
+    () =>
+      projects.filter((project) => {
+        const dl = getCurrentStatusDeadline(project);
+        return project.urgente || dl.isOverdue || (dl.hasDeadline && (dl.daysRemaining ?? 999) <= 15);
+      }),
+    [projects],
+  );
+
+  const tabCounts = useMemo(
+    () => ({ table: projects.length, kanban: projects.length, kpis: allProjects.length, alerts: alerts.length }),
+    [projects.length, allProjects.length, alerts.length],
+  );
+
+  useEffect(() => {
+    setLastUpdatedAt(new Date().toLocaleString());
+    const timer = window.setTimeout(() => setTableState("ready"), 420);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  function touchLastUpdated() {
+    setLastUpdatedAt(new Date().toLocaleString());
+  }
+
+  function handleFiltersChange(patch: Parameters<typeof setFilters>[0]) {
+    setFilters(patch);
+    touchLastUpdated();
+  }
+
+  function openCreate() {
+    setDrawerContext(null);
+    setQuickCreate(false);
+    setModalOpen(true);
+  }
+
+  function openQuickCreate() {
+    setDrawerContext(null);
+    setQuickCreate(true);
+    setModalOpen(true);
+  }
+
+  function openDrawer(project: Project, mode: "view" | "edit", section: "overview" | "history") {
+    setDrawerContext({ projectId: project.id, mode, section });
+  }
+
+  function openDetails(project: Project) {
+    openDrawer(project, "view", "overview");
+  }
+
+  function openEdit(project: Project) {
+    openDrawer(project, "edit", "overview");
+  }
+
+  function openHistory(project: Project) {
+    openDrawer(project, "view", "history");
+  }
+
+  function openStatusDialog(project: Project) {
+    setStatusChangeProject(project);
+  }
+
+  function applyStatusChange(nextStatus: ProjectStatus, observation?: string) {
+    const project = statusChangeProject;
+    if (!project) return;
+
+    const oldStatus = project.status_atual;
+    const result = moveStatus(project.id, nextStatus, "acao-rapida");
+    if (!result.ok) {
+      notify(result.error ?? "Nao foi possivel alterar o status.");
+      return;
+    }
+
+    if (observation?.trim()) {
+      addObservation(
+        project.id,
+        `Mudanca de status via menu de acoes: ${oldStatus} -> ${nextStatus}. Observacao: ${observation.trim()}`,
+        currentUsername,
+      );
+    }
+
+    setStatusChangeProject(undefined);
+    touchLastUpdated();
+    notify("Status atualizado com sucesso.");
+
+    notifyStatusChange({
+      project,
+      oldStatus,
+      newStatus: nextStatus,
+      notes: observation,
+    });
+  }
+
+  function notify(message: string) {
+    setToast(message);
+    window.setTimeout(() => setToast(""), 3000);
+  }
+
+  /**
+   * Dispara a notificação de e-mail de mudança de status (fire-and-forget).
+   * Usado por TODOS os caminhos que alteram status: Kanban, dialog de ação
+   * rápida e edição pelo drawer de detalhes. Centralizar evita que algum
+   * caminho fique sem enviar e-mail (causa do bug em que mudanças pelo drawer
+   * nao notificavam o vendedor).
+   */
+  function notifyStatusChange(args: {
+    project: Project;
+    oldStatus: ProjectStatus;
+    newStatus: ProjectStatus;
+    notes?: string;
+  }) {
+    const { project, oldStatus, newStatus, notes } = args;
+    if (oldStatus === newStatus) return;
+
+    const isReleased = oldStatus === "CADASTRO INICIAL" && newStatus === "ELABORAR ANTE-PROJETO";
+    const isFinished = newStatus === "PROJETO FINAL ENVIADO";
+    const eventType: ProjectNotificationEventType = isReleased
+      ? "PROJECT_RELEASED_TO_ELABORATE_ANTE_PROJECT"
+      : isFinished
+        ? "PROJECT_FINISHED"
+        : "STATUS_CHANGED";
+
+    const sellerEmail = getVendorEmail(project.vendedor);
+
+    sendProjectNotification({
+      projectId: project.id,
+      projectCode: project.codigo_projeto,
+      constructorName: project.construtora,
+      workName: project.obra,
+      sellerName: project.vendedor,
+      sellerEmail: sellerEmail ?? "",
+      oldStatus,
+      newStatus,
+      eventType,
+      changedBy: currentUsername,
+      changedAt: new Date().toISOString(),
+      notes: notes?.trim() || undefined,
+      ...(isReleased ? { deadlineDays: 45 } : {}),
+    }).then((emailResult) => {
+      const dest = sellerEmail ?? "equipe de projetos";
+      if (!emailResult.success) {
+        addObservation(project.id, `Falha ao enviar e-mail para [${dest}].`, "sistema");
+        notify("Status atualizado, mas não foi possível enviar o e-mail ao vendedor.");
+      } else {
+        addObservation(project.id, `E-mail enviado para [${dest}] sobre alteração de status.`, "sistema");
+      }
+    });
+
+    if (!sellerEmail && project.vendedor && project.vendedor !== "SEM VENDEDOR") {
+      addObservation(project.id, "Vendedor sem e-mail cadastrado: aviso enviado apenas à equipe de projetos.", "sistema");
+    }
+  }
+
+  /**
+   * Envolve updateProject e dispara e-mail de notificação sempre que o status
+   * do projeto muda (qualquer transição), inclusive na edição pelo drawer de
+   * detalhes. Antes, só a transição CADASTRO INICIAL → ELABORAR notificava.
+   */
+  function handleUpdateProject(id: string, patch: Partial<Project>): { ok: boolean; error?: string } {
+    const current = allProjects.find((p) => p.id === id);
+    const oldStatus = current?.status_atual;
+    const newStatus = patch.status_atual ?? oldStatus;
+
+    const result = updateProject(id, patch);
+
+    if (result.ok && current && oldStatus && newStatus && oldStatus !== newStatus) {
+      // Usa os dados resultantes (patch sobrepõe os atuais) para o destinatário correto.
+      notifyStatusChange({
+        project: { ...current, ...patch },
+        oldStatus,
+        newStatus,
+      });
+    }
+
+    return result;
+  }
+
+  function markUrgentWithReason(payload: { projectId: string; urgencyReason: string; updatedAt: string; updatedBy: string }) {
+    const target = baseProjects.find((project) => project.id === payload.projectId);
+    if (!target || target.urgente) return;
+
+    toggleUrgente(payload.projectId);
+
+    const when = new Date(payload.updatedAt).toLocaleString();
+    addObservation(
+      payload.projectId,
+      `Projeto marcado como urgente por ${payload.updatedBy} em ${when}. Justificativa: ${payload.urgencyReason}`,
+      payload.updatedBy,
+    );
+
+    touchLastUpdated();
+    notify("Projeto marcado como urgente.");
+
+    // Disparar e-mail ao vendedor (fire-and-forget)
+    const sellerEmail = getVendorEmail(target.vendedor);
+    if (sellerEmail) {
+      sendProjectNotification({
+        projectId: target.id,
+        projectCode: target.codigo_projeto,
+        constructorName: target.construtora,
+        workName: target.obra,
+        sellerName: target.vendedor,
+        sellerEmail,
+        newStatus: target.status_atual,
+        eventType: "MARKED_URGENT",
+        changedBy: payload.updatedBy,
+        changedAt: payload.updatedAt,
+        urgencyReason: payload.urgencyReason,
+      }).then((emailResult) => {
+        if (!emailResult.success) {
+          addObservation(target.id, `Falha ao enviar e-mail para [${sellerEmail}].`, "sistema");
+        } else {
+          addObservation(target.id, `E-mail enviado para [${sellerEmail}] sobre marcação de urgência.`, "sistema");
+        }
+      });
+    } else if (target.vendedor && target.vendedor !== "SEM VENDEDOR") {
+      addObservation(target.id, "E-mail não enviado: vendedor sem e-mail cadastrado.", "sistema");
+    }
+  }
+
+  function removeUrgent(project: Project) {
+    if (!project.urgente) return;
+
+    toggleUrgente(project.id);
+    const by = currentUsername;
+    const when = new Date().toLocaleString();
+    addObservation(project.id, `Urgencia removida por ${by} em ${when}.`, by);
+
+    touchLastUpdated();
+    notify("Urgencia removida do projeto.");
+
+    // Disparar e-mail ao vendedor (fire-and-forget)
+    const sellerEmail = getVendorEmail(project.vendedor);
+    if (sellerEmail) {
+      sendProjectNotification({
+        projectId: project.id,
+        projectCode: project.codigo_projeto,
+        constructorName: project.construtora,
+        workName: project.obra,
+        sellerName: project.vendedor,
+        sellerEmail,
+        newStatus: project.status_atual,
+        eventType: "URGENCY_REMOVED",
+        changedBy: by,
+        changedAt: new Date().toISOString(),
+      }).then((emailResult) => {
+        if (!emailResult.success) {
+          addObservation(project.id, `Falha ao enviar e-mail para [${sellerEmail}].`, "sistema");
+        } else {
+          addObservation(project.id, `E-mail enviado para [${sellerEmail}] sobre remoção de urgência.`, "sistema");
+        }
+      });
+    }
+  }
+
+  function retryTableLoad() {
+    setTableState("loading");
+    window.setTimeout(() => {
+      setTableState("ready");
+      touchLastUpdated();
+    }, 500);
+  }
+
+  function clearAllFilters() {
+    setFilters({
+      search: "",
+      status: "all",
+      construtora: "",
+      obra: "",
+      vendedor: "",
+      equipamento: "",
+      atrasadoOnly: false,
+      urgenteOnly: false,
+    });
+    setKpiFilter("all");
+    touchLastUpdated();
+  }
+
+  return (
+    <main className="py-4 md:py-6">
+      <PageContainer>
+        {/* Header compacto */}
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h1 className="text-[1.05rem] font-semibold tracking-tight text-zinc-900 dark:text-foreground">Projetos</h1>
+            <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
+              Controle operacional dos projetos de engenharia
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {lastUpdatedAt && (
+              <span className="hidden text-[11px] text-zinc-400 dark:text-zinc-500 sm:block">
+                Atualizado: {lastUpdatedAt}
+              </span>
+            )}
+            {/* Dropdown Novo Projeto — visível apenas com permissão de criar */}
+            {(perms?.projects.create ?? true) && (
+            <div
+              className="relative"
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) {
+                  setNewProjectDropOpen(false);
+                }
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setNewProjectDropOpen((o) => !o)}
+                aria-label="Novo projeto"
+                aria-expanded={newProjectDropOpen}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-brand-dark"
+              >
+                <Plus size={14} />
+                Novo projeto
+                <ChevronDown
+                  size={12}
+                  className={`transition-transform duration-150 ${newProjectDropOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+              {newProjectDropOpen && (
+                <div className="absolute right-0 top-full z-50 mt-1.5 w-44 overflow-hidden rounded-xl border border-zinc-200/70 dark:border-white/8 bg-white dark:bg-panel shadow-[0_8px_24px_-6px_rgba(0,0,0,0.14)]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openQuickCreate();
+                      setNewProjectDropOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-50 dark:hover:bg-white/5"
+                  >
+                    <Zap size={13} className="text-amber-500" />
+                    Cadastro rápido
+                  </button>
+                  <div className="mx-3 h-px bg-zinc-100 dark:bg-white/8" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openCreate();
+                      setNewProjectDropOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-50 dark:hover:bg-white/5"
+                  >
+                    <ClipboardList size={13} className="text-brand" />
+                    Cadastro completo
+                  </button>
+                </div>
+              )}
+            </div>
+            )}
+          </div>
+        </div>
+
+        <ProjectsToolbar
+          view={activeView}
+          onViewChange={setActiveView}
+          onClearFilters={clearAllFilters}
+          tabCounts={tabCounts}
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+        />
+
+        <section className="mt-4">
+          <ProjectsKpiCards
+            total={kpis.total}
+            andamento={kpis.andamento}
+            atrasados={kpis.atrasados}
+            urgentes={kpis.urgentes}
+            finalizados={kpis.finalizados}
+            active={kpiFilter}
+            onSelect={(key) => {
+              setKpiFilter(key === "total" ? "all" : key);
+              touchLastUpdated();
+            }}
+          />
+        </section>
+
+        <section className="mt-4">
+          {activeView === "table" && (
+          <ProjectsTable
+            projects={projects}
+            onViewDetails={openDetails}
+            onEditProject={perms?.projects.edit !== false ? openEdit : undefined}
+            onChangeStatus={perms?.projects.changeStatus !== false ? openStatusDialog : undefined}
+            onViewHistory={openHistory}
+            onMarkUrgente={perms?.projects.markUrgent !== false ? markUrgentWithReason : undefined}
+            onRemoveUrgente={removeUrgent}
+            onClearFilters={clearAllFilters}
+            state={tableState}
+            onRetry={retryTableLoad}
+          />
+        )}
+          {activeView === "kanban" && (
+          <ProjectsKanban
+            projects={projects}
+            onOpen={openDetails}
+            notify={notify}
+            canDrag={perms?.kanban.dragAndDrop !== false}
+            onMoveStatus={(projectId, status, observation) => {
+              const current = projects.find((item) => item.id === projectId);
+              const oldStatus = current?.status_atual;
+              const result = moveStatus(projectId, status, "kanban", observation?.trim() || undefined);
+
+              if (result.ok && current && oldStatus) {
+                const message = observation?.trim()
+                  ? `Mudanca de status via Kanban: ${oldStatus} -> ${status}. Observacao: ${observation.trim()}`
+                  : `Mudanca de status via Kanban: ${oldStatus} -> ${status}.`;
+                addObservation(projectId, message, currentUsername);
+                touchLastUpdated();
+
+                notifyStatusChange({
+                  project: current,
+                  oldStatus,
+                  newStatus: status,
+                  notes: observation,
+                });
+              }
+
+              if (!result.ok) notify(result.error ?? "Falha na movimentacao");
+              return result;
+            }}
+          />
+        )}
+          {activeView === "kpis" && (
+            <KpiDashboardErrorBoundary>
+              <ProjectsKpiDashboard
+                projects={allProjects}
+                statusHistory={statusHistory}
+              />
+            </KpiDashboardErrorBoundary>
+          )}
+          {activeView === "alerts" && <ProjectsAlerts projects={alerts} onOpen={openDetails} />}
+        </section>
+
+        {tableState === "error" && (
+          <section className="mt-6 rounded-2xl border border-red-200 dark:border-red-700/50 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+            <p className="inline-flex items-center gap-2 font-semibold">
+              <AlertTriangle size={16} />
+              Erro ao sincronizar dados locais desta visualizacao.
+            </p>
+          </section>
+        )}
+
+        <ProjectFormModal
+          open={modalOpen}
+          mode="create"
+          quickMode={quickCreate}
+          statusHistory={[]}
+          observations={[]}
+          onClose={() => {
+            setModalOpen(false);
+          }}
+          onCreate={(input) => {
+            const result = createProject(input as Parameters<typeof createProject>[0]);
+            if (result.ok && result.project) {
+              const proj = result.project;
+              const sellerEmail = getVendorEmail(proj.vendedor);
+              sendProjectCreatedNotification({
+                projectId: proj.id,
+                projectCode: proj.codigo_projeto,
+                constructorName: proj.construtora,
+                workName: proj.obra,
+                sellerName: proj.vendedor,
+                sellerEmail: sellerEmail ?? "",
+                equipamento: proj.equipamento,
+                tipoCabine: proj.tipo_cabine,
+                eventType: "PROJECT_CREATED",
+                changedBy: currentUsername,
+                changedAt: new Date().toISOString(),
+              }).then((emailResult) => {
+                const dest = sellerEmail ?? "equipe de projetos";
+                if (!emailResult.success) {
+                  addObservation(proj.id, `Falha ao enviar e-mail de cadastro para [${dest}].`, "sistema");
+                } else {
+                  addObservation(proj.id, `E-mail de novo cadastro enviado para [${dest}].`, "sistema");
+                }
+              });
+              touchLastUpdated();
+            }
+            return result;
+          }}
+          onUpdate={handleUpdateProject}
+          onDelete={deleteProject}
+          onMoveStatus={(id, status) => moveStatus(id, status, "formulario")}
+          isCodigoDuplicado={isCodigoProjetoDuplicado}
+          onAddObservation={(id, text) => addObservation(id, text, currentUsername)}
+          notify={notify}
+        />
+
+        {detailsProject && (
+          <ProjectDetailsDrawer
+            key={`${drawerContext?.projectId}-${drawerContext?.mode}-${drawerContext?.section}`}
+            open={true}
+            project={detailsProject}
+            initialMode={drawerContext?.mode}
+            initialSection={drawerContext?.section}
+            statusHistory={history}
+            observations={observations}
+            onClose={() => setDrawerContext(null)}
+            onUpdate={handleUpdateProject}
+            onAddObservation={(id, text) => addObservation(id, text, currentUsername)}
+            isCodigoDuplicado={isCodigoProjetoDuplicado}
+            notify={notify}
+          />
+        )}
+
+        {statusChangeProject && (
+          <ProjectStatusChangeDialog
+            key={statusChangeProject.id}
+            open={true}
+            project={statusChangeProject}
+            onCancel={() => setStatusChangeProject(undefined)}
+            onConfirm={applyStatusChange}
+          />
+        )}
+
+        {toast && (
+          <div className="fixed right-4 bottom-4 rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg">{toast}</div>
+        )}
+      </PageContainer>
+    </main>
+  );
+}
