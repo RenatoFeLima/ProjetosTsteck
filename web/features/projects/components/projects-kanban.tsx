@@ -60,6 +60,8 @@ type ProjectsKanbanProps = {
   ) => { ok: boolean; error?: string };
   onOpen: (project: Project) => void;
   notify: (message: string) => void;
+  /** Quando false, o arraste é desabilitado (usuário sem permissão kanban.dragAndDrop). */
+  canDrag?: boolean;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -430,7 +432,7 @@ function KanbanColumn({
 
 // ─── Board ────────────────────────────────────────────────────────────────────
 
-export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify }: ProjectsKanbanProps) {
+export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, canDrag = true }: ProjectsKanbanProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overStatus, setOverStatus] = useState<ProjectStatus | null>(null);
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
@@ -439,11 +441,13 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify }: Proje
   // Bug #4: capture the dragged card's measured width for the overlay
   const [dragCardWidth, setDragCardWidth] = useState<number | undefined>(undefined);
 
-  const sensors = useSensors(
+  const allSensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
     }),
   );
+  // Sem permissão de arraste, nenhum sensor é ativo → cards só abrem ao clicar.
+  const sensors = canDrag ? allSensors : [];
 
   const byStatus = useMemo(
     () =>

@@ -3,20 +3,17 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Eye, EyeOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { hashPassword } from "@/features/auth/lib/password-utils";
-import { useUsersStore } from "@/features/auth/state/users-store";
-import { useAuth } from "@/features/auth/hooks/use-auth";
+import * as usersApi from "@/features/admin/lib/users-api";
 import type { User } from "@/features/auth/lib/auth-types";
 
 type ResetPasswordDialogProps = {
   open: boolean;
   onClose: () => void;
   user: User | null;
+  onSaved?: () => void | Promise<void>;
 };
 
-export function ResetPasswordDialog({ open, onClose, user }: ResetPasswordDialogProps) {
-  const { session } = useAuth();
-  const setPasswordHash = useUsersStore((s) => s.setPasswordHash);
+export function ResetPasswordDialog({ open, onClose, user, onSaved }: ResetPasswordDialogProps) {
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -49,11 +46,14 @@ export function ResetPasswordDialog({ open, onClose, user }: ResetPasswordDialog
 
     setSubmitting(true);
     try {
-      const hash = await hashPassword(password);
-      const actorId = session?.user.id ?? "sistema";
-      const actorName = session?.user.name ?? "sistema";
-      setPasswordHash(user.id, hash, mustChange, actorId, actorName);
+      await usersApi.resetPassword(user.id, password);
+      // A API força "trocar no próximo login" ao redefinir senha de terceiros.
+      // Se o admin desmarcou essa exigência, ajustamos em seguida.
+      if (!mustChange) await usersApi.updateUser(user.id, { mustChangePassword: false });
+      await onSaved?.();
       onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao redefinir senha.");
     } finally {
       setSubmitting(false);
     }

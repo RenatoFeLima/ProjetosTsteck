@@ -3,15 +3,6 @@
 import { nanoid } from "nanoid";
 import { create, type StoreApi } from "zustand";
 import { persist } from "zustand/middleware";
-import {
-  buildSeedConstrutoras,
-  buildSeedEngenheiros,
-  buildSeedEquipamentos,
-  buildSeedObras,
-  buildSeedTiposCabine,
-  buildSeedVendedores,
-  getSeedVendedorEmail,
-} from "@/features/master-data/domain/master-data-seed";
 import type {
   AuditEvent,
   Construtora,
@@ -165,12 +156,13 @@ function buildStore(set: any, get: () => MasterDataState): MasterDataState {
   }
 
   return {
-    construtoras: buildSeedConstrutoras(),
-    obras: buildSeedObras(),
-    equipamentos: buildSeedEquipamentos(),
-    tiposCabine: buildSeedTiposCabine(),
-    vendedores: buildSeedVendedores(),
-    engenheiros: buildSeedEngenheiros(),
+    // Base inicia VAZIA — sem dados mockados. Cadastros reais serão criados no sistema.
+    construtoras: [],
+    obras: [],
+    equipamentos: [],
+    tiposCabine: [],
+    vendedores: [],
+    engenheiros: [],
     auditLog: [],
 
     // ─── Construtoras ─────────────────────────────────────────────────
@@ -366,22 +358,23 @@ export const useMasterDataStore = create<MasterDataState>()(
     (set, get) => buildStore(set, get),
     {
       name: "tsteck:master-data",
-      // v2: preenche e-mails de vendedores conhecidos em estados ja persistidos.
-      // Sem isso, o localStorage antigo (vendedores sem e-mail) bloquearia o envio
-      // de notificacoes ao vendedor, mesmo apos a atualizacao do seed.
-      version: 2,
+      // v3: limpeza oficial — zera dados mockados antigos que ainda estejam no
+      // localStorage do navegador. A partir daqui, só dados reais cadastrados.
+      version: 3,
       migrate: (persisted, fromVersion) => {
-        const state = persisted as Partial<MasterDataState> | undefined;
-        if (!state || !Array.isArray(state.vendedores)) return state as MasterDataState;
-
-        if (fromVersion < 2) {
-          state.vendedores = state.vendedores.map((v) =>
-            v.email && v.email.trim()
-              ? v
-              : { ...v, email: getSeedVendedorEmail(v.name) ?? v.email },
-          );
+        const state = (persisted as Partial<MasterDataState>) ?? {};
+        if (fromVersion < 3) {
+          return {
+            ...state,
+            construtoras: [],
+            obras: [],
+            equipamentos: [],
+            tiposCabine: [],
+            vendedores: [],
+            engenheiros: [],
+            auditLog: [],
+          } as MasterDataState;
         }
-
         return state as MasterDataState;
       },
       partialize: (state) => ({

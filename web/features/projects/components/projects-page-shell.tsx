@@ -487,8 +487,8 @@ export function ProjectsPageShell() {
           <ProjectsTable
             projects={projects}
             onViewDetails={openDetails}
-            onEditProject={openEdit}
-            onChangeStatus={openStatusDialog}
+            onEditProject={perms?.projects.edit !== false ? openEdit : undefined}
+            onChangeStatus={perms?.projects.changeStatus !== false ? openStatusDialog : undefined}
             onViewHistory={openHistory}
             onMarkUrgente={perms?.projects.markUrgent !== false ? markUrgentWithReason : undefined}
             onRemoveUrgente={removeUrgent}
@@ -502,6 +502,7 @@ export function ProjectsPageShell() {
             projects={projects}
             onOpen={openDetails}
             notify={notify}
+            canDrag={perms?.kanban.dragAndDrop !== false}
             onMoveStatus={(projectId, status, observation) => {
               const current = projects.find((item) => item.id === projectId);
               const oldStatus = current?.status_atual;

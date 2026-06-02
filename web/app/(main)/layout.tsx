@@ -9,7 +9,6 @@ import { useAuth } from "@/features/auth/hooks/use-auth";
 import { ROLE_LABELS } from "@/features/auth/lib/permissions";
 import { resolveRouteRule } from "@/features/auth/lib/route-permissions";
 import { AccessDenied } from "@/features/auth/components/access-denied";
-import { useUsersStore } from "@/features/auth/state/users-store";
 import type { CurrentUser } from "@/features/user/hooks/use-current-user";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
@@ -17,7 +16,6 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   const { session, isLoading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const addAuditLog = useUsersStore((s) => s.addAuditLog);
 
   useEffect(() => {
     if (isLoading) return;
@@ -25,23 +23,22 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     if (session.user.mustChangePassword) { router.replace("/change-password"); }
   }, [isLoading, session, router]);
 
-  // ── Controle de acesso por rota (bloqueia URL direta) ──────────────────────
+  // ── Controle de acesso por rota (bloqueia navegação para área sem permissão) ──
   const rule = session ? resolveRouteRule(pathname) : undefined;
   const accessDenied = !!(session && rule && !rule.check(session.user.permissions));
 
-  // Registra a tentativa de acesso sem permissão (uma vez por rota).
+  // Registra a tentativa de acesso sem permissão no MySQL (uma vez por rota).
   const loggedPathRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!accessDenied || !session || !rule) return;
+    if (!accessDenied || !rule) return;
     if (loggedPathRef.current === pathname) return;
     loggedPathRef.current = pathname;
-    addAuditLog({
-      action: "ACCESS_DENIED",
-      actorUserId: session.user.id,
-      actorName: session.user.name,
-      message: `Tentativa de acesso sem permissão: ${rule.label} (${pathname}).`,
-    });
-  }, [accessDenied, pathname, session, rule, addAuditLog]);
+    void fetch("/api/audit/access-denied", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ area: rule.label, path: pathname }),
+    }).catch(() => {});
+  }, [accessDenied, pathname, rule]);
 
   if (isLoading || !session || session.user.mustChangePassword) {
     return (
@@ -51,7 +48,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     );
   }
 
-  // Converte para CurrentUser compatível com a sidebar
+  // Converte a sessão para o formato esperado pela sidebar.
   const currentUser: CurrentUser = {
     name: session.user.name,
     role: ROLE_LABELS[session.user.role] ?? session.user.role,

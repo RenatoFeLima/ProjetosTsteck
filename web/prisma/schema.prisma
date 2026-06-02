@@ -1,0 +1,341 @@
+// ============================================================================
+// Pipeline de Projetos TSTECK — Schema Prisma (MySQL / Hostinger)
+// Charset: utf8mb4 · Collation default do banco: utf8mb4_unicode_ci · Engine: InnoDB
+//
+// NOTA Prisma 6: a CLI lê DATABASE_URL de `.env` por padrão (não de `.env.local`).
+// Os scripts npm (db:migrate / db:seed / db:studio) usam `dotenv -e .env.local`
+// para injetar as variáveis do app sem duplicar segredos.
+// ============================================================================
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  PROJECTS
+  COMMERCIAL
+  VIEWER
+  CUSTOM
+}
+
+enum ProjectStatus {
+  CADASTRO_INICIAL
+  ELABORAR_ANTE_PROJETO
+  ANTE_PROJETO_ENVIADO
+  REVISAO_DE_ESTUDO
+  ANTE_PROJETO_APROVADO
+  PROJETO_APROVADO
+  PROJETO_FINAL_ENVIADO
+  REVISAO_DE_PROJETO_FINAL
+}
+
+enum ProjectPriority {
+  NORMAL
+  URGENTE
+}
+
+enum NotificationType {
+  PROJECT_CREATED
+  STATUS_CHANGED
+  PROJECT_RELEASED_TO_ELABORATE_ANTE_PROJECT
+  URGENCY_MARKED
+  URGENCY_REMOVED
+  DEADLINE_7_DAYS_LEFT
+  DEADLINE_DUE_TODAY
+  DEADLINE_OVERDUE
+}
+
+// ─── Usuários ───────────────────────────────────────────────────────────────
+
+model User {
+  id                 String    @id @default(uuid())
+  username           String    @unique
+  name               String
+  email              String?   @unique
+  passwordHash       String
+  role               UserRole  @default(VIEWER)
+  active             Boolean   @default(true)
+  mustChangePassword Boolean   @default(true)
+  permissionsJson    Json
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  createdById        String?
+  updatedById        String?
+
+  projectsCreated Project[] @relation("ProjectCreatedBy")
+  projectsUpdated Project[] @relation("ProjectUpdatedBy")
+
+  @@index([role])
+  @@index([active])
+}
+
+// ─── Cadastros mestres ──────────────────────────────────────────────────────
+
+model Constructor {
+  id        String   @id @default(uuid())
+  name      String
+  cnpj      String?
+  phone     String?
+  email     String?
+  notes     String?  @db.Text
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  works    Work[]
+  projects Project[]
+
+  @@index([active])
+}
+
+model Work {
+  id            String   @id @default(uuid())
+  constructorId String
+  name          String
+  code          String?
+  address       String?
+  city          String?
+  state         String?
+  notes         String?  @db.Text
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  constructor Constructor @relation(fields: [constructorId], references: [id])
+  projects    Project[]
+
+  @@index([constructorId])
+  @@index([active])
+}
+
+model Equipment {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  description String?
+  family      String?
+  capacity    String?
+  dimension   String?
+  notes       String?  @db.Text
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  projects Project[]
+
+  @@index([active])
+}
+
+model CabinType {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  projects Project[]
+
+  @@index([active])
+}
+
+model Seller {
+  id        String   @id @default(uuid())
+  name      String
+  email     String?
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects Project[]
+
+  @@index([active])
+}
+
+model Engineer {
+  id        String   @id @default(uuid())
+  name      String
+  email     String?
+  phone     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects Project[]
+
+  @@index([active])
+}
+
+// ─── Projetos ───────────────────────────────────────────────────────────────
+
+model Project {
+  id            String  @id @default(uuid())
+  code          String  @unique
+  constructorId String?
+  workId        String?
+  sellerId      String?
+  equipmentId   String?
+  cabinTypeId   String?
+  engineerId    String?
+  engineerName  String?
+  engineerPhone String?
+
+  status   ProjectStatus   @default(CADASTRO_INICIAL)
+  priority ProjectPriority @default(NORMAL)
+
+  nextAction           String?
+  projectReceived      Boolean   @default(false)
+  cabinLocationDefined Boolean   @default(false)
+  alignmentCompleted   Boolean   @default(false)
+  alignmentDate        DateTime?
+
+  // Data/hora em que o projeto entrou no status atual (base do cálculo de prazo/SLA).
+  currentStatusEnteredAt DateTime @default(now())
+
+  reviewStudyCount Int @default(0)
+  finalReviewCount Int @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  updatedById String?
+
+  constructor Constructor? @relation(fields: [constructorId], references: [id])
+  work        Work?        @relation(fields: [workId], references: [id])
+  seller      Seller?      @relation(fields: [sellerId], references: [id])
+  equipment   Equipment?   @relation(fields: [equipmentId], references: [id])
+  cabinType   CabinType?   @relation(fields: [cabinTypeId], references: [id])
+  engineer    Engineer?    @relation(fields: [engineerId], references: [id])
+  createdBy   User?        @relation("ProjectCreatedBy", fields: [createdById], references: [id])
+  updatedBy   User?        @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
+
+  statusHistory      ProjectStatusHistory[]
+  reviewStudyHistory ProjectReviewStudyHistory[]
+  finalReviewHistory ProjectFinalReviewHistory[]
+  observations       ProjectObservation[]
+  notifications      ProjectNotification[]
+
+  @@index([status])
+  @@index([priority])
+  @@index([constructorId])
+  @@index([workId])
+  @@index([sellerId])
+  @@index([currentStatusEnteredAt])
+}
+
+// ─── Histórico de status ────────────────────────────────────────────────────
+
+model ProjectStatusHistory {
+  id          String         @id @default(uuid())
+  projectId   String
+  fromStatus  ProjectStatus?
+  toStatus    ProjectStatus
+  enteredAt   DateTime       @default(now())
+  exitedAt    DateTime?
+  changedById String?
+  source      String?
+  note        String?        @db.Text
+  createdAt   DateTime       @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([toStatus])
+}
+
+// ─── Revisão de Estudo (20 dias) ────────────────────────────────────────────
+
+model ProjectReviewStudyHistory {
+  id          String    @id @default(uuid())
+  projectId   String
+  enteredAt   DateTime  @default(now())
+  exitedAt    DateTime?
+  reason      String?   @db.Text
+  requestedBy String?
+  changedById String?
+  createdAt   DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// ─── Revisão de Projeto Final (20 dias) ─────────────────────────────────────
+
+model ProjectFinalReviewHistory {
+  id          String    @id @default(uuid())
+  projectId   String
+  enteredAt   DateTime  @default(now())
+  exitedAt    DateTime?
+  reason      String?   @db.Text
+  requestedBy String?
+  changedById String?
+  createdAt   DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// ─── Observações ────────────────────────────────────────────────────────────
+
+model ProjectObservation {
+  id        String   @id @default(uuid())
+  projectId String
+  author    String
+  text      String   @db.Text
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// ─── Notificações (idempotência via notificationKey) ────────────────────────
+
+model ProjectNotification {
+  id              String           @id @default(uuid())
+  projectId       String
+  type            NotificationType
+  status          ProjectStatus?
+  notificationKey String           @unique
+  sentToJson      Json?
+  success         Boolean          @default(false)
+  errorMessage    String?          @db.Text
+  sentAt          DateTime?
+  createdAt       DateTime         @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([type])
+}
+
+// ─── Auditoria ──────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  action       String
+  actorUserId  String?
+  actorName    String?
+  entityType   String?
+  entityId     String?
+  message      String   @db.Text
+  metadataJson Json?
+  createdAt    DateTime @default(now())
+
+  @@index([action])
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}

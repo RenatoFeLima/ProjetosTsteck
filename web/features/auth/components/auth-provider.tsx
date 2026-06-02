@@ -1,116 +1,97 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { hashPassword, verifyPassword } from "../lib/password-utils";
-import { useUsersStore } from "../state/users-store";
 import { AuthContext } from "../state/auth-context";
+import { mapApiUser, type ApiUser } from "../lib/api-user";
 import type { AuthSession, LoginResult } from "../lib/auth-types";
 
 /**
- * Provedor de autenticação.
- * - Sessão mantida APENAS em memória (React state).
- * - Ao recarregar a página, a sessão é perdida e o usuário volta para /login.
- * - Dados de usuários (com hash) são persistidos via Zustand no localStorage.
+ * Provedor de autenticação — agora 100% integrado ao backend MySQL.
+ * - A sessão é um cookie HTTP-only com JWT, emitido por /api/auth/login.
+ * - Ao montar, /api/auth/me restaura a sessão (sobrevive a recarregar a página).
+ * - Nenhum dado de usuário fica no localStorage/Zustand.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const seeded = useUsersStore((s) => s.seeded);
-  const seed = useUsersStore((s) => s.seed);
-  const getUserByUsername = useUsersStore((s) => s.getUserByUsername);
-  const recordLogin = useUsersStore((s) => s.recordLogin);
-  const addAuditLog = useUsersStore((s) => s.addAuditLog);
-  const setPasswordHash = useUsersStore((s) => s.setPasswordHash);
+  const applyUser = useCallback((apiUser: ApiUser | null) => {
+    setSession(apiUser ? { user: mapApiUser(apiUser), loggedInAt: new Date().toISOString() } : null);
+  }, []);
 
-  // ── Inicialização: seed do admin inicial ─────────────────────────────────
-  useEffect(() => {
-    async function init() {
-      if (!seeded) {
-        const hash = await hashPassword("172631");
-        seed(hash);
-      }
-      setIsLoading(false);
+  // ── Restaura sessão do cookie ao montar ──────────────────────────────────
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch("/api/auth/me", { cache: "no-store" });
+      const data = (await res.json().catch(() => ({}))) as { user?: ApiUser | null };
+      applyUser(data.user ?? null);
+    } catch {
+      applyUser(null);
     }
-    init();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [applyUser]);
+
+  useEffect(() => {
+    (async () => {
+      await refresh();
+      setIsLoading(false);
+    })();
+  }, [refresh]);
 
   // ── Login ─────────────────────────────────────────────────────────────────
   const login = useCallback(
     async (username: string, password: string): Promise<LoginResult> => {
-      const user = getUserByUsername(username);
-
-      if (!user || !user.active) {
-        addAuditLog({
-          action: "LOGIN_FAILED",
-          message: `Tentativa de login com usuário "${username}" — não encontrado ou inativo.`,
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
         });
-        return { ok: false, error: "Usuário ou senha inválidos." };
+        const data = (await res.json().catch(() => ({}))) as {
+          user?: ApiUser;
+          mustChangePassword?: boolean;
+          error?: string;
+        };
+        if (!res.ok || !data.user) {
+          return { ok: false, error: data.error ?? "Usuário ou senha inválidos." };
+        }
+        applyUser(data.user);
+        return { ok: true, mustChangePassword: !!data.mustChangePassword };
+      } catch {
+        return { ok: false, error: "Não foi possível conectar ao servidor." };
       }
-
-      const valid = await verifyPassword(password, user.passwordHash);
-      if (!valid) {
-        addAuditLog({
-          action: "LOGIN_FAILED",
-          actorUserId: user.id,
-          actorName: user.name,
-          message: `Login negado para ${user.name} — senha incorreta.`,
-        });
-        return { ok: false, error: "Usuário ou senha inválidos." };
-      }
-
-      recordLogin(user.id);
-      addAuditLog({
-        action: "LOGIN",
-        actorUserId: user.id,
-        actorName: user.name,
-        message: `${user.name} realizou login.`,
-      });
-
-      // Lê usuário atualizado após recordLogin
-      const fresh = useUsersStore.getState().getUserByUsername(username)!;
-      setSession({ user: { ...fresh }, loggedInAt: new Date().toISOString() });
-      return { ok: true, mustChangePassword: fresh.mustChangePassword };
     },
-    [getUserByUsername, addAuditLog, recordLogin],
+    [applyUser],
   );
 
   // ── Logout ────────────────────────────────────────────────────────────────
   const logout = useCallback(() => {
-    if (session) {
-      addAuditLog({
-        action: "LOGOUT",
-        actorUserId: session.user.id,
-        actorName: session.user.name,
-        message: `${session.user.name} realizou logout.`,
-      });
-    }
-    setSession(null);
-  }, [session, addAuditLog]);
+    void fetch("/api/auth/logout", { method: "POST" }).finally(() => setSession(null));
+  }, []);
 
   // ── Trocar senha ──────────────────────────────────────────────────────────
   const changePassword = useCallback(
     async (newPassword: string): Promise<{ ok: boolean; error?: string }> => {
-      if (!session) return { ok: false, error: "Sessão inválida." };
-      const hash = await hashPassword(newPassword);
-      setPasswordHash(session.user.id, hash, false, session.user.id, session.user.name);
-      const updated = useUsersStore.getState().getUserByUsername(session.user.username);
-      if (updated) setSession((prev) => (prev ? { ...prev, user: { ...updated } } : null));
-      return { ok: true };
-    },
-    [session, setPasswordHash],
-  );
-
-  // ── Atualizar sessão após mudança de dados ────────────────────────────────
-  const refreshSession = useCallback(
-    (userId: string) => {
-      const updated = useUsersStore.getState().getUserById(userId);
-      if (updated && session) {
-        setSession((prev) => (prev ? { ...prev, user: { ...updated } } : null));
+      try {
+        const res = await fetch("/api/auth/change-password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ newPassword }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok) return { ok: false, error: data.error ?? "Erro ao alterar senha." };
+        await refresh();
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "Não foi possível conectar ao servidor." };
       }
     },
-    [session],
+    [refresh],
   );
+
+  // ── Atualizar sessão (revalida do servidor) ───────────────────────────────
+  const refreshSession = useCallback(() => {
+    void refresh();
+  }, [refresh]);
 
   return (
     <AuthContext.Provider value={{ session, isLoading, login, logout, changePassword, refreshSession }}>

@@ -21,16 +21,23 @@ type Props = {
 
 export function AppSidebar({ collapsed, onToggle, user, onIdentify, onLogout }: Props) {
   const { session } = useAuth();
-  const isAdmin = session?.user.role === "ADMIN";
+  const perms = session?.user.permissions;
+  const canManageUsers = perms?.users.view ?? false;
 
   const adminGroup: NavGroup = {
     title: "Administração",
     items: [
-      { label: "Usuários", href: "/administracao/usuarios", icon: Users },
+      { label: "Usuários", href: "/administracao/usuarios", icon: Users, permission: (p) => p.users.view },
     ],
   };
 
-  const allGroups = isAdmin ? [...NAV_GROUPS, adminGroup] : NAV_GROUPS;
+  // Esconde itens e grupos para os quais o usuário não tem permissão de visualização.
+  const sourceGroups = canManageUsers ? [...NAV_GROUPS, adminGroup] : NAV_GROUPS;
+  const allGroups = perms
+    ? sourceGroups
+        .map((g) => ({ ...g, items: g.items.filter((it) => !it.permission || it.permission(perms)) }))
+        .filter((g) => g.items.length > 0)
+    : [];
 
   return (
     <aside

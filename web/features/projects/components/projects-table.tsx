@@ -10,8 +10,8 @@ import { RemoveUrgencyConfirmDialog } from "./remove-urgency-confirm-dialog";
 type ProjectsTableProps = {
   projects: Project[];
   onViewDetails: (project: Project) => void;
-  onEditProject: (project: Project) => void;
-  onChangeStatus: (project: Project) => void;
+  onEditProject?: (project: Project) => void;
+  onChangeStatus?: (project: Project) => void;
   onViewHistory: (project: Project) => void;
   onMarkUrgente?: (payload: { projectId: string; urgencyReason: string; updatedAt: string; updatedBy: string }) => void;
   onRemoveUrgente: (project: Project) => void;
@@ -265,8 +265,9 @@ export function ProjectsTable({
                               Ver detalhes
                             </DropdownMenu.Item>
                             <DropdownMenu.Item
-                              onSelect={() => onEditProject(project)}
-                              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 dark:text-zinc-300 outline-none hover:bg-zinc-100 dark:hover:bg-white/8"
+                              disabled={!onEditProject}
+                              onSelect={() => onEditProject?.(project)}
+                              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 dark:text-zinc-300 outline-none hover:bg-zinc-100 dark:hover:bg-white/8 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
                             >
                               <PencilLine size={14} className="text-zinc-500 dark:text-zinc-500" />
                               Editar projeto
@@ -275,8 +276,8 @@ export function ProjectsTable({
                           <DropdownMenu.Separator className="my-1 h-px bg-zinc-100 dark:bg-white/8" />
                           <DropdownMenu.Group>
                             <DropdownMenu.Item
-                              disabled={project.status_atual === "PROJETO FINAL ENVIADO"}
-                              onSelect={() => onChangeStatus(project)}
+                              disabled={project.status_atual === "PROJETO FINAL ENVIADO" || !onChangeStatus}
+                              onSelect={() => onChangeStatus?.(project)}
                               className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 dark:text-zinc-300 outline-none hover:bg-zinc-100 dark:hover:bg-white/8 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
                             >
                               <Workflow size={14} className="text-zinc-500 dark:text-zinc-500" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   Clock3,
   KeyRound,
+  Loader2,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -20,8 +21,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROLE_COLORS, ROLE_LABELS } from "@/features/auth/lib/permissions";
-import { useUsersStore } from "@/features/auth/state/users-store";
 import { useAuth } from "@/features/auth/hooks/use-auth";
+import * as usersApi from "@/features/admin/lib/users-api";
 import { UserFormDialog } from "./user-form-dialog";
 import { ResetPasswordDialog } from "./reset-password-dialog";
 import type { User, UserRole } from "@/features/auth/lib/auth-types";
@@ -29,18 +30,30 @@ import type { User, UserRole } from "@/features/auth/lib/auth-types";
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 export function UsersPage() {
-  const { session } = useAuth();
-  const users = useUsersStore((s) => s.users);
-  const promoteAdmin = useUsersStore((s) => s.promoteAdmin);
-  const revokeAdmin = useUsersStore((s) => s.revokeAdmin);
-  const inactivateUser = useUsersStore((s) => s.inactivateUser);
-  const activateUser = useUsersStore((s) => s.activateUser);
-  const updateUser = useUsersStore((s) => s.updateUser);
+  const { session, refreshSession } = useAuth();
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<UserRole | "ALL">("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "active" | "inactive">("ALL");
   const [toast, setToast] = useState<{ type: "ok" | "err"; message: string } | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      setLoadError(null);
+      setUsers(await usersApi.fetchUsers());
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Erro ao carregar usuários.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   // Dialogs
   const [createOpen, setCreateOpen] = useState(false);
@@ -75,40 +88,24 @@ export function UsersPage() {
     setTimeout(() => setToast(null), 3500);
   }
 
-  function handlePromote(u: User) {
-    if (!session) return;
-    const r = promoteAdmin(u.id, session.user.id, session.user.name);
-    if (r.ok) showToast("ok", `${u.name} agora é Administrador.`);
-    else showToast("err", r.error ?? "Erro ao promover.");
+  /** Executa uma mutação na API, recarrega a lista e revalida a própria sessão. */
+  async function run(fn: () => Promise<unknown>, okMsg: string) {
+    try {
+      await fn();
+      await load();
+      refreshSession();
+      showToast("ok", okMsg);
+    } catch (e) {
+      showToast("err", e instanceof Error ? e.message : "Erro ao executar ação.");
+    }
   }
 
-  function handleRevoke(u: User) {
-    if (!session) return;
-    const r = revokeAdmin(u.id, session.user.id, session.user.name);
-    if (r.ok) showToast("ok", `Perfil de administrador removido de ${u.name}.`);
-    else showToast("err", r.error ?? "Erro ao revogar.");
-  }
-
-  function handleInactivate(u: User) {
-    if (!session) return;
-    const r = inactivateUser(u.id, session.user.id, session.user.name);
-    if (r.ok) showToast("ok", `${u.name} foi inativado.`);
-    else showToast("err", r.error ?? "Erro ao inativar.");
-  }
-
-  function handleActivate(u: User) {
-    if (!session) return;
-    const r = activateUser(u.id, session.user.id, session.user.name);
-    if (r.ok) showToast("ok", `${u.name} foi ativado.`);
-    else showToast("err", r.error ?? "Erro ao ativar.");
-  }
-
-  function handleRequirePwdChange(u: User) {
-    if (!session) return;
-    const r = updateUser(u.id, { mustChangePassword: true }, session.user.id, session.user.name);
-    if (r.ok) showToast("ok", `${u.name} deverá trocar a senha no próximo login.`);
-    else showToast("err", r.error ?? "Erro ao exigir troca de senha.");
-  }
+  const handlePromote = (u: User) => run(() => usersApi.setRole(u.id, "promote"), `${u.name} agora é Administrador.`);
+  const handleRevoke = (u: User) => run(() => usersApi.setRole(u.id, "revoke"), `Perfil de administrador removido de ${u.name}.`);
+  const handleInactivate = (u: User) => run(() => usersApi.setActive(u.id, false), `${u.name} foi inativado.`);
+  const handleActivate = (u: User) => run(() => usersApi.setActive(u.id, true), `${u.name} foi ativado.`);
+  const handleRequirePwdChange = (u: User) =>
+    run(() => usersApi.updateUser(u.id, { mustChangePassword: true }), `${u.name} deverá trocar a senha no próximo login.`);
 
   return (
     <div className="flex h-full flex-col">
@@ -128,9 +125,9 @@ export function UsersPage() {
       )}
 
       {/* Dialogs */}
-      <UserFormDialog open={createOpen} onClose={() => setCreateOpen(false)} mode="create" />
-      <UserFormDialog open={!!editUser} onClose={() => setEditUser(null)} mode="edit" user={editUser} />
-      <ResetPasswordDialog open={!!resetUser} onClose={() => setResetUser(null)} user={resetUser} />
+      <UserFormDialog open={createOpen} onClose={() => setCreateOpen(false)} mode="create" onSaved={load} />
+      <UserFormDialog open={!!editUser} onClose={() => setEditUser(null)} mode="edit" user={editUser} onSaved={load} />
+      <ResetPasswordDialog open={!!resetUser} onClose={() => setResetUser(null)} user={resetUser} onSaved={load} />
 
       {/* Page header */}
       <div className="flex items-start justify-between gap-4 border-b border-zinc-200 dark:border-white/8 px-6 py-5">
@@ -190,7 +187,23 @@ export function UsersPage() {
 
       {/* Table */}
       <div className="flex-1 overflow-auto px-6 py-4">
-        {filtered.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-zinc-400">
+            <Loader2 size={26} className="animate-spin opacity-60" />
+            <p className="text-[14px]">Carregando usuários…</p>
+          </div>
+        ) : loadError ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-16 text-red-500">
+            <AlertCircle size={30} className="opacity-60" />
+            <p className="text-[14px]">{loadError}</p>
+            <button
+              onClick={() => { setLoading(true); void load(); }}
+              className="rounded-lg border border-zinc-200 dark:border-white/10 px-3 py-1.5 text-[13px] text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-zinc-400">
             <UserX size={32} className="opacity-40" />
             <p className="text-[14px]">Nenhum usuário encontrado.</p>
@@ -338,7 +351,7 @@ function UserActionsMenu({
   // Itens visíveis dependem das permissões do usuário logado.
   const showEdit = canEdit;
   const showReset = canResetPwd;
-  const showRequirePwd = canResetPwd || canEdit;
+  const showRequirePwd = canEdit;
   const showPromote = canPromote && user.role !== "ADMIN";
   const showRevoke = canPromote && user.role === "ADMIN" && !isSelf;
   const showInactivate = (canEdit || canPromote) && !isSelf && user.active;

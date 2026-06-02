@@ -1,8 +1,30 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProjectFormModal } from "@/features/projects/components/project-form-modal";
+import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import type { Project } from "@/features/projects/domain/project-types";
+
+// A base inicia vazia (sem mock). Cada teste injeta os cadastros que precisa.
+function seedMasterData() {
+  const base = { active: true, createdAt: "2026-01-01", updatedAt: "2026-01-01", createdBy: "test" };
+  useMasterDataStore.setState({
+    construtoras: [{ id: "c1", name: "ACRY", ...base }],
+    obras: [{ id: "o1", construtoraName: "ACRY", name: "ARTHUR DE AZEVEDO", ...base }],
+    equipamentos: [
+      { id: "e1", code: "EK-15/26", ...base },
+      { id: "e2", code: "EK-20/30", ...base },
+    ],
+    tiposCabine: [],
+    vendedores: [{ id: "v1", name: "RENATO", ...base }],
+    engenheiros: [],
+    auditLog: [],
+  });
+}
+
+beforeEach(() => {
+  seedMasterData();
+});
 
 function buildCreateProps() {
   return {

@@ -9,7 +9,7 @@ export type AuthContextValue = {
   login: (username: string, password: string) => Promise<LoginResult>;
   logout: () => void;
   changePassword: (newPassword: string) => Promise<{ ok: boolean; error?: string }>;
-  refreshSession: (userId: string) => void;
+  refreshSession: (userId?: string) => void;
 };
 
 export const AuthContext = createContext<AuthContextValue>({

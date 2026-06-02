@@ -2,7 +2,6 @@
 
 import { create } from "zustand";
 import { formatISO } from "date-fns";
-import { buildSeedProjects } from "@/features/projects/domain/project-seed";
 import {
   getCurrentStatusDeadline,
   validateRequiredFields,
@@ -79,7 +78,8 @@ function rankAlert(project: Project): number {
   return 3;
 }
 
-const initialProjects = buildSeedProjects();
+// Base inicia VAZIA — sem dados mockados. Projetos reais virão da integração MySQL.
+const initialProjects: Project[] = [];
 
 export const useProjectsStore = create<StoreState>((set, get) => ({
   projects: initialProjects,

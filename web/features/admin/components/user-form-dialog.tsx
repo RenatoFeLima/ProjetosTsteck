@@ -3,10 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Eye, EyeOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { hashPassword } from "@/features/auth/lib/password-utils";
 import { getDefaultPermissions, ROLE_LABELS } from "@/features/auth/lib/permissions";
-import { useUsersStore } from "@/features/auth/state/users-store";
-import { useAuth } from "@/features/auth/hooks/use-auth";
+import * as usersApi from "@/features/admin/lib/users-api";
 import { PermissionsEditor } from "./permissions-editor";
 import type { User, UserPermissions, UserRole } from "@/features/auth/lib/auth-types";
 
@@ -20,17 +18,15 @@ type UserFormDialogProps = {
   mode: Mode;
   /** Usuário existente (obrigatório para mode=edit) */
   user?: User | null;
+  /** Chamado após criar/editar com sucesso (para recarregar a lista). */
+  onSaved?: () => void | Promise<void>;
 };
 
 const ROLES: UserRole[] = ["ADMIN", "MANAGER", "PROJECTS", "COMMERCIAL", "VIEWER", "CUSTOM"];
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
-export function UserFormDialog({ open, onClose, mode, user }: UserFormDialogProps) {
-  const { session } = useAuth();
-  const createUser = useUsersStore((s) => s.createUser);
-  const updateUser = useUsersStore((s) => s.updateUser);
-  const addAuditLog = useUsersStore((s) => s.addAuditLog);
+export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormDialogProps) {
 
   // Form fields
   const [name, setName] = useState("");
@@ -99,24 +95,33 @@ export function UserFormDialog({ open, onClose, mode, user }: UserFormDialogProp
       if (password !== confirmPassword) { setError("As senhas não coincidem."); return; }
     }
 
-    const actorId = session?.user.id ?? "sistema";
-    const actorName = session?.user.name ?? "sistema";
-
     setSubmitting(true);
     try {
       if (mode === "create") {
-        const hash = await hashPassword(password);
-        const result = createUser(
-          { username: username.trim(), name: name.trim(), email: email.trim() || undefined, passwordHash: hash, role, active, mustChangePassword: mustChange, permissions, createdBy: actorId },
-          actorId,
-          actorName,
-        );
-        if (!result.ok) { setError(result.error ?? "Erro ao criar usuário."); return; }
+        await usersApi.createUser({
+          username: username.trim(),
+          name: name.trim(),
+          email: email.trim() || undefined,
+          password,
+          role,
+          active,
+          mustChangePassword: mustChange,
+          permissions,
+        });
       } else if (user) {
-        const result = updateUser(user.id, { name: name.trim(), email: email.trim() || undefined, role, active, mustChangePassword: mustChange, permissions }, actorId, actorName);
-        if (!result.ok) { setError(result.error ?? "Erro ao salvar."); return; }
+        await usersApi.updateUser(user.id, {
+          name: name.trim(),
+          email: email.trim() || null,
+          role,
+          active,
+          mustChangePassword: mustChange,
+          permissions,
+        });
       }
+      await onSaved?.();
       onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao salvar.");
     } finally {
       setSubmitting(false);
     }

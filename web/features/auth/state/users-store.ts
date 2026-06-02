@@ -38,7 +38,7 @@ type UsersStoreActions = {
   promoteAdmin: (id: string, actorId: string, actorName: string) => { ok: boolean; error?: string };
   revokeAdmin: (id: string, actorId: string, actorName: string) => { ok: boolean; error?: string };
   inactivateUser: (id: string, actorId: string, actorName: string) => { ok: boolean; error?: string };
-  activateUser: (id: string, actorId: string, actorName: string) => { ok: boolean };
+  activateUser: (id: string, actorId: string, actorName: string) => { ok: boolean; error?: string };
   recordLogin: (id: string) => void;
 
   addAuditLog: (entry: Omit<AuditLog, "id" | "createdAt">) => void;
@@ -185,10 +185,12 @@ export const useUsersStore = create<UsersStore>()(
         const target = get().users.find((u) => u.id === id);
         if (!target) return { ok: false, error: "Usuário não encontrado." };
 
-        // Permissão: editar dados exige users.edit; alterar permissões exige managePermissions.
-        const changesPermissions = patch.permissions !== undefined;
-        const allowed = actorHasPermission(get().users, actorId, (p) =>
-          changesPermissions ? p.users.managePermissions : p.users.edit,
+        // Permissão: editar exige users.edit (managePermissions também habilita,
+        // pois o formulário de edição agrupa dados e permissões no mesmo patch).
+        const allowed = actorHasPermission(
+          get().users,
+          actorId,
+          (p) => p.users.edit || p.users.managePermissions,
         );
         if (!allowed) {
           get().addAuditLog({
@@ -377,6 +379,16 @@ export const useUsersStore = create<UsersStore>()(
       },
 
       activateUser(id, actorId, actorName) {
+        if (!actorHasPermission(get().users, actorId, (p) => p.users.delete)) {
+          get().addAuditLog({
+            action: "ACTION_DENIED",
+            actorUserId: actorId,
+            actorName,
+            targetUserId: id,
+            message: `${actorName} tentou ativar um usuário sem permissão.`,
+          });
+          return { ok: false, error: PERMISSION_DENIED };
+        }
         const target = get().users.find((u) => u.id === id);
         set((s) => ({
           users: s.users.map((u) =>
