@@ -3,6 +3,7 @@ import { IBM_Plex_Mono, IBM_Plex_Sans, Rajdhani } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/features/ui/theme/theme-provider";
 import { ThemeScript } from "@/features/ui/theme/theme-script";
+import { AuthProvider } from "@/features/auth/components/auth-provider";
 
 const plexSans = IBM_Plex_Sans({
   variable: "--font-plex-sans",
@@ -40,7 +41,9 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-background text-foreground">
         <ThemeScript />
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

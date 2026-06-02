@@ -1,6 +1,9 @@
 import type { Project } from "./project-types";
 
-const SEED_PROJECTS: Project[] = [
+// Os campos abaixo são adicionados pelo buildSeedProjects() via map — não precisam estar no array bruto.
+type SeedProjectInput = Omit<Project, "status_entered_at" | "reviewCount" | "finalReviewCount" | "reviewHistory" | "finalReviewHistory">;
+
+const SEED_PROJECTS: SeedProjectInput[] = [
   {
     id: "seed-181",
     construtora: "SOUSA ARAUJO",
@@ -21058,5 +21061,32 @@ const SEED_PROJECTS: Project[] = [
 ];
 
 export function buildSeedProjects(): Project[] {
-  return SEED_PROJECTS.map((project) => ({ ...project }));
+  return SEED_PROJECTS.map((project) => {
+    // Corrige projetos inconsistentes: alinhamento=true + CADASTRO INICIAL → ELABORAR ANTE-PROJETO
+    let status_atual = project.status_atual;
+    if (
+      project.alinhamento &&
+      project.proj_obra_recebido &&
+      project.local_cabine_definido &&
+      status_atual === "CADASTRO INICIAL"
+    ) {
+      status_atual = "ELABORAR ANTE-PROJETO";
+    }
+
+    // Determina status_entered_at: usa data_alinhamento se entrou em ELABORAR, senão created_at
+    const status_entered_at =
+      status_atual === "ELABORAR ANTE-PROJETO" && project.data_alinhamento
+        ? project.data_alinhamento
+        : project.created_at;
+
+    return {
+      ...project,
+      status_atual,
+      status_entered_at,
+      reviewCount: 0,
+      reviewHistory: [],
+      finalReviewCount: 0,
+      finalReviewHistory: [],
+    };
+  });
 }

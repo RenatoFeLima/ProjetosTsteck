@@ -107,10 +107,24 @@ export function buildSeedTiposCabine(): TipoCabine[] {
 }
 
 // ─── Vendedores ───────────────────────────────────────────────────────────────
+
+// E-mails conhecidos por nome de vendedor (uppercase). Sem o e-mail aqui (ou
+// cadastrado pelo formulário em Cadastros → Vendedores), a notificação vai
+// apenas para a equipe (PROJECTS_TEAM_EMAIL) e o vendedor NAO recebe o aviso.
+export const VENDEDOR_EMAILS: Record<string, string> = {
+  RENATO: "renatoferreira37@yahoo.com",
+};
+
+/** Retorna o e-mail conhecido de um vendedor pelo nome, ou undefined. */
+export function getSeedVendedorEmail(name: string): string | undefined {
+  return VENDEDOR_EMAILS[name.toUpperCase().trim()];
+}
+
 export function buildSeedVendedores(): Vendedor[] {
   return PRESET_VENDEDORES.map((name, i) => ({
     id: mkId("ven", i),
     name,
+    email: getSeedVendedorEmail(name),
     active: true,
     createdAt: TODAY,
     updatedAt: TODAY,

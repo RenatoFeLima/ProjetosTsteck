@@ -22,8 +22,8 @@ describe("projects store", () => {
   it("registra historico ao mover status", () => {
     const project = useProjectsStore
       .getState()
-      .projects.find((item) => item.alinhamento);
-    if (!project) throw new Error("Seed deve conter projeto alinhado");
+      .projects.find((item) => item.status_atual === "ANTE-PROJETO ENVIADO");
+    if (!project) throw new Error("Seed deve conter projeto em ANTE-PROJETO ENVIADO");
     const result = useProjectsStore
       .getState()
       .moveStatus(project.id, "REVISAO DE ESTUDO", "kanban");

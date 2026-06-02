@@ -21,7 +21,7 @@ export function IdentificationModal({ open, onClose, onSave, current }: Props) {
   useEffect(() => {
     if (open) {
       setName(current?.name ?? "");
-      setRole(current?.role ?? "Vendedor");
+      setRole((current?.role ?? "Vendedor") as UserRole);
       setTimeout(() => nameRef.current?.focus(), 50);
     }
   }, [open, current]);

@@ -20,10 +20,10 @@ import { AlertCircle, CheckCircle2, GripVertical } from "lucide-react";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
 import {
   computeNextAction,
-  computePrazoBadge,
-  computePrazoEntrega,
-  todayIsoDate,
+  getCurrentStatusDeadline,
+  validateStatusTransition,
 } from "@/features/projects/domain/project-rules";
+import { getStatusTheme } from "@/features/projects/domain/status-theme";
 import { PrazoBadge, UrgenteBadge } from "./pill-badges";
 import { KanbanStatusChangeDialog } from "./kanban-status-change-dialog";
 
@@ -35,6 +35,7 @@ const COLUMNS: ProjectStatus[] = [
   "PROJETO APROVADO",
   "PROJETO FINAL ENVIADO",
   "REVISAO DE ESTUDO",
+  "REVISAO DE PROJETO FINAL",
 ];
 
 const COLUMN_VIEWPORT_HEIGHT = 520;
@@ -61,32 +62,94 @@ type ProjectsKanbanProps = {
   notify: (message: string) => void;
 };
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getReviewOrdinal(count: number): string {
+  const ordinals = ["1ª", "2ª", "3ª", "4ª", "5ª", "6ª", "7ª", "8ª", "9ª", "10ª"];
+  return ordinals[count - 1] ?? `${count}ª`;
+}
+
 // ─── Shared card content ─────────────────────────────────────────────────────
 
 function CardContent({ project }: { project: Project }) {
+  const theme = getStatusTheme(project.status_atual);
+  const nextAction = computeNextAction(project);
+  const isInReview = project.status_atual === "REVISAO DE ESTUDO";
+  const isInFinalReview = project.status_atual === "REVISAO DE PROJETO FINAL";
+  const accentBg = project.urgente ? "bg-[#9e0b0f] dark:bg-red-600" : theme.accentBg;
+
   return (
-    <>
-      <div className="mb-2 flex items-center gap-2">
-        <GripVertical size={14} className="text-zinc-400 dark:text-zinc-600" />
-        <strong className="text-sm text-zinc-900 dark:text-foreground">{project.codigo_projeto}</strong>
-        <UrgenteBadge urgente={project.urgente} />
+    <div className="flex">
+      {/* Left accent strip */}
+      <div className={`w-[3px] flex-none ${accentBg} transition-colors`} />
+
+      {/* Card body */}
+      <div className="flex-1 min-w-0 p-3">
+        {/* Row 1: grip handle + project code + urgente badge */}
+        <div className="mb-0.5 flex items-start gap-1.5">
+          <GripVertical size={13} className="mt-[2px] shrink-0 text-zinc-300 dark:text-zinc-600" />
+          <span className="flex-1 min-w-0 font-mono text-[12.5px] font-bold leading-tight text-zinc-900 dark:text-foreground">
+            {project.codigo_projeto}
+          </span>
+          {project.urgente && <UrgenteBadge urgente />}
+        </div>
+
+        {/* Row 2: construtora */}
+        <p className="pl-[19px] text-[12px] font-semibold leading-snug text-zinc-800 dark:text-zinc-200">
+          {project.construtora}
+        </p>
+
+        {/* Row 3: obra */}
+        <p className="pl-[19px] mt-0.5 truncate text-[11px] leading-snug text-zinc-500 dark:text-muted" title={project.obra}>
+          {project.obra}
+        </p>
+
+        {/* Row 4: deadline badge + review badges */}
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          <PrazoBadge project={project} />
+          {project.reviewCount > 0 && (
+            <span
+              title={`Passou ${project.reviewCount}x por Revisao de Estudo`}
+              className={[
+                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                isInReview
+                  ? "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-700/50 dark:bg-orange-900/30 dark:text-orange-300"
+                  : "border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700/40 dark:bg-zinc-800/40 dark:text-zinc-400",
+              ].join(" ")}
+            >
+              {isInReview
+                ? `${getReviewOrdinal(project.reviewCount)} rev. estudo`
+                : `${project.reviewCount}x rev. estudo`}
+            </span>
+          )}
+          {project.finalReviewCount > 0 && (
+            <span
+              title={`Passou ${project.finalReviewCount}x por Revisao de Projeto Final`}
+              className={[
+                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                isInFinalReview
+                  ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-700/50 dark:bg-rose-900/30 dark:text-rose-300"
+                  : "border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700/40 dark:bg-zinc-800/40 dark:text-zinc-400",
+              ].join(" ")}
+            >
+              {isInFinalReview
+                ? `${getReviewOrdinal(project.finalReviewCount)} rev. final`
+                : `${project.finalReviewCount}x rev. final`}
+            </span>
+          )}
+        </div>
+
+        {/* Row 5: next action */}
+        <p
+          title={nextAction}
+          className="mt-2 truncate rounded border border-zinc-100 dark:border-white/[0.06] bg-zinc-50 dark:bg-white/[0.03] px-2 py-1 text-[10.5px] text-zinc-500 dark:text-zinc-400"
+        >
+          {nextAction}
+        </p>
       </div>
-      <p className="text-xs text-zinc-700 dark:text-zinc-300">{project.construtora}</p>
-      <p className="text-xs text-zinc-500 dark:text-muted">{project.obra}</p>
-      <div className="mt-2">
-        <PrazoBadge project={project} />
-      </div>
-      <p className="mt-2 rounded-md border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-2 py-1 text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
-        Proxima acao: {computeNextAction(project)}
-      </p>
-    </>
+    </div>
   );
 }
-
-// ─── Column card — ghost while being dragged ─────────────────────────────────
-// Bug #5: transition only applied when NOT dragging (prevents 150ms flash on drag start)
-// Bug #5: hover:-translate-y-0.5 removed (conflicts with dnd-kit transforms)
-// Bug #2B: minHeight on ghost prevents virtual-scroll layout jumps during drag
 
 function KanbanCard({
   project,
@@ -111,14 +174,14 @@ function KanbanCard({
         if (!isDragging) onOpen(project);
       }}
       className={[
-        "relative rounded-xl border p-3 select-none",
+        "relative rounded-xl border overflow-hidden select-none",
         isDragging
-          ? "cursor-grabbing border-dashed border-zinc-300 dark:border-white/15 bg-zinc-50/60 dark:bg-white/5 opacity-35 shadow-none"
+          ? "cursor-grabbing border-dashed border-zinc-200 dark:border-white/8 bg-zinc-50/60 dark:bg-white/[0.03] opacity-35 shadow-none"
           : [
               "cursor-grab bg-white dark:bg-panel-soft transition-all duration-150",
-              "shadow-[0_14px_24px_-20px_rgba(0,0,0,0.45)]",
-              "hover:shadow-[0_18px_28px_-18px_rgba(0,0,0,0.38)]",
-              project.urgente ? "border-red-200 dark:border-red-700/50" : "border-line",
+              "shadow-[0_1px_4px_-1px_rgba(0,0,0,0.06),0_4px_16px_-6px_rgba(0,0,0,0.10)]",
+              "hover:shadow-[0_2px_8px_-2px_rgba(0,0,0,0.10),0_8px_24px_-6px_rgba(0,0,0,0.16)]",
+              "hover:-translate-y-px",
             ].join(" "),
       ].join(" ")}
       style={isDragging ? { minHeight: CARD_HEIGHT } : undefined}
@@ -130,19 +193,14 @@ function KanbanCard({
 }
 
 // ─── Overlay card — follows the mouse, rendered via DragOverlay portal ────────
-// Bug #4: width passed in so the overlay matches the original card's column width
 
 function DragOverlayCard({ project, width }: { project: Project; width?: number }) {
   return (
     <article
-      className={[
-        "cursor-grabbing select-none rounded-xl border bg-white dark:bg-panel-soft p-3",
-        "shadow-[0_24px_48px_-12px_rgba(0,0,0,0.28)] ring-1",
-        project.urgente ? "border-red-200 dark:border-red-700/50 ring-red-100 dark:ring-red-700/20" : "border-zinc-200 dark:border-white/8 ring-zinc-200 dark:ring-white/5",
-      ].join(" ")}
+      className="cursor-grabbing select-none rounded-xl border overflow-hidden bg-white dark:bg-panel-soft shadow-[0_16px_48px_-8px_rgba(0,0,0,0.24),0_6px_20px_-6px_rgba(0,0,0,0.16)]"
       style={{
         width: width ?? undefined,
-        transform: "scale(1.03)",
+        transform: "scale(1.03) rotate(0.6deg)",
         transformOrigin: "center top",
       }}
     >
@@ -246,29 +304,14 @@ function BlockedMoveDialog({
 }
 
 function getBlockReasons(project: Project, toStatus: ProjectStatus): string[] {
-  const from = project.status_atual;
+  const validation = validateStatusTransition(project, toStatus);
+  if (validation.allowed) return [];
+
   const reasons: string[] = [];
-
-  if (from === "CADASTRO INICIAL" && toStatus !== "ELABORAR ANTE-PROJETO") {
-    reasons.push("De Cadastro Inicial, o projeto so pode avancar para Elaborar Ante-Projeto.");
-    return reasons;
+  if (validation.reason) reasons.push(validation.reason);
+  if (validation.missingFields && validation.missingFields.length > 0) {
+    reasons.push(...validation.missingFields.map((f) => `• ${f}`));
   }
-
-  if (from !== "CADASTRO INICIAL" && toStatus === "CADASTRO INICIAL") {
-    reasons.push("Projetos ja liberados nao podem retornar automaticamente para Cadastro Inicial.");
-    return reasons;
-  }
-
-  if (!project.alinhamento) {
-    if (!project.proj_obra_recebido) {
-      reasons.push("Projeto de obra do cliente nao recebido.");
-    }
-    if (!project.local_cabine_definido) {
-      reasons.push("Local da cabine nao definido.");
-    }
-    reasons.push("Alinhamento nao concluido.");
-  }
-
   return reasons;
 }
 
@@ -303,67 +346,69 @@ function KanbanColumn({
   isDropTarget: boolean;
   recentlyMovedProjectId: string | null;
 }) {
-  // Bug #1C: ref on <section> so the entire column area is the drop target,
-  // not just the inner scroll container (which caused missed drops at column edges)
   const { setNodeRef } = useDroppable({ id: status });
   const [scrollTop, setScrollTop] = useState(0);
   const { start, end, top, bottom } = useVirtualSlice(projects.length, scrollTop);
 
-  // Bug #2A: disable virtualization during drag so the dragged card's DOM node
-  // always exists (virtual slice could exclude it if the column scrolled)
   const effectiveProjects = isDragActive ? projects : projects.slice(start, end);
   const effectiveTop = isDragActive ? 0 : top;
   const effectiveBottom = isDragActive ? 0 : bottom;
+
+  const theme = getStatusTheme(status);
 
   const urgentCount = useMemo(() => projects.filter((p) => p.urgente).length, [projects]);
   const nearDeadlineCount = useMemo(
     () =>
       projects.filter((p) => {
-        const badge = computePrazoBadge(
-          todayIsoDate(),
-          computePrazoEntrega(
-            p.data_alinhamento,
-            p.proj_obra_recebido && p.local_cabine_definido,
-          ),
-        );
-        return badge === "atencao" || badge === "atrasado";
+        const dl = getCurrentStatusDeadline(p);
+        return dl.isOverdue || (dl.hasDeadline && (dl.daysRemaining ?? 999) <= 15);
       }).length,
     [projects],
   );
 
+  const sectionClass = [
+    "flex flex-col min-h-44 rounded-2xl border overflow-hidden transition-colors duration-150",
+    isDropTarget
+      ? `${theme.columnDropBg} ${theme.columnDropBorder}`
+      : isDragActive
+        ? "border-zinc-200/60 dark:border-white/5 bg-white/50 dark:bg-panel/60"
+        : `${theme.columnBg} ${theme.columnBorder}`,
+  ].join(" ");
+
   return (
-    <section
-      ref={setNodeRef}
-      className={[
-        "min-h-44 rounded-2xl border p-3 transition-colors duration-150",
-        isDropTarget
-          ? "border-[#9e0b0f]/25 bg-red-50/25 dark:bg-red-900/10"
-          : isDragActive
-            ? "border-line bg-white/60 dark:bg-white/5"
-            : "border-line bg-white/75 dark:bg-panel",
-      ].join(" ")}
-    >
-      <header className="mb-3 border-b border-dashed border-zinc-200 dark:border-white/10 pb-2">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-zinc-700 dark:text-zinc-300">{status}</h3>
-        <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
-          <span className="rounded-full border border-zinc-200 dark:border-white/8 bg-zinc-100 dark:bg-white/8 px-2 py-0.5 font-semibold text-zinc-700 dark:text-zinc-300">
-            {projects.length} projetos
+    <section ref={setNodeRef} className={sectionClass}>
+      {/* Colored top strip — status identity */}
+      <div className={`h-[3px] w-full flex-none ${theme.accentBg}`} />
+
+      {/* Column header */}
+      <header className="flex-none px-3 pt-2.5 pb-2.5 border-b border-zinc-200/60 dark:border-white/[0.07]">
+        <h3
+          className="text-[11px] font-bold uppercase tracking-widest text-zinc-600 dark:text-zinc-400 truncate"
+          title={theme.label}
+        >
+          {theme.label}
+        </h3>
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${theme.countPill}`}>
+            {projects.length} {projects.length === 1 ? "projeto" : "projetos"}
           </span>
-          <span className="rounded-full border border-red-200 dark:border-red-700/40 bg-red-50 dark:bg-red-900/15 px-2 py-0.5 font-semibold text-red-700 dark:text-red-300">
-            {urgentCount} urgentes
-          </span>
-          <span className="rounded-full border border-amber-200 dark:border-amber-700/40 bg-amber-50 dark:bg-amber-900/15 px-2 py-0.5 font-semibold text-amber-700 dark:text-amber-300">
-            {nearDeadlineCount} no prazo critico
-          </span>
+          {urgentCount > 0 && (
+            <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-[#9e0b0f] dark:border-red-700/40 dark:bg-red-900/15 dark:text-red-300">
+              {urgentCount} urg.
+            </span>
+          )}
+          {nearDeadlineCount > 0 && (
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-700/40 dark:bg-amber-900/15 dark:text-amber-300">
+              {nearDeadlineCount} crít{nearDeadlineCount !== 1 ? "icos" : "ico"}
+            </span>
+          )}
         </div>
       </header>
 
+      {/* Cards scroll area */}
       <div
         onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
-        className={[
-          "overflow-y-auto rounded-xl pr-1 transition-all duration-150",
-          isDropTarget ? "ring-1 ring-[#9e0b0f]/20" : "",
-        ].join(" ")}
+        className="flex-1 overflow-y-auto px-3 py-3"
         style={{ maxHeight: `${COLUMN_VIEWPORT_HEIGHT}px` }}
       >
         {effectiveTop > 0 && <div style={{ height: effectiveTop }} />}

@@ -1,5 +1,5 @@
 ﻿import { differenceInCalendarDays, parseISO } from "date-fns";
-import { computeNextAction, computePrazoBadge, computePrazoEntrega, todayIsoDate } from "@/features/projects/domain/project-rules";
+import { computeNextAction, getCurrentStatusDeadline, todayIsoDate } from "@/features/projects/domain/project-rules";
 import { AlertTriangle, BellRing, Clock3 } from "lucide-react";
 import type { Project } from "@/features/projects/domain/project-types";
 import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
@@ -23,7 +23,6 @@ function isStalled(project: Project): boolean {
 }
 
 function buildAlertGroups(projects: Project[]): AlertGroup[] {
-  const today = todayIsoDate();
   const groups: AlertGroup[] = [
     {
       key: "urgent",
@@ -34,22 +33,39 @@ function buildAlertGroups(projects: Project[]): AlertGroup[] {
     {
       key: "overdue",
       title: "Atrasados",
-      helper: "Projetos com prazo ja vencido.",
-      projects: projects.filter((project) => computePrazoBadge(today, computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido)) === "atrasado"),
+      helper: "Projetos com prazo de etapa ja vencido.",
+      projects: projects.filter((project) => getCurrentStatusDeadline(project).isOverdue),
     },
     {
-      key: "no-deadline",
-      title: "Sem prazo ativo",
-      helper: "Projetos fora do cadastro inicial sem prazo definido.",
-      projects: projects.filter(
-        (project) => project.status_atual !== "CADASTRO INICIAL" && !computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido),
-      ),
+      key: "review-overdue",
+      title: "Revisao de estudo vencida",
+      helper: "Projetos em Revisao de Estudo com prazo de 20 dias ja esgotado.",
+      projects: projects.filter((project) => project.status_atual === "REVISAO DE ESTUDO" && getCurrentStatusDeadline(project).isOverdue),
+    },
+    {
+      key: "review-near-deadline",
+      title: "Revisao de estudo proxima do vencimento",
+      helper: "Projetos em Revisao de Estudo com ate 5 dias restantes.",
+      projects: projects.filter((project) => {
+        if (project.status_atual !== "REVISAO DE ESTUDO") return false;
+        const dl = getCurrentStatusDeadline(project);
+        return dl.hasDeadline && !dl.isOverdue && (dl.daysRemaining ?? 999) <= 5;
+      }),
+    },
+    {
+      key: "review-multiple",
+      title: "Multiplas revisoes",
+      helper: "Projetos com 3 ou mais ciclos de Revisao de Estudo.",
+      projects: projects.filter((project) => project.reviewCount >= 3),
     },
     {
       key: "near-deadline",
       title: "Proximos do vencimento",
-      helper: "Projetos com risco de estourar prazo (ate 15 dias).",
-      projects: projects.filter((project) => computePrazoBadge(today, computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido)) === "atencao"),
+      helper: "Projetos com prazo de etapa a ate 15 dias.",
+      projects: projects.filter((project) => {
+        const dl = getCurrentStatusDeadline(project);
+        return dl.hasDeadline && !dl.isOverdue && (dl.daysRemaining ?? 999) <= 15;
+      }),
     },
     {
       key: "stalled",
@@ -71,9 +87,37 @@ function buildAlertGroups(projects: Project[]): AlertGroup[] {
     },
     {
       key: "review",
-      title: "Revisao de estudo",
-      helper: "Projetos em ciclo de revisao tecnica.",
+      title: "Revisao de estudo ativa",
+      helper: "Projetos atualmente em ciclo de revisao tecnica.",
       projects: projects.filter((project) => project.status_atual === "REVISAO DE ESTUDO"),
+    },
+    {
+      key: "final-review-active",
+      title: "Revisao de projeto final ativa",
+      helper: "Projetos com projeto final enviado em processo de revisao.",
+      projects: projects.filter((project) => project.status_atual === "REVISAO DE PROJETO FINAL"),
+    },
+    {
+      key: "final-review-overdue",
+      title: "Revisao de projeto final vencida",
+      helper: "Projetos em Revisao de Projeto Final com prazo de 20 dias ja esgotado.",
+      projects: projects.filter((project) => project.status_atual === "REVISAO DE PROJETO FINAL" && getCurrentStatusDeadline(project).isOverdue),
+    },
+    {
+      key: "final-review-near-deadline",
+      title: "Revisao de projeto final proxima do vencimento",
+      helper: "Projetos em Revisao de Projeto Final com ate 7 dias restantes.",
+      projects: projects.filter((project) => {
+        if (project.status_atual !== "REVISAO DE PROJETO FINAL") return false;
+        const dl = getCurrentStatusDeadline(project);
+        return dl.hasDeadline && !dl.isOverdue && (dl.daysRemaining ?? 999) <= 7;
+      }),
+    },
+    {
+      key: "final-review-multiple",
+      title: "Multiplas revisoes de projeto final",
+      helper: "Projetos com 3 ou mais ciclos de Revisao de Projeto Final.",
+      projects: projects.filter((project) => project.finalReviewCount >= 3),
     },
   ];
 

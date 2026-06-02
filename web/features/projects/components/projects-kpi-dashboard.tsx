@@ -33,7 +33,7 @@ import {
 import { differenceInCalendarDays, format, isValid, parseISO, subDays } from "date-fns";
 import { SearchableCombobox } from "./searchable-combobox";
 import { PROJECT_STATUSES, type Project, type ProjectStatus, type StatusHistoryItem } from "@/features/projects/domain/project-types";
-import { computeNextAction, computePrazoBadge, computePrazoEntrega, todayIsoDate } from "@/features/projects/domain/project-rules";
+import { computeNextAction, getCurrentStatusDeadline, todayIsoDate } from "@/features/projects/domain/project-rules";
 import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { KpiCard } from "./kpi-card";
 
@@ -78,7 +78,8 @@ const STATUS_COLORS: Record<ProjectStatus, string> = {
   "ANTE-PROJETO APROVADO": "#10b981",
   "PROJETO APROVADO": "#0ea5e9",
   "PROJETO FINAL ENVIADO": "#027a48",
-  "REVISAO DE ESTUDO": "#9e0b0f",
+  "REVISAO DE ESTUDO": "#ea580c",
+  "REVISAO DE PROJETO FINAL": "#f43f5e",
 };
 
 function parseDate(value?: string | null): Date | null {
@@ -245,10 +246,10 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       if (filters.prioridade === "urgente" && !project.urgente) return false;
       if (filters.prioridade === "normal" && project.urgente) return false;
 
-      const badge = computePrazoBadge(todayIsoDate(), computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido));
-      if (filters.situacao === "atrasado" && badge !== "atrasado") return false;
-      if (filters.situacao === "sem_prazo" && badge !== "sem_prazo") return false;
-      if (filters.situacao === "dentro_prazo" && (badge === "atrasado" || badge === "sem_prazo")) return false;
+      const dl = getCurrentStatusDeadline(project);
+      if (filters.situacao === "atrasado" && !dl.isOverdue) return false;
+      if (filters.situacao === "sem_prazo" && dl.hasDeadline) return false;
+      if (filters.situacao === "dentro_prazo" && (dl.isOverdue || !dl.hasDeadline)) return false;
 
       if (filters.abertoFinalizado === "abertos" && project.status_atual === "PROJETO FINAL ENVIADO") return false;
       if (filters.abertoFinalizado === "finalizados" && project.status_atual !== "PROJETO FINAL ENVIADO") return false;
@@ -289,13 +290,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
 
     const overdue = filteredProjects.filter((item) => {
       if (item.status_atual === "PROJETO FINAL ENVIADO") return false;
-      return computePrazoBadge(todayIsoDate(), computePrazoEntrega(item.data_alinhamento, item.proj_obra_recebido && item.local_cabine_definido)) === "atrasado";
+      return getCurrentStatusDeadline(item).isOverdue;
     });
 
-    const withoutDeadline = filteredProjects.filter((item) => {
-      const badge = computePrazoBadge(todayIsoDate(), computePrazoEntrega(item.data_alinhamento, item.proj_obra_recebido && item.local_cabine_definido));
-      return item.status_atual !== "CADASTRO INICIAL" && badge === "sem_prazo";
-    });
+    const withoutDeadline = filteredProjects.filter((item) =>
+      item.status_atual !== "CADASTRO INICIAL" && !getCurrentStatusDeadline(item).hasDeadline,
+    );
 
     const deliveryTimes: number[] = [];
     let estimatedByFallback = 0;
@@ -313,12 +313,15 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
     const avgDelivery = average(deliveryTimes);
     const completionRate = total ? (finalized.length / total) * 100 : 0;
 
-    const finalizedWithDeadline = finalized.filter((item) => computePrazoEntrega(item.data_alinhamento, item.proj_obra_recebido && item.local_cabine_definido));
+    const finalizedWithDeadline = finalized.filter((item) => {
+      const enteredAt = findEnteredStatusDate(item, "ELABORAR ANTE-PROJETO", historyByProject);
+      return enteredAt !== null;
+    });
     const finalizedInSla = finalizedWithDeadline.filter((item) => {
-      const prazo = computePrazoEntrega(item.data_alinhamento, item.proj_obra_recebido && item.local_cabine_definido);
+      const enteredAt = findEnteredStatusDate(item, "ELABORAR ANTE-PROJETO", historyByProject);
       const finalizedAt = findFinalizedAt(item, historyByProject);
-      if (!prazo || !finalizedAt) return false;
-      return finalizedAt <= parseISO(prazo);
+      if (!enteredAt || !finalizedAt) return false;
+      return differenceInCalendarDays(finalizedAt, enteredAt) <= 45;
     });
     const slaRate = finalizedWithDeadline.length
       ? (finalizedInSla.length / finalizedWithDeadline.length) * 100
@@ -427,16 +430,16 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       {
         nome: "Dentro do prazo",
         total: filteredProjects.filter((item) => {
-          const badge = computePrazoBadge(todayIsoDate(), computePrazoEntrega(item.data_alinhamento, item.proj_obra_recebido && item.local_cabine_definido));
-          return badge === "no_prazo";
+          const dl = getCurrentStatusDeadline(item);
+          return dl.hasDeadline && !dl.isOverdue && (dl.daysRemaining ?? 999) > 15;
         }).length,
         color: "#027a48",
       },
       {
         nome: "Proximo do prazo",
         total: filteredProjects.filter((item) => {
-          const badge = computePrazoBadge(todayIsoDate(), computePrazoEntrega(item.data_alinhamento, item.proj_obra_recebido && item.local_cabine_definido));
-          return badge === "atencao";
+          const dl = getCurrentStatusDeadline(item);
+          return dl.hasDeadline && !dl.isOverdue && (dl.daysRemaining ?? 999) <= 15;
         }).length,
         color: "#b54708",
       },
@@ -447,7 +450,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       },
       {
         nome: "Sem prazo",
-        total: filteredProjects.filter((item) => computePrazoBadge(todayIsoDate(), computePrazoEntrega(item.data_alinhamento, item.proj_obra_recebido && item.local_cabine_definido)) === "sem_prazo").length,
+        total: filteredProjects.filter((item) => !getCurrentStatusDeadline(item).hasDeadline).length,
         color: "#6b7280",
       },
     ];
@@ -478,14 +481,14 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
 
     const criticalRows: CriticalProjectRow[] = [];
     for (const project of filteredProjects) {
-      const badge = computePrazoBadge(todayIsoDate(), computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido));
+      const dl = getCurrentStatusDeadline(project);
       const diasStatus = daysInCurrentStatus(project, historyByProject, today);
 
-      if (badge === "atrasado") {
+      if (dl.isOverdue) {
         criticalRows.push({
           project,
           diasNoStatus: diasStatus,
-          motivo: `Atrasado ha ${Math.abs(differenceInCalendarDays(today, parseISO(computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido) ?? todayIsoDate())))} dias`,
+          motivo: `Atrasado ha ${dl.overdueDays} dias`,
           acao: "Priorizar tratativa com time tecnico e cliente.",
         });
       }
@@ -499,7 +502,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
         });
       }
 
-      if (project.status_atual !== "CADASTRO INICIAL" && badge === "sem_prazo") {
+      if (project.status_atual !== "CADASTRO INICIAL" && !dl.hasDeadline) {
         criticalRows.push({
           project,
           diasNoStatus: diasStatus,
@@ -526,7 +529,16 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
         });
       }
 
-      if (badge === "atencao") {
+      if (project.status_atual === "REVISAO DE PROJETO FINAL") {
+        criticalRows.push({
+          project,
+          diasNoStatus: diasStatus,
+          motivo: "Em revisao de projeto final",
+          acao: "Concluir revisao e reenviar projeto final ao cliente.",
+        });
+      }
+
+      if (dl.hasDeadline && !dl.isOverdue && (dl.daysRemaining ?? 999) <= 7) {
         criticalRows.push({
           project,
           diasNoStatus: diasStatus,
@@ -561,6 +573,76 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
     if (bySeller[0]) insights.push(`O vendedor ${bySeller[0].nome} possui o maior volume de projetos (${bySeller[0].totalProjetos}).`);
     if (byConstrutora[0]) insights.push(`A construtora ${byConstrutora[0].nome} concentra o maior volume de projetos (${byConstrutora[0].totalProjetos}).`);
 
+    // ─── Revisao de Estudo KPIs ─────────────────────────────────────────────────
+    const totalReviews = filteredProjects.reduce((sum, p) => sum + (p.reviewCount ?? 0), 0);
+    const projectsWithReview = filteredProjects.filter((p) => (p.reviewCount ?? 0) > 0);
+    const avgReviewsPerProject = projectsWithReview.length
+      ? totalReviews / projectsWithReview.length
+      : 0;
+    const currentlyInReview = filteredProjects.filter((p) => p.status_atual === "REVISAO DE ESTUDO");
+    const overdueReviews = currentlyInReview.filter((p) => getCurrentStatusDeadline(p).isOverdue);
+    const reviewsByConstrutora = Array.from(
+      filteredProjects.reduce((acc, p) => {
+        if ((p.reviewCount ?? 0) > 0) {
+          acc.set(p.construtora, (acc.get(p.construtora) ?? 0) + (p.reviewCount ?? 0));
+        }
+        return acc;
+      }, new Map<string, number>()),
+    )
+      .map(([nome, totalReviewCount]) => ({ nome, totalReviewCount }))
+      .sort((a, b) => b.totalReviewCount - a.totalReviewCount)
+      .slice(0, 10);
+
+    const reviews = {
+      total: totalReviews,
+      projectsWithReview: projectsWithReview.length,
+      avgPerProject: avgReviewsPerProject,
+      currentlyInReview: currentlyInReview.length,
+      overdueReviews: overdueReviews.length,
+      byConstrutora: reviewsByConstrutora,
+    };
+
+    // ─── Revisao de Projeto Final KPIs ─────────────────────────────────────────
+    const totalFinalReviews = filteredProjects.reduce((sum, p) => sum + (p.finalReviewCount ?? 0), 0);
+    const projectsWithFinalReview = filteredProjects.filter((p) => (p.finalReviewCount ?? 0) > 0);
+    const avgFinalReviewsPerProject = projectsWithFinalReview.length
+      ? totalFinalReviews / projectsWithFinalReview.length
+      : 0;
+    const currentlyInFinalReview = filteredProjects.filter((p) => p.status_atual === "REVISAO DE PROJETO FINAL");
+    const overdueFinalReviews = currentlyInFinalReview.filter((p) => getCurrentStatusDeadline(p).isOverdue);
+    const finalReviewsByConstrutora = Array.from(
+      filteredProjects.reduce((acc, p) => {
+        if ((p.finalReviewCount ?? 0) > 0) {
+          acc.set(p.construtora, (acc.get(p.construtora) ?? 0) + (p.finalReviewCount ?? 0));
+        }
+        return acc;
+      }, new Map<string, number>()),
+    )
+      .map(([nome, totalFinalReviewCount]) => ({ nome, totalFinalReviewCount }))
+      .sort((a, b) => b.totalFinalReviewCount - a.totalFinalReviewCount)
+      .slice(0, 10);
+    const finalReviewsByObra = Array.from(
+      filteredProjects.reduce((acc, p) => {
+        if ((p.finalReviewCount ?? 0) > 0) {
+          acc.set(p.obra, (acc.get(p.obra) ?? 0) + (p.finalReviewCount ?? 0));
+        }
+        return acc;
+      }, new Map<string, number>()),
+    )
+      .map(([nome, totalFinalReviewCount]) => ({ nome, totalFinalReviewCount }))
+      .sort((a, b) => b.totalFinalReviewCount - a.totalFinalReviewCount)
+      .slice(0, 10);
+
+    const finalReviews = {
+      total: totalFinalReviews,
+      projectsWithFinalReview: projectsWithFinalReview.length,
+      avgPerProject: avgFinalReviewsPerProject,
+      currentlyInFinalReview: currentlyInFinalReview.length,
+      overdueFinalReviews: overdueFinalReviews.length,
+      byConstrutora: finalReviewsByConstrutora,
+      byObra: finalReviewsByObra,
+    };
+
     return {
       total,
       ongoing,
@@ -587,6 +669,8 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       urgentStalled,
       criticalRows: dedupCritical,
       insights,
+      reviews,
+      finalReviews,
     };
   }, [filteredProjects, historyByProject, today]);
 
@@ -595,7 +679,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
     const finalized = previousPeriodProjects.filter((item) => item.status_atual === "PROJETO FINAL ENVIADO").length;
     const overdue = previousPeriodProjects.filter((item) => {
       if (item.status_atual === "PROJETO FINAL ENVIADO") return false;
-      return computePrazoBadge(todayIsoDate(), computePrazoEntrega(item.data_alinhamento, item.proj_obra_recebido && item.local_cabine_definido)) === "atrasado";
+      return getCurrentStatusDeadline(item).isOverdue;
     }).length;
     const urgent = previousPeriodProjects.filter((item) => item.urgente).length;
 
@@ -694,7 +778,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
     const projectsInStatus = drilldownProjects;
     const avgDays = average(projectsInStatus.map((item) => daysInCurrentStatus(item, historyByProject, today)));
     const urgentCount = projectsInStatus.filter((item) => item.urgente).length;
-    const noDeadline = projectsInStatus.filter((item) => computePrazoBadge(todayIsoDate(), computePrazoEntrega(item.data_alinhamento, item.proj_obra_recebido && item.local_cabine_definido)) === "sem_prazo").length;
+    const noDeadline = projectsInStatus.filter((item) => !getCurrentStatusDeadline(item).hasDeadline).length;
 
     return {
       total: projectsInStatus.length,
@@ -731,7 +815,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       project.equipamento,
       project.status_atual,
       project.urgente ? "Urgente" : "Normal",
-      computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido) ?? "",
+      getCurrentStatusDeadline(project).dueDate ?? "",
       String(daysInCurrentStatus(project, historyByProject, today)),
       computeNextAction(project),
     ]);
@@ -1160,6 +1244,126 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             )}
           </div>
         </article>
+      </section>
+
+      <section className="rounded-2xl border border-line bg-white dark:bg-panel p-3">
+        <header className="mb-3 flex items-center gap-2 border-b border-zinc-100 dark:border-white/8 pb-2">
+          <h3 className="text-sm font-bold text-zinc-900 dark:text-foreground">Revisao de Estudo</h3>
+          <span className="rounded-full border border-orange-200 bg-orange-50 dark:border-orange-700/50 dark:bg-orange-900/30 px-2 py-0.5 text-xs font-semibold text-orange-700 dark:text-orange-300">
+            {analytics.reviews.total} revisoes totais
+          </span>
+        </header>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Total de ciclos</p>
+            <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-foreground">{analytics.reviews.total}</p>
+            <p className="text-xs text-zinc-500 dark:text-muted">Soma de todas as revisoes dos projetos</p>
+          </div>
+          <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Projetos revisados</p>
+            <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-foreground">{analytics.reviews.projectsWithReview}</p>
+            <p className="text-xs text-zinc-500 dark:text-muted">Com pelo menos 1 ciclo de revisao</p>
+          </div>
+          <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Media por projeto</p>
+            <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-foreground">
+              {analytics.reviews.projectsWithReview ? analytics.reviews.avgPerProject.toFixed(1) : "N/D"}
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-muted">Entre projetos com revisao</p>
+          </div>
+          <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Em revisao agora</p>
+            <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-foreground">{analytics.reviews.currentlyInReview}</p>
+            <p className="text-xs text-zinc-500 dark:text-muted">Status: Revisao de Estudo</p>
+          </div>
+          <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3 sm:col-span-2">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Revisoes com prazo vencido</p>
+            <p className={`mt-1 text-2xl font-bold ${analytics.reviews.overdueReviews > 0 ? "text-red-700 dark:text-red-400" : "text-zinc-900 dark:text-foreground"}`}>
+              {analytics.reviews.overdueReviews}
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-muted">Em revisao ha mais de 20 dias</p>
+          </div>
+          {analytics.reviews.byConstrutora.length > 0 && (
+            <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3 sm:col-span-2 lg:col-span-3 xl:col-span-2">
+              <p className="mb-2 text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Construtoras com mais revisoes</p>
+              <div className="space-y-1">
+                {analytics.reviews.byConstrutora.slice(0, 5).map((item) => (
+                  <div key={item.nome} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate text-zinc-700 dark:text-zinc-300">{item.nome}</span>
+                    <span className="shrink-0 font-semibold text-orange-700 dark:text-orange-300">{item.totalReviewCount} rev.</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ─── Revisao de Projeto Final KPIs ─────────────────────────────────── */}
+      <section className="rounded-2xl border border-rose-200/80 dark:border-rose-800/30 bg-white dark:bg-panel p-3">
+        <header className="mb-3 flex items-center gap-2 border-b border-zinc-100 dark:border-white/8 pb-2">
+          <h3 className="text-sm font-bold text-zinc-900 dark:text-foreground">Revisao de Projeto Final</h3>
+          <span className="rounded-full border border-rose-200 bg-rose-50 dark:border-rose-700/50 dark:bg-rose-900/30 px-2 py-0.5 text-xs font-semibold text-rose-700 dark:text-rose-300">
+            {analytics.finalReviews.total} revisoes totais
+          </span>
+        </header>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Total de revisoes finais</p>
+            <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-foreground">{analytics.finalReviews.total}</p>
+            <p className="text-xs text-zinc-500 dark:text-muted">Soma de todas as revisoes de projeto final</p>
+          </div>
+          <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Projetos com revisao final</p>
+            <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-foreground">{analytics.finalReviews.projectsWithFinalReview}</p>
+            <p className="text-xs text-zinc-500 dark:text-muted">Com pelo menos 1 ciclo de revisao final</p>
+          </div>
+          <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Media por projeto</p>
+            <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-foreground">
+              {analytics.finalReviews.projectsWithFinalReview ? analytics.finalReviews.avgPerProject.toFixed(1) : "N/D"}
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-muted">Entre projetos com revisao final</p>
+          </div>
+          <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Em revisao final agora</p>
+            <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-foreground">{analytics.finalReviews.currentlyInFinalReview}</p>
+            <p className="text-xs text-zinc-500 dark:text-muted">Status: Revisao de Projeto Final</p>
+          </div>
+          <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3 sm:col-span-2">
+            <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Revisoes finais com prazo vencido</p>
+            <p className={`mt-1 text-2xl font-bold ${analytics.finalReviews.overdueFinalReviews > 0 ? "text-red-700 dark:text-red-400" : "text-zinc-900 dark:text-foreground"}`}>
+              {analytics.finalReviews.overdueFinalReviews}
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-muted">Em revisao final ha mais de 20 dias</p>
+          </div>
+          {analytics.finalReviews.byConstrutora.length > 0 && (
+            <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3 sm:col-span-2">
+              <p className="mb-2 text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Construtoras com mais revisoes finais</p>
+              <div className="space-y-1">
+                {analytics.finalReviews.byConstrutora.slice(0, 5).map((item) => (
+                  <div key={item.nome} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate text-zinc-700 dark:text-zinc-300">{item.nome}</span>
+                    <span className="shrink-0 font-semibold text-rose-700 dark:text-rose-300">{item.totalFinalReviewCount} rev.</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {analytics.finalReviews.byObra.length > 0 && (
+            <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3 sm:col-span-2">
+              <p className="mb-2 text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Obras com mais revisoes finais</p>
+              <div className="space-y-1">
+                {analytics.finalReviews.byObra.slice(0, 5).map((item) => (
+                  <div key={item.nome} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate text-zinc-700 dark:text-zinc-300">{item.nome}</span>
+                    <span className="shrink-0 font-semibold text-rose-700 dark:text-rose-300">{item.totalFinalReviewCount} rev.</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="rounded-2xl border border-line bg-white dark:bg-panel p-3">

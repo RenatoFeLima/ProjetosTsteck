@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendProjectMovementEmail } from "@/lib/mail/mail-service";
-import type { ProjectNotificationPayload } from "@/features/projects/services/project-notification-service";
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import {
+  getProjectNotificationRecipients,
+  isValidEmail,
+  type ProjectNotificationPayload,
+} from "@/features/projects/services/project-notification-service";
 
 /** Escapa caracteres HTML para evitar injeção no template do e-mail. */
 function escapeHtml(str: unknown): string {
@@ -24,21 +26,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, message: "Payload inválido." }, { status: 400 });
   }
 
-  const { projectId, projectCode, sellerEmail, eventType, changedBy, changedAt } = body;
+  const { projectId, projectCode, eventType, changedBy, changedAt } = body;
 
-  if (!projectId || !projectCode || !sellerEmail || !eventType || !changedBy || !changedAt) {
+  if (!projectId || !projectCode || !eventType || !changedBy || !changedAt) {
     return NextResponse.json(
       { success: false, message: "Campos obrigatórios ausentes." },
       { status: 400 },
     );
   }
 
-  if (!EMAIL_REGEX.test(sellerEmail)) {
-    return NextResponse.json(
-      { success: false, message: "E-mail do vendedor inválido." },
-      { status: 400 },
-    );
-  }
+  // Valida o e-mail do vendedor apenas se informado.
+  const sellerEmailValid = typeof body.sellerEmail === "string" && isValidEmail(body.sellerEmail);
 
   // Sanitiza todos os campos de texto usados no HTML do e-mail.
   const sanitized: ProjectNotificationPayload = {
@@ -47,7 +45,7 @@ export async function POST(request: NextRequest) {
     constructorName: escapeHtml(body.constructorName),
     workName: escapeHtml(body.workName),
     sellerName: escapeHtml(body.sellerName),
-    sellerEmail: body.sellerEmail, // validado acima, não vai para o HTML
+    sellerEmail: sellerEmailValid ? body.sellerEmail : "",
     oldStatus: body.oldStatus ? escapeHtml(body.oldStatus) : undefined,
     newStatus: body.newStatus ? escapeHtml(body.newStatus) : undefined,
     eventType: body.eventType,
@@ -55,9 +53,14 @@ export async function POST(request: NextRequest) {
     changedAt: body.changedAt,
     urgencyReason: body.urgencyReason ? escapeHtml(body.urgencyReason) : undefined,
     notes: body.notes ? escapeHtml(body.notes) : undefined,
+    deadlineDays: body.deadlineDays,
+    dueDate: body.dueDate ? escapeHtml(body.dueDate) : undefined,
+    statusEnteredAt: body.statusEnteredAt,
+    nextAction: body.nextAction ? escapeHtml(body.nextAction) : undefined,
   };
 
-  const result = await sendProjectMovementEmail(sanitized);
+  const recipients = getProjectNotificationRecipients(sellerEmailValid ? body.sellerEmail : undefined);
+  const result = await sendProjectMovementEmail(sanitized, recipients.to, recipients.cc);
 
   return NextResponse.json(result, { status: result.success ? 200 : 500 });
 }

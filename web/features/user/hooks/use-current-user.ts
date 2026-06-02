@@ -6,7 +6,7 @@ export type UserRole = "Vendedor" | "Engenheiro" | "Gerente" | "Admin";
 
 export type CurrentUser = {
   name: string;
-  role: UserRole;
+  role: string;
 };
 
 const STORAGE_KEY = "tsteck:current-user";

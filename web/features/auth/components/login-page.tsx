@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Eye, EyeOff, Lock, LogIn, User } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCurrentUser } from "@/features/user/hooks/use-current-user";
+import { useAuth } from "@/features/auth/hooks/use-auth";
 
 // ─── Input field ──────────────────────────────────────────────────────────────
 type InputFieldProps = {
@@ -79,36 +79,26 @@ function InputField({
 // ─── Login page ───────────────────────────────────────────────────────────────
 export function LoginPage() {
   const router = useRouter();
-  const { identify } = useCurrentUser();
+  const { login } = useAuth();
 
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState({ email: "", password: "" });
+  const [fieldErrors, setFieldErrors] = useState({ username: "", password: "" });
+  const [forgotMsg, setForgotMsg] = useState(false);
 
-  // Redirect if already authenticated
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem("tsteck:current-user");
-      if (stored) router.replace("/");
-    } catch {
-      // ignore in SSR
-    }
-  }, [router]);
-
-  function clearFieldError(field: "email" | "password") {
+  function clearFieldError(field: "username" | "password") {
     if (fieldErrors[field]) setFieldErrors((prev) => ({ ...prev, [field]: "" }));
   }
 
   function validate(): boolean {
-    const errors = { email: "", password: "" };
-    if (!email.trim()) errors.email = "Informe seu usuário ou e-mail.";
+    const errors = { username: "", password: "" };
+    if (!username.trim()) errors.username = "Informe seu usuário.";
     if (!password) errors.password = "Informe sua senha.";
     setFieldErrors(errors);
-    return !errors.email && !errors.password;
+    return !errors.username && !errors.password;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -117,28 +107,20 @@ export function LoginPage() {
     if (!validate()) return;
 
     setLoading(true);
-
     try {
-      // Simulate authentication delay
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-
-      // Derive display name from email/username
-      const raw = email.trim();
-      const displayName = raw.includes("@")
-        ? raw
-            .split("@")[0]
-            .replace(/[._-]+/g, " ")
-            .replace(/\b\w/g, (l) => l.toUpperCase())
-            .trim()
-        : raw
-            .replace(/[._-]+/g, " ")
-            .replace(/\b\w/g, (l) => l.toUpperCase())
-            .trim();
-
-      identify({ name: displayName || "Usuário TSTECK", role: "Admin" });
-      router.push("/");
+    const result = await login(username.trim(), password);
+      if (result.ok) {
+        if (result.mustChangePassword) {
+          router.push("/change-password");
+          return;
+        }
+        router.push("/");
+        return;
+      }
+      setGlobalError(result.error ?? "Credenciais inválidas.");
     } catch {
       setGlobalError("Não foi possível conectar. Tente novamente.");
+    } finally {
       setLoading(false);
     }
   }
@@ -217,17 +199,17 @@ export function LoginPage() {
             {/* ── Form ── */}
             <form onSubmit={handleSubmit} noValidate>
               <div className="space-y-4">
-                {/* Email / username */}
+                {/* Username */}
                 <InputField
-                  id="login-email"
-                  label="Usuário ou e-mail"
-                  value={email}
-                  onChange={(v) => { setEmail(v); clearFieldError("email"); }}
-                  placeholder="usuario@tsteck.com"
+                  id="login-username"
+                  label="Usuário"
+                  value={username}
+                  onChange={(v) => { setUsername(v); clearFieldError("username"); }}
+                  placeholder="Ex.: JoaoSilva"
                   icon={<User size={15} />}
-                  error={fieldErrors.email}
+                  error={fieldErrors.username}
                   disabled={loading}
-                  autoComplete="email"
+                  autoComplete="username"
                 />
 
                 {/* Password */}
@@ -241,6 +223,7 @@ export function LoginPage() {
                     </label>
                     <button
                       type="button"
+                      onClick={() => setForgotMsg((s) => !s)}
                       className="text-[12px] text-zinc-400 transition hover:text-brand"
                     >
                       Esqueci minha senha
@@ -269,20 +252,13 @@ export function LoginPage() {
                       </button>
                     }
                   />
+                  {forgotMsg && (
+                    <p className="mt-2 rounded-xl border border-amber-100 dark:border-amber-700/40 bg-amber-50 dark:bg-amber-900/20 px-3 py-2.5 text-[12px] text-amber-700 dark:text-amber-300" role="status">
+                      Solicite ao administrador do sistema a redefinição da sua senha.
+                    </p>
+                  )}
                 </div>
               </div>
-
-              {/* Remember me */}
-              <label className="mt-4 flex cursor-pointer select-none items-center gap-2 text-[13px] text-zinc-500 dark:text-zinc-400">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="h-[15px] w-[15px] rounded border-zinc-300 accent-brand"
-                  disabled={loading}
-                />
-                Manter conectado
-              </label>
 
               {/* Submit */}
               <button

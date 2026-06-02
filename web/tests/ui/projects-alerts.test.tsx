@@ -21,10 +21,15 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     data_lancamento: "2026-05-01",
     data_alinhamento: "2026-01-01",
     status_atual: "CADASTRO INICIAL",
+    status_entered_at: "2026-05-01",
     data_previsao: null,
     data_envio: null,
     data_aprovacao: null,
     urgente: false,
+    reviewCount: 0,
+    reviewHistory: [],
+    finalReviewCount: 0,
+    finalReviewHistory: [],
     created_at: "2026-05-01",
     updated_at: "2026-05-01",
     ...overrides,
@@ -63,6 +68,7 @@ describe("projects alerts", () => {
       id: "p-review",
       codigo_projeto: "REV-200-0002",
       status_atual: "REVISAO DE ESTUDO",
+      status_entered_at: "2026-01-01",
       proj_obra_recebido: true,
       local_cabine_definido: true,
       alinhamento: true,
@@ -76,7 +82,7 @@ describe("projects alerts", () => {
     expect(screen.getByRole("heading", { name: "Atrasados" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Aguardando documentacao" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Aguardando localizacao da cabine" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Revisao de estudo" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Revisao de estudo ativa" })).toBeInTheDocument();
     expect(screen.getAllByText(/Proxima acao:/i).length).toBeGreaterThan(0);
 
     await user.click(screen.getAllByText("URG-100-0001")[0]);

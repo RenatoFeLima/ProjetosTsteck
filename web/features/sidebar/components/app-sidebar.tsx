@@ -1,12 +1,15 @@
 "use client";
 
+import { Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CurrentUser } from "@/features/user/hooks/use-current-user";
+import { useAuth } from "@/features/auth/hooks/use-auth";
 import { NAV_GROUPS } from "../nav-config";
 import { SidebarBrand } from "./sidebar-brand";
 import { SidebarNavGroup } from "./sidebar-nav-group";
 import { SidebarUserProfile } from "./sidebar-user-profile";
 import { ThemeToggle } from "@/features/ui/theme/theme-toggle";
+import type { NavGroup } from "../nav-config";
 
 type Props = {
   collapsed: boolean;
@@ -17,6 +20,18 @@ type Props = {
 };
 
 export function AppSidebar({ collapsed, onToggle, user, onIdentify, onLogout }: Props) {
+  const { session } = useAuth();
+  const isAdmin = session?.user.role === "ADMIN";
+
+  const adminGroup: NavGroup = {
+    title: "Administração",
+    items: [
+      { label: "Usuários", href: "/administracao/usuarios", icon: Users },
+    ],
+  };
+
+  const allGroups = isAdmin ? [...NAV_GROUPS, adminGroup] : NAV_GROUPS;
+
   return (
     <aside
       className={cn(
@@ -36,7 +51,7 @@ export function AppSidebar({ collapsed, onToggle, user, onIdentify, onLogout }: 
         className="flex flex-1 flex-col gap-5 overflow-y-auto py-4"
         aria-label="Navegação principal"
       >
-        {NAV_GROUPS.map((group, i) => (
+        {allGroups.map((group, i) => (
           <SidebarNavGroup key={i} group={group} collapsed={collapsed} />
         ))}
       </nav>

@@ -247,7 +247,13 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
       engenheiro_celular: stripPhone(form.engenheiro_celular ?? ""),
     };
 
-    if (props.mode === "create") payload.status_atual = "CADASTRO INICIAL";
+    if (props.mode === "create") {
+      const alignmentComplete = Boolean(
+        payload.proj_obra_recebido && payload.local_cabine_definido && payload.alinhamento,
+      );
+      payload.status_atual = alignmentComplete ? "ELABORAR ANTE-PROJETO" : "CADASTRO INICIAL";
+    }
+
     return payload;
   }
 
@@ -280,10 +286,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
   function confirmCreateSave() {
     if (isSavingCreate) return;
 
-    const normalized = {
-      ...buildNormalizedFormPayload(),
-      status_atual: "CADASTRO INICIAL" as const,
-    };
+    const normalized = buildNormalizedFormPayload();
 
     if (!validateBeforeSave(normalized)) return;
 
@@ -297,7 +300,12 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
     }
 
     setConfirmCreateOpen(false);
-    props.notify("Projeto cadastrado com sucesso. O projeto foi criado como Cadastro Inicial e aguardara as proximas validacoes.");
+    const isElaborar = normalized.status_atual === "ELABORAR ANTE-PROJETO";
+    props.notify(
+      isElaborar
+        ? "Projeto cadastrado com alinhamento concluido. Ja inicia em Elaborar Ante-Projeto (prazo de 45 dias ativo)."
+        : "Projeto cadastrado com sucesso. O projeto foi criado como Cadastro Inicial e aguardara as proximas validacoes.",
+    );
     props.onClose();
   }
 
@@ -557,6 +565,11 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                   {!prerequisitesReady && (
                     <p className="sm:col-span-2 rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-3 py-2 text-xs text-zinc-500 dark:text-muted">
                       Para concluir o alinhamento, confirme o recebimento do projeto e a definição do local da cabine.
+                    </p>
+                  )}
+                  {props.mode === "create" && prerequisitesReady && form.alinhamento && (
+                    <p className="sm:col-span-2 rounded-xl border border-sky-200 bg-sky-50 dark:border-sky-700/50 dark:bg-sky-900/20 px-3 py-2 text-xs text-sky-700 dark:text-sky-300 font-medium">
+                      Este projeto será cadastrado diretamente como <strong>Elaborar Ante-Projeto</strong> e terá prazo de 45 dias.
                     </p>
                   )}
                   <FormField label="Data do Alinhamento">

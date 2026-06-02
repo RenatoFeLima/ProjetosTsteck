@@ -22,20 +22,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, message: "Informe o campo 'to' no body ou configure SMTP_USER." }, { status: 400 });
   }
 
-  const result = await sendProjectMovementEmail({
-    projectId: "test-001",
-    projectCode: "TST-EML-0001",
-    constructorName: "TSTECK Construtora Teste",
-    workName: "Obra de Teste",
-    sellerName: "Vendedor Teste",
-    sellerEmail: recipient,
-    oldStatus: "CADASTRO INICIAL",
-    newStatus: "ELABORAR ANTE-PROJETO",
-    eventType: "STATUS_CHANGED",
-    changedBy: "sistema.teste",
-    changedAt: new Date().toISOString(),
-    notes: "Este é um e-mail de teste do Pipeline de Projetos TSTECK.",
-  });
+  const result = await sendProjectMovementEmail(
+    {
+      projectId: "test-001",
+      projectCode: "TST-EML-0001",
+      constructorName: "TSTECK Construtora Teste",
+      workName: "Obra de Teste",
+      sellerName: "Vendedor Teste",
+      sellerEmail: recipient,
+      oldStatus: "CADASTRO INICIAL",
+      newStatus: "ELABORAR ANTE-PROJETO",
+      eventType: "STATUS_CHANGED",
+      changedBy: "sistema.teste",
+      changedAt: new Date().toISOString(),
+      notes: "Este é um e-mail de teste do Pipeline de Projetos TSTECK.",
+    },
+    [recipient],
+  );
 
   return NextResponse.json(result, { status: result.success ? 200 : 500 });
 }

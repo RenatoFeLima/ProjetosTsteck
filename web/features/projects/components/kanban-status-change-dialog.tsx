@@ -28,7 +28,7 @@ export function KanbanStatusChangeDialog({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
 
-  const requiresNote = toStatus === "REVISAO DE ESTUDO";
+  const requiresNote = toStatus === "REVISAO DE ESTUDO" || toStatus === "REVISAO DE PROJETO FINAL";
   const noteValid = note.trim().length > 0;
 
   // Needed to avoid SSR mismatch — createPortal requires document
@@ -71,6 +71,9 @@ export function KanbanStatusChangeDialog({
 
   const helper = useMemo(() => {
     if (!requiresNote || !touched || noteValid) return "";
+    if (toStatus === "REVISAO DE PROJETO FINAL") {
+      return "Informe uma observacao para mover o projeto para Revisao de Projeto Final.";
+    }
     return "Informe uma observacao para mover o projeto para Revisao de Estudo.";
   }, [requiresNote, touched, noteValid]);
 
@@ -131,7 +134,7 @@ export function KanbanStatusChangeDialog({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               onBlur={() => setTouched(true)}
-              placeholder="Descreva o motivo da revisao de estudo..."
+              placeholder={toStatus === "REVISAO DE PROJETO FINAL" ? "Descreva o motivo da revisao do projeto final..." : "Descreva o motivo da revisao de estudo..."}  
               className={[
                 "min-h-24 w-full rounded-xl border bg-white dark:bg-panel-soft dark:text-foreground dark:placeholder:text-zinc-600 p-3 text-sm outline-none transition",
                 helper

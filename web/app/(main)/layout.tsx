@@ -1,33 +1,64 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { AppSidebar } from "@/features/sidebar/components/app-sidebar";
 import { useSidebar } from "@/features/sidebar/hooks/use-sidebar";
-import { useCurrentUser } from "@/features/user/hooks/use-current-user";
+import { useAuth } from "@/features/auth/hooks/use-auth";
+import { ROLE_LABELS } from "@/features/auth/lib/permissions";
+import { resolveRouteRule } from "@/features/auth/lib/route-permissions";
+import { AccessDenied } from "@/features/auth/components/access-denied";
+import { useUsersStore } from "@/features/auth/state/users-store";
+import type { CurrentUser } from "@/features/user/hooks/use-current-user";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const { collapsed, toggle } = useSidebar();
-  const { user, clear } = useCurrentUser();
+  const { session, isLoading, logout } = useAuth();
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
+  const addAuditLog = useUsersStore((s) => s.addAuditLog);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    if (isLoading) return;
+    if (!session) { router.replace("/login"); return; }
+    if (session.user.mustChangePassword) { router.replace("/change-password"); }
+  }, [isLoading, session, router]);
 
+  // ── Controle de acesso por rota (bloqueia URL direta) ──────────────────────
+  const rule = session ? resolveRouteRule(pathname) : undefined;
+  const accessDenied = !!(session && rule && !rule.check(session.user.permissions));
+
+  // Registra a tentativa de acesso sem permissão (uma vez por rota).
+  const loggedPathRef = useRef<string | null>(null);
   useEffect(() => {
-    if (mounted && !user) {
-      router.replace("/login");
-    }
-  }, [mounted, user, router]);
+    if (!accessDenied || !session || !rule) return;
+    if (loggedPathRef.current === pathname) return;
+    loggedPathRef.current = pathname;
+    addAuditLog({
+      action: "ACCESS_DENIED",
+      actorUserId: session.user.id,
+      actorName: session.user.name,
+      message: `Tentativa de acesso sem permissão: ${rule.label} (${pathname}).`,
+    });
+  }, [accessDenied, pathname, session, rule, addAuditLog]);
 
-  // Aguarda hidratação e redireciona se não autenticado
-  if (!mounted || !user) return null;
+  if (isLoading || !session || session.user.mustChangePassword) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
+      </div>
+    );
+  }
+
+  // Converte para CurrentUser compatível com a sidebar
+  const currentUser: CurrentUser = {
+    name: session.user.name,
+    role: ROLE_LABELS[session.user.role] ?? session.user.role,
+  };
 
   function handleLogout() {
-    clear();
+    logout();
     router.push("/login");
   }
 
@@ -43,14 +74,14 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         <AppSidebar
           collapsed={collapsed}
           onToggle={toggle}
-          user={user}
+          user={currentUser}
           onIdentify={() => router.push("/login")}
           onLogout={handleLogout}
         />
       </div>
 
       <main className="flex flex-1 flex-col">
-        {children}
+        {accessDenied ? <AccessDenied area={rule?.label} /> : children}
       </main>
     </div>
   );

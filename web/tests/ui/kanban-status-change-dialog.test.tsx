@@ -24,7 +24,7 @@ describe("kanban status change dialog", () => {
       />,
     );
 
-    const confirmButton = screen.getByRole("button", { name: /Confirmar mudanca/i });
+    const confirmButton = screen.getByRole("button", { name: /Confirmar alteracao/i });
     expect(confirmButton).toBeDisabled();
 
     await user.type(screen.getByLabelText(/Observacao obrigatoria/i), " Ajuste tecnico solicitado pelo cliente. ");
@@ -52,7 +52,7 @@ describe("kanban status change dialog", () => {
       />,
     );
 
-    const confirmButton = screen.getByRole("button", { name: /Confirmar mudanca/i });
+    const confirmButton = screen.getByRole("button", { name: /Confirmar alteracao/i });
     expect(confirmButton).toBeEnabled();
 
     await user.click(confirmButton);

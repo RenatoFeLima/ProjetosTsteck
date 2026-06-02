@@ -4,16 +4,16 @@ import { create } from "zustand";
 import { formatISO } from "date-fns";
 import { buildSeedProjects } from "@/features/projects/domain/project-seed";
 import {
-  computePrazoBadge,
-  computePrazoEntrega,
-  todayIsoDate,
-  transitionStatus,
+  getCurrentStatusDeadline,
   validateRequiredFields,
+  validateStatusTransition,
 } from "@/features/projects/domain/project-rules";
 import type {
   Project,
   ProjectObservation,
   ProjectStatus,
+  ReviewHistoryItem,
+  FinalReviewHistoryItem,
   StatusHistoryItem,
 } from "@/features/projects/domain/project-types";
 
@@ -46,11 +46,11 @@ type StoreState = {
   setFilters: (patch: Partial<Filters>) => void;
   filteredProjects: () => Project[];
   alertProjects: () => Project[];
-  createProject: (input: ProjectInput) => { ok: boolean; error?: string; missing?: string[] };
+  createProject: (input: ProjectInput) => { ok: boolean; error?: string; missing?: string[]; project?: Project };
   updateProject: (id: string, patch: Partial<Project>) => { ok: boolean; error?: string };
   deleteProject: (id: string) => void;
   toggleUrgente: (id: string) => void;
-  moveStatus: (id: string, nextStatus: ProjectStatus, origem: StatusHistoryItem["origem"]) => { ok: boolean; error?: string };
+  moveStatus: (id: string, nextStatus: ProjectStatus, origem: StatusHistoryItem["origem"], nota?: string) => { ok: boolean; error?: string };
   addObservation: (projetoId: string, texto: string, usuario: string) => void;
   getProjectStatusHistory: (projectId: string) => StatusHistoryItem[];
   getProjectObservations: (projectId: string) => ProjectObservation[];
@@ -65,16 +65,17 @@ function buildInitialHistory(projects: Project[]): StatusHistoryItem[] {
     projeto_id: project.id,
     status_de: null,
     status_para: project.status_atual,
-    alterado_em: project.created_at,
-    origem: "formulario",
+    alterado_em: project.status_entered_at,
+    origem: "formulario" as const,
+    nota: "Historico inicial gerado pelo seed",
   }));
 }
 
 function rankAlert(project: Project): number {
   if (project.urgente) return 0;
-  const badge = computePrazoBadge(todayIsoDate(), computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido));
-  if (badge === "atrasado") return 1;
-  if (badge === "atencao") return 2;
+  const deadline = getCurrentStatusDeadline(project);
+  if (deadline.isOverdue) return 1;
+  if (deadline.hasDeadline && (deadline.daysRemaining ?? 999) <= 15) return 2;
   return 3;
 }
 
@@ -118,8 +119,8 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       if (filters.urgenteOnly && !project.urgente) return false;
 
       if (filters.atrasadoOnly) {
-        const badge = computePrazoBadge(todayIsoDate(), computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido));
-        if (badge !== "atrasado") return false;
+        const deadline = getCurrentStatusDeadline(project);
+        if (!deadline.isOverdue) return false;
       }
 
       return true;
@@ -154,6 +155,18 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     }
 
     const now = nowDate();
+
+    // Regra: se alinhamento completo no cadastro, entra direto em ELABORAR ANTE-PROJETO
+    const alignmentComplete =
+      (input.proj_obra_recebido ?? false) &&
+      (input.local_cabine_definido ?? false) &&
+      (input.alinhamento ?? false);
+
+    const initialStatus: ProjectStatus = alignmentComplete ? "ELABORAR ANTE-PROJETO" : "CADASTRO INICIAL";
+    const statusEnteredAt = alignmentComplete
+      ? (input.data_alinhamento ?? now)
+      : now;
+
     const next: Project = {
       id: crypto.randomUUID(),
       construtora: input.construtora,
@@ -169,7 +182,8 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       alinhamento: input.alinhamento ?? false,
       data_lancamento: input.data_lancamento,
       data_alinhamento: input.data_alinhamento ?? null,
-      status_atual: "CADASTRO INICIAL",
+      status_atual: initialStatus,
+      status_entered_at: statusEnteredAt,
       data_previsao: input.data_previsao ?? null,
       data_envio: null,
       data_aprovacao: null,
@@ -180,26 +194,54 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       local_cabine_final: input.local_cabine_final ?? false,
       data_final: input.data_final ?? null,
       urgente: input.urgente ?? false,
+      reviewCount: 0,
+      reviewHistory: [],
+      finalReviewCount: 0,
+      finalReviewHistory: [],
       created_at: now,
       updated_at: now,
     };
 
+    const historyEntries: StatusHistoryItem[] = [];
+
+    if (alignmentComplete) {
+      // Registra as duas entradas: CADASTRO INICIAL (instantâneo) + ELABORAR ANTE-PROJETO
+      historyEntries.push({
+        id: crypto.randomUUID(),
+        projeto_id: next.id,
+        status_de: null,
+        status_para: "CADASTRO INICIAL",
+        alterado_em: now,
+        origem: "formulario",
+        nota: "Projeto cadastrado",
+      });
+      historyEntries.push({
+        id: crypto.randomUUID(),
+        projeto_id: next.id,
+        status_de: "CADASTRO INICIAL",
+        status_para: "ELABORAR ANTE-PROJETO",
+        alterado_em: statusEnteredAt,
+        origem: "sistema",
+        nota: "Projeto cadastrado com alinhamento concluido e liberado automaticamente para Elaborar Ante-Projeto.",
+      });
+    } else {
+      historyEntries.push({
+        id: crypto.randomUUID(),
+        projeto_id: next.id,
+        status_de: null,
+        status_para: "CADASTRO INICIAL",
+        alterado_em: now,
+        origem: "formulario",
+        nota: "Projeto cadastrado",
+      });
+    }
+
     set((state) => ({
       projects: [next, ...state.projects],
-      statusHistory: [
-        {
-          id: crypto.randomUUID(),
-          projeto_id: next.id,
-          status_de: null,
-          status_para: next.status_atual,
-          alterado_em: now,
-          origem: "formulario",
-        },
-        ...state.statusHistory,
-      ],
+      statusHistory: [...historyEntries, ...state.statusHistory],
     }));
 
-    return { ok: true };
+    return { ok: true, project: next };
   },
 
   updateProject: (id, patch) => {
@@ -223,24 +265,31 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       };
     }
 
+    const now = nowDate();
+    const statusChanged = current.status_atual !== merged.status_atual;
+
+    // Atualiza status_entered_at quando o status muda
+    if (statusChanged) {
+      merged.status_entered_at = now;
+    }
+
     set((state) => ({
       projects: state.projects.map((project) =>
-        project.id === id ? { ...merged, updated_at: nowDate() } : project,
+        project.id === id ? { ...merged, updated_at: now } : project,
       ),
-      statusHistory:
-        current.status_atual !== merged.status_atual
-          ? [
-              {
-                id: crypto.randomUUID(),
-                projeto_id: id,
-                status_de: current.status_atual,
-                status_para: merged.status_atual,
-                alterado_em: nowDate(),
-                origem: "formulario",
-              },
-              ...state.statusHistory,
-            ]
-          : state.statusHistory,
+      statusHistory: statusChanged
+        ? [
+            {
+              id: crypto.randomUUID(),
+              projeto_id: id,
+              status_de: current.status_atual,
+              status_para: merged.status_atual,
+              alterado_em: now,
+              origem: "formulario" as const,
+            },
+            ...state.statusHistory,
+          ]
+        : state.statusHistory,
     }));
 
     return { ok: true };
@@ -262,25 +311,80 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     }));
   },
 
-  moveStatus: (id, nextStatus, origem) => {
+  moveStatus: (id, nextStatus, origem, nota) => {
     const current = get().projects.find((project) => project.id === id);
     if (!current) return { ok: false, error: "Projeto nao encontrado." };
 
-    let side;
-    try {
-      side = transitionStatus({
-        currentStatus: current.status_atual,
-        nextStatus,
-        aligned: current.alinhamento,
-        today: nowDate(),
-        data_envio: current.data_envio,
-        data_aprovacao: current.data_aprovacao,
-      });
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : "Erro de transicao." };
+    const validation = validateStatusTransition(current, nextStatus);
+    if (!validation.allowed) {
+      return { ok: false, error: validation.reason ?? "Transicao de status nao permitida." };
     }
 
     const now = nowDate();
+
+    // Campos derivados da transição
+    const data_envio =
+      nextStatus === "ANTE-PROJETO ENVIADO" && !current.data_envio
+        ? now
+        : current.data_envio;
+    const data_aprovacao =
+      nextStatus === "ANTE-PROJETO APROVADO" && !current.data_aprovacao
+        ? now
+        : current.data_aprovacao;
+
+    // Rastrear revisão de estudo
+    const enteringReview = nextStatus === "REVISAO DE ESTUDO";
+    const exitingReview = current.status_atual === "REVISAO DE ESTUDO";
+
+    let updatedReviewHistory = [...(current.reviewHistory ?? [])];
+    let reviewCount = current.reviewCount;
+
+    if (exitingReview) {
+      updatedReviewHistory = updatedReviewHistory.map((item, index) =>
+        index === updatedReviewHistory.length - 1 && item.exitedAt === null
+          ? { ...item, exitedAt: now }
+          : item,
+      );
+    }
+
+    if (enteringReview) {
+      reviewCount += 1;
+      const newReview: ReviewHistoryItem = {
+        id: crypto.randomUUID(),
+        enteredAt: now,
+        exitedAt: null,
+        reason: nota?.trim() || "Sem motivo informado",
+        changedBy: "usuario.local",
+      };
+      updatedReviewHistory = [...updatedReviewHistory, newReview];
+    }
+
+    // Rastrear revisão de projeto final
+    const enteringFinalReview = nextStatus === "REVISAO DE PROJETO FINAL";
+    const exitingFinalReview = current.status_atual === "REVISAO DE PROJETO FINAL";
+
+    let updatedFinalReviewHistory = [...(current.finalReviewHistory ?? [])];
+    let finalReviewCount = current.finalReviewCount;
+
+    if (exitingFinalReview) {
+      updatedFinalReviewHistory = updatedFinalReviewHistory.map((item, index) =>
+        index === updatedFinalReviewHistory.length - 1 && item.exitedAt === null
+          ? { ...item, exitedAt: now }
+          : item,
+      );
+    }
+
+    if (enteringFinalReview) {
+      finalReviewCount += 1;
+      const newFinalReview: FinalReviewHistoryItem = {
+        id: crypto.randomUUID(),
+        enteredAt: now,
+        exitedAt: null,
+        reason: nota?.trim() || "Sem motivo informado",
+        changedBy: "usuario.local",
+      };
+      updatedFinalReviewHistory = [...updatedFinalReviewHistory, newFinalReview];
+    }
 
     set((state) => ({
       projects: state.projects.map((project) =>
@@ -288,8 +392,13 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
           ? {
               ...project,
               status_atual: nextStatus,
-              data_envio: side.data_envio,
-              data_aprovacao: side.data_aprovacao,
+              status_entered_at: now,
+              data_envio,
+              data_aprovacao,
+              reviewCount,
+              reviewHistory: updatedReviewHistory,
+              finalReviewCount,
+              finalReviewHistory: updatedFinalReviewHistory,
               updated_at: now,
             }
           : project,
@@ -302,6 +411,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
           status_para: nextStatus,
           alterado_em: now,
           origem,
+          nota: nota?.trim() || undefined,
         },
         ...state.statusHistory,
       ],

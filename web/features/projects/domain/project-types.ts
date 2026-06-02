@@ -6,10 +6,27 @@ export const PROJECT_STATUSES = [
   "PROJETO APROVADO",
   "PROJETO FINAL ENVIADO",
   "REVISAO DE ESTUDO",
+  "REVISAO DE PROJETO FINAL",
 ] as const;
 
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export type PrazoBadge = "sem_prazo" | "no_prazo" | "atencao" | "atrasado";
+
+export type ReviewHistoryItem = {
+  id: string;
+  enteredAt: string;
+  exitedAt: string | null;
+  reason: string;
+  changedBy: string;
+};
+
+export type FinalReviewHistoryItem = {
+  id: string;
+  enteredAt: string;
+  exitedAt: string | null;
+  reason: string;
+  changedBy: string;
+};
 
 export type Project = {
   id: string;
@@ -27,6 +44,8 @@ export type Project = {
   data_lancamento: string;
   data_alinhamento: string | null;
   status_atual: ProjectStatus;
+  /** Data/hora em que o projeto entrou no status_atual. Usado para calcular prazos por etapa. */
+  status_entered_at: string;
   data_previsao?: string | null;
   data_envio: string | null;
   data_aprovacao: string | null;
@@ -37,6 +56,14 @@ export type Project = {
   local_cabine_final?: boolean;
   data_final?: string | null;
   urgente: boolean;
+  /** Quantidade total de vezes que o projeto entrou em Revisao de Estudo. */
+  reviewCount: number;
+  /** Historico detalhado de cada ciclo de Revisao de Estudo. */
+  reviewHistory?: ReviewHistoryItem[];
+  /** Quantidade total de vezes que o projeto entrou em Revisao de Projeto Final. */
+  finalReviewCount: number;
+  /** Historico detalhado de cada ciclo de Revisao de Projeto Final. */
+  finalReviewHistory?: FinalReviewHistoryItem[];
   created_at: string;
   updated_at: string;
 };
@@ -47,7 +74,8 @@ export type StatusHistoryItem = {
   status_de: ProjectStatus | null;
   status_para: ProjectStatus;
   alterado_em: string;
-  origem: "kanban" | "formulario" | "acao-rapida";
+  origem: "kanban" | "formulario" | "acao-rapida" | "sistema";
+  nota?: string;
 };
 
 export type ProjectObservation = {

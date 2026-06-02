@@ -1,7 +1,7 @@
 ﻿import type { Project } from "@/features/projects/domain/project-types";
 import { useMemo, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { computeNextAction } from "@/features/projects/domain/project-rules";
+import { computeNextAction, getCodeSortableSuffix } from "@/features/projects/domain/project-rules";
 import { AlertTriangle, ArrowDownWideNarrow, ChevronLeft, ChevronRight, CircleDot, Copy, Eye, History, LoaderCircle, MoreHorizontal, PencilLine, RotateCcw, Workflow } from "lucide-react";
 import { DeadlineBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { UrgencyJustificationDialog } from "./urgency-justification-dialog";
@@ -13,7 +13,7 @@ type ProjectsTableProps = {
   onEditProject: (project: Project) => void;
   onChangeStatus: (project: Project) => void;
   onViewHistory: (project: Project) => void;
-  onMarkUrgente: (payload: { projectId: string; urgencyReason: string; updatedAt: string; updatedBy: string }) => void;
+  onMarkUrgente?: (payload: { projectId: string; urgencyReason: string; updatedAt: string; updatedBy: string }) => void;
   onRemoveUrgente: (project: Project) => void;
   onClearFilters?: () => void;
   state?: "loading" | "ready" | "error";
@@ -49,6 +49,16 @@ export function ProjectsTable({
   const sortedProjects = useMemo(() => {
     const copy = [...projects];
     copy.sort((a, b) => {
+      if (sortKey === "codigo_projeto") {
+        const as = getCodeSortableSuffix(a.codigo_projeto);
+        const bs = getCodeSortableSuffix(b.codigo_projeto);
+        if (typeof as === "number" && typeof bs === "number") {
+          return sortDir === "asc" ? as - bs : bs - as;
+        }
+        const cmp = String(as).localeCompare(String(bs), undefined, { numeric: true });
+        return sortDir === "asc" ? cmp : -cmp;
+      }
+
       const getValue = (project: Project) => {
         if (sortKey === "external") return project.codigo_projeto;
         if (sortKey === "construtora") return `${project.construtora} ${project.obra}`;
@@ -70,8 +80,8 @@ export function ProjectsTable({
   const end = Math.min(start + pageSize, total);
   const pageRows = sortedProjects.slice(start, end);
 
-  const sortableHeaders: Array<{ key: SortableKey; label: string }> = [
-    { key: "codigo_projeto", label: "CODIGO" },
+  const sortableHeaders: Array<{ key: SortableKey; label: string; tooltip?: string }> = [
+    { key: "codigo_projeto", label: "CODIGO", tooltip: "Ordenar pelos últimos dígitos do código." },
     { key: "construtora", label: "CONSTRUTORA / OBRA" },
     { key: "vendedor", label: "VENDEDOR" },
     { key: "external", label: "STATUS" },
@@ -161,6 +171,7 @@ export function ProjectsTable({
                 <th key={header.key} className="px-3 py-2.5 whitespace-nowrap">
                   <button
                     type="button"
+                    title={header.tooltip}
                     onClick={() => toggleSort(header.key)}
                     className="inline-flex items-center gap-1 font-semibold text-zinc-600 dark:text-zinc-400 transition hover:text-zinc-900 dark:hover:text-zinc-200"
                   >
@@ -272,7 +283,7 @@ export function ProjectsTable({
                               Alterar status
                             </DropdownMenu.Item>
                             <DropdownMenu.Item
-                              disabled={project.status_atual === "PROJETO FINAL ENVIADO"}
+                              disabled={project.status_atual === "PROJETO FINAL ENVIADO" || !onMarkUrgente}
                               onSelect={() => {
                                 if (project.urgente) {
                                   setRemoveUrgencyProject(project);
@@ -350,7 +361,7 @@ export function ProjectsTable({
         project={urgencyDialogProject}
         onCancel={() => setUrgencyDialogProject(undefined)}
         onConfirm={(payload) => {
-          onMarkUrgente(payload);
+          onMarkUrgente?.(payload);
           setUrgencyDialogProject(undefined);
         }}
       />

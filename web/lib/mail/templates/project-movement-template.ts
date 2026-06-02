@@ -9,6 +9,7 @@ function statusLabel(status: string): string {
     "PROJETO APROVADO": "Projeto Aprovado",
     "PROJETO FINAL ENVIADO": "Projeto Final Enviado",
     "REVISAO DE ESTUDO": "Revisão de Estudo",
+    "REVISAO DE PROJETO FINAL": "Revisão de Projeto Final",
   };
   return labels[status] ?? status;
 }
@@ -64,7 +65,14 @@ export function buildProjectMovementTemplate(data: ProjectNotificationPayload): 
     URGENCY_REMOVED: "Urgência Removida",
     PROJECT_FINISHED: "Projeto Finalizado",
     PROJECT_UPDATED: "Dados Atualizados",
+    PROJECT_RELEASED_TO_ELABORATE_ANTE_PROJECT: "Liberado para Anteprojeto",
   };
+
+  const isReleased = data.eventType === "PROJECT_RELEASED_TO_ELABORATE_ANTE_PROJECT";
+
+  const introText = isReleased
+    ? "O alinhamento da cabine foi concluído e o projeto foi liberado automaticamente para elaboração do anteprojeto. <strong>O prazo de 45 dias foi iniciado.</strong>"
+    : "O projeto abaixo teve uma movimentação no Pipeline de Projetos TSTECK. Acompanhe os detalhes:";
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -105,8 +113,7 @@ export function buildProjectMovementTemplate(data: ProjectNotificationPayload): 
                 Olá, <strong>${data.sellerName}</strong>.
               </p>
               <p style="margin:8px 0 0;font-size:14px;color:#71717a;line-height:1.6;">
-                O projeto abaixo teve uma movimentação no Pipeline de Projetos TSTECK.
-                Acompanhe os detalhes:
+                ${introText}
               </p>
             </td>
           </tr>

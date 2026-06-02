@@ -3,6 +3,7 @@ import type {
   AlignmentAutomationResult,
   PrazoBadge,
   Project,
+  ReviewHistoryItem,
   StatusHistoryItem,
   ProjectStatus,
 } from "./project-types";
@@ -18,6 +19,7 @@ export type ProjectOperationalKpis = {
   slaState: SlaState;
 };
 
+// SLA operacional interno por status (monitoramento de pipeline)
 const STATUS_SLA_TARGET_DAYS: Record<ProjectStatus, number> = {
   "CADASTRO INICIAL": 3,
   "ELABORAR ANTE-PROJETO": 10,
@@ -26,7 +28,131 @@ const STATUS_SLA_TARGET_DAYS: Record<ProjectStatus, number> = {
   "PROJETO APROVADO": 7,
   "PROJETO FINAL ENVIADO": 5,
   "REVISAO DE ESTUDO": 4,
+  "REVISAO DE PROJETO FINAL": 4,
 };
+
+// Prazo externo por status (compromisso com o cliente/fluxo)
+const STATUS_DEADLINE_DAYS: Partial<Record<ProjectStatus, number>> = {
+  "ELABORAR ANTE-PROJETO": 45,
+  "REVISAO DE ESTUDO": 20,
+  "REVISAO DE PROJETO FINAL": 20,
+};
+
+// ─── Transições permitidas no fluxo ───────────────────────────────────────────
+
+const ALLOWED_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
+  "CADASTRO INICIAL": ["ELABORAR ANTE-PROJETO"],
+  "ELABORAR ANTE-PROJETO": ["ANTE-PROJETO ENVIADO"],
+  "ANTE-PROJETO ENVIADO": ["ANTE-PROJETO APROVADO", "REVISAO DE ESTUDO"],
+  "REVISAO DE ESTUDO": ["ANTE-PROJETO ENVIADO"],
+  "ANTE-PROJETO APROVADO": ["PROJETO APROVADO"],
+  "PROJETO APROVADO": ["PROJETO FINAL ENVIADO"],
+  "PROJETO FINAL ENVIADO": ["REVISAO DE PROJETO FINAL"],
+  "REVISAO DE PROJETO FINAL": ["PROJETO FINAL ENVIADO"],
+};
+
+export type StatusTransitionValidation = {
+  allowed: boolean;
+  reason?: string;
+  missingFields?: string[];
+};
+
+/**
+ * Valida se a transição de status é permitida pelas regras de negócio.
+ * Retorna allowed=true se permitida, ou allowed=false com reason e missingFields.
+ */
+export function validateStatusTransition(
+  project: Project,
+  toStatus: ProjectStatus,
+): StatusTransitionValidation {
+  const from = project.status_atual;
+  if (from === toStatus) return { allowed: true };
+
+  const allowed = ALLOWED_TRANSITIONS[from]?.includes(toStatus) ?? false;
+  if (!allowed) {
+    return {
+      allowed: false,
+      reason: `Movimentação de "${from}" para "${toStatus}" não é permitida no fluxo.`,
+    };
+  }
+
+  if (from === "CADASTRO INICIAL" && toStatus === "ELABORAR ANTE-PROJETO") {
+    const missingFields: string[] = [];
+    if (!project.proj_obra_recebido) missingFields.push("Projeto de obra recebido");
+    if (!project.local_cabine_definido) missingFields.push("Local da cabine definido");
+    if (!project.alinhamento) missingFields.push("Alinhamento concluído");
+    if (missingFields.length > 0) {
+      return {
+        allowed: false,
+        reason: "Alinhamento não concluído.",
+        missingFields,
+      };
+    }
+  }
+
+  return { allowed: true };
+}
+
+export type CurrentStatusDeadline = {
+  hasDeadline: boolean;
+  deadlineDays?: number;
+  enteredAt?: string;
+  dueDate?: string;
+  daysElapsed?: number;
+  daysRemaining?: number;
+  isOverdue: boolean;
+  overdueDays?: number;
+  label: string;
+};
+
+/**
+ * Calcula o prazo da etapa atual do projeto.
+ * - ELABORAR ANTE-PROJETO: 45 dias a partir de status_entered_at
+ * - REVISAO DE ESTUDO: 20 dias a partir de status_entered_at
+ * - Demais status: sem prazo ativo
+ */
+export function getCurrentStatusDeadline(project: Project, todayOverride?: string): CurrentStatusDeadline {
+  const today = todayOverride ?? todayIsoDate();
+  const { status_atual, status_entered_at } = project;
+  const deadlineDays = STATUS_DEADLINE_DAYS[status_atual];
+
+  if (!deadlineDays || !status_entered_at) {
+    return { hasDeadline: false, isOverdue: false, label: "Sem prazo" };
+  }
+
+  const enteredAt = parseISO(status_entered_at);
+  const dueDate = addDays(enteredAt, deadlineDays);
+  const todayDate = parseISO(today);
+  const daysRemaining = differenceInCalendarDays(dueDate, todayDate);
+  const isOverdue = daysRemaining < 0;
+  const daysElapsed = Math.max(differenceInCalendarDays(todayDate, enteredAt), 0);
+
+  return {
+    hasDeadline: true,
+    deadlineDays,
+    enteredAt: status_entered_at,
+    dueDate: formatISO(dueDate, { representation: "date" }),
+    daysElapsed,
+    daysRemaining: isOverdue ? 0 : daysRemaining,
+    isOverdue,
+    overdueDays: isOverdue ? Math.abs(daysRemaining) : 0,
+    label: isOverdue ? `${Math.abs(daysRemaining)}d atraso` : `${daysRemaining}d restantes`,
+  };
+}
+
+/**
+ * Retorna o sufixo ordenável do código do projeto (último bloco após hífen).
+ * Se numérico, retorna como número. Caso contrário, retorna string em minúsculas.
+ */
+export function getCodeSortableSuffix(code: string): string | number {
+  const trimmed = code.trim();
+  const parts = trimmed.split("-");
+  if (parts.length < 2) return trimmed.toLowerCase();
+  const suffix = parts[parts.length - 1].trim().toLowerCase();
+  const numericSuffix = Number(suffix);
+  if (!isNaN(numericSuffix) && suffix !== "") return numericSuffix;
+  return suffix;
+}
 
 export function todayIsoDate(): string {
   return formatISO(new Date(), { representation: "date" });
@@ -80,16 +206,17 @@ export function transitionStatus(input: {
   data_envio: string | null;
   data_aprovacao: string | null;
 }) {
-  if (input.currentStatus === "CADASTRO INICIAL" && input.nextStatus !== "ELABORAR ANTE-PROJETO") {
-    throw new Error("Projeto em cadastro inicial so pode avancar para elaborar ante-projeto.");
-  }
+  // Constrói um projeto mínimo para usar validateStatusTransition
+  const mockProject = {
+    status_atual: input.currentStatus,
+    proj_obra_recebido: input.aligned,
+    local_cabine_definido: input.aligned,
+    alinhamento: input.aligned,
+  } as Project;
 
-  if (input.currentStatus !== "CADASTRO INICIAL" && input.nextStatus === "CADASTRO INICIAL") {
-    throw new Error("Este projeto ja foi liberado para elaboracao de anteprojeto e nao pode retornar automaticamente para a fase inicial.");
-  }
-
-  if (input.currentStatus !== input.nextStatus && !input.aligned) {
-    throw new Error("Nao e possivel avancar status sem alinhamento.");
+  const validation = validateStatusTransition(mockProject, input.nextStatus);
+  if (!validation.allowed) {
+    throw new Error(validation.reason ?? "Transição de status não permitida.");
   }
 
   return {
@@ -113,6 +240,7 @@ export function statusOrder(status: ProjectStatus): number {
     "PROJETO APROVADO": 4,
     "PROJETO FINAL ENVIADO": 5,
     "REVISAO DE ESTUDO": 6,
+    "REVISAO DE PROJETO FINAL": 7,
   };
   return order[status];
 }
@@ -140,10 +268,12 @@ export function computeNextAction(project: Project): string {
 
   if (project.status_atual === "ELABORAR ANTE-PROJETO") return "Elaborar anteprojeto";
   if (project.status_atual === "ANTE-PROJETO ENVIADO") return "Aguardando aprovacao do cliente";
+  if (project.status_atual === "REVISAO DE ESTUDO") return "Revisar estudo e reenviar anteprojeto";
   if (project.status_atual === "ANTE-PROJETO APROVADO") return "Consolidar projeto aprovado";
   if (project.status_atual === "PROJETO APROVADO") return "Preparar envio do projeto final";
   if (project.status_atual === "PROJETO FINAL ENVIADO") return "Acompanhar validacao final";
-  return "Revisar estudo e ajustar pendencias";
+  if (project.status_atual === "REVISAO DE PROJETO FINAL") return "Revisar projeto final e reenviar";
+  return "Verificar pendencias";
 }
 
 export function computeOperationalKpis(
