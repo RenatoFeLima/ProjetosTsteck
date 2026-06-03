@@ -230,6 +230,20 @@ export async function updateProject(actor: SessionUser, id: string, data: Projec
     message: `${actor.name} editou o projeto ${updated.code}.`,
   });
 
+  // Alinhamento automático: projeto em CADASTRO_INICIAL que passou a ter os 3
+  // pré-requisitos avança sozinho para ELABORAR_ANTE_PROJETO (prazo de 45 dias).
+  if (
+    updated.status === "CADASTRO_INICIAL" &&
+    updated.projectReceived &&
+    updated.cabinLocationDefined &&
+    updated.alignmentCompleted
+  ) {
+    return changeStatus(actor, id, "ELABORAR_ANTE_PROJETO", {
+      source: "alinhamento-automatico",
+      note: "Alinhamento concluído na edição — liberado automaticamente.",
+    });
+  }
+
   return serializeProject(updated);
 }
 
