@@ -47,7 +47,7 @@ const REGISTRY: Record<MasterEntityKey, EntityConfig> = {
     displayField: "name",
     allowed: ["constructorId", "name", "code", "address", "city", "state", "notes"],
     required: ["name", "constructorId"],
-    include: { constructor: { select: { id: true, name: true } } },
+    include: { builder: { select: { id: true, name: true } } },
   },
   equipamentos: {
     delegate: () => prisma.equipment as unknown as Delegate,
@@ -131,7 +131,7 @@ async function assertNoDuplicate(
 /** Mapeia o registro do banco para um formato estável p/ o cliente. */
 function serialize(entity: MasterEntityKey, row: any): any {
   if (entity === "obras") {
-    return { ...row, construtoraName: row.constructor?.name ?? "" };
+    return { ...row, construtoraName: row.builder?.name ?? "" };
   }
   return row;
 }

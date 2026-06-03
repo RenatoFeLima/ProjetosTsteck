@@ -1,0 +1,443 @@
+// Serviço de Projetos — MySQL como fonte única da verdade.
+// Resolve nomes dos Cadastros Mestres -> FKs (pronto para reuso em importação CSV),
+// calcula status inicial, valida transições, grava histórico/revisões/observações
+// e auditoria. RBAC validado server-side em toda operação.
+
+import type { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/db/prisma";
+import { assertPermission, HttpError } from "@/server/auth/guards";
+import type { SessionUser } from "@/server/auth/session";
+import {
+  UI_TO_DB_STATUS,
+  DB_TO_UI_STATUS,
+  ALLOWED_DB_TRANSITIONS,
+  type DbStatus,
+} from "@/features/projects/domain/project-status-map";
+import { writeAudit } from "./auditService";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+const PROJECT_INCLUDE = {
+  builder: { select: { name: true } },
+  work: { select: { name: true } },
+  seller: { select: { name: true } },
+  equipment: { select: { code: true } },
+  cabinType: { select: { name: true } },
+  engineer: { select: { name: true, phone: true } },
+} satisfies Prisma.ProjectInclude;
+
+const REVIEW_STUDY = "REVISAO_DE_ESTUDO" as const;
+const REVIEW_FINAL = "REVISAO_DE_PROJETO_FINAL" as const;
+
+// ─── Serialização (DB -> formato da UI) ──────────────────────────────────────
+
+function iso(d: Date | null | undefined): string | null {
+  return d ? d.toISOString() : null;
+}
+
+function serializeProject(p: any) {
+  return {
+    id: p.id,
+    construtora: p.builder?.name ?? "",
+    obra: p.work?.name ?? "",
+    engenheiro_nome: p.engineerName ?? p.engineer?.name ?? "",
+    engenheiro_celular: p.engineerPhone ?? p.engineer?.phone ?? "",
+    equipamento: p.equipment?.code ?? "",
+    tipo_cabine: p.cabinType?.name ?? "",
+    codigo_projeto: p.code,
+    vendedor: p.seller?.name ?? "",
+    proj_obra_recebido: p.projectReceived,
+    local_cabine_definido: p.cabinLocationDefined,
+    alinhamento: p.alignmentCompleted,
+    data_lancamento: iso(p.createdAt) ?? "",
+    data_alinhamento: iso(p.alignmentDate),
+    status_atual: DB_TO_UI_STATUS[p.status as DbStatus],
+    status_entered_at: iso(p.currentStatusEnteredAt) ?? "",
+    data_envio: null,
+    data_aprovacao: null,
+    urgente: p.priority === "URGENTE",
+    reviewCount: p.reviewStudyCount,
+    finalReviewCount: p.finalReviewCount,
+    created_at: iso(p.createdAt) ?? "",
+    updated_at: iso(p.updatedAt) ?? "",
+  };
+}
+
+export type SerializedProject = ReturnType<typeof serializeProject>;
+
+// ─── Resolução de cadastros mestres por nome (CSV-ready) ─────────────────────
+
+export type ProjectInput = {
+  codigo_projeto?: string;
+  construtora?: string;
+  obra?: string;
+  vendedor?: string;
+  equipamento?: string;
+  tipo_cabine?: string;
+  engenheiro_nome?: string;
+  engenheiro_celular?: string;
+  proj_obra_recebido?: boolean;
+  local_cabine_definido?: boolean;
+  alinhamento?: boolean;
+  data_alinhamento?: string | null;
+};
+
+async function resolveRefs(data: ProjectInput) {
+  const construtora = (data.construtora ?? "").trim();
+  const constructor = construtora
+    ? await prisma.constructor.findFirst({ where: { name: construtora, active: true } })
+    : null;
+  if (!constructor) throw new HttpError(400, `Construtora "${construtora}" não encontrada nos cadastros ativos.`);
+
+  const obra = (data.obra ?? "").trim();
+  const work = obra
+    ? await prisma.work.findFirst({ where: { name: obra, constructorId: constructor.id, active: true } })
+    : null;
+  if (!work) throw new HttpError(400, `Obra "${obra}" não encontrada para a construtora selecionada.`);
+
+  const vendedor = (data.vendedor ?? "").trim();
+  const seller = vendedor ? await prisma.seller.findFirst({ where: { name: vendedor, active: true } }) : null;
+  if (!seller) throw new HttpError(400, `Vendedor "${vendedor}" não encontrado nos cadastros ativos.`);
+
+  const equipamento = (data.equipamento ?? "").trim();
+  const equipment = equipamento
+    ? await prisma.equipment.findFirst({ where: { code: equipamento, active: true } })
+    : null;
+  if (!equipment) throw new HttpError(400, `Equipamento "${equipamento}" não encontrado nos cadastros ativos.`);
+
+  const tipo = (data.tipo_cabine ?? "").trim();
+  const cabinType = tipo ? await prisma.cabinType.findFirst({ where: { name: tipo, active: true } }) : null;
+
+  const engNome = (data.engenheiro_nome ?? "").trim();
+  const engineer = engNome ? await prisma.engineer.findFirst({ where: { name: engNome, active: true } }) : null;
+
+  return {
+    constructorId: constructor.id,
+    workId: work.id,
+    sellerId: seller.id,
+    equipmentId: equipment.id,
+    cabinTypeId: cabinType?.id ?? null,
+    engineerId: engineer?.id ?? null,
+  };
+}
+
+function toDbStatus(input: string): DbStatus {
+  if (input in UI_TO_DB_STATUS) return UI_TO_DB_STATUS[input as keyof typeof UI_TO_DB_STATUS];
+  if (input in DB_TO_UI_STATUS) return input as DbStatus;
+  throw new HttpError(400, `Status inválido: ${input}.`);
+}
+
+// ─── Operações ────────────────────────────────────────────────────────────────
+
+export async function listProjects(actor: SessionUser): Promise<SerializedProject[]> {
+  assertPermission(actor, (p) => p.projects.view);
+  const rows = await prisma.project.findMany({ include: PROJECT_INCLUDE, orderBy: { createdAt: "desc" } });
+  return rows.map(serializeProject);
+}
+
+export async function getProject(actor: SessionUser, id: string): Promise<SerializedProject> {
+  assertPermission(actor, (p) => p.projects.view);
+  const row = await prisma.project.findUnique({ where: { id }, include: PROJECT_INCLUDE });
+  if (!row) throw new HttpError(404, "Projeto não encontrado.");
+  return serializeProject(row);
+}
+
+export async function createProject(actor: SessionUser, data: ProjectInput): Promise<SerializedProject> {
+  assertPermission(actor, (p) => p.projects.create);
+
+  const code = (data.codigo_projeto ?? "").trim();
+  if (!code) throw new HttpError(400, "Código do projeto é obrigatório.");
+  if (await prisma.project.findUnique({ where: { code } })) {
+    throw new HttpError(409, `Já existe um projeto com o código "${code}".`);
+  }
+
+  const refs = await resolveRefs(data);
+
+  const projectReceived = !!data.proj_obra_recebido;
+  const cabinLocationDefined = !!data.local_cabine_definido;
+  const alignmentCompleted = !!data.alinhamento;
+
+  // Status inicial automático (calculado no backend).
+  const initialStatus: DbStatus =
+    projectReceived && cabinLocationDefined && alignmentCompleted
+      ? "ELABORAR_ANTE_PROJETO"
+      : "CADASTRO_INICIAL";
+
+  const now = new Date();
+
+  const created = await prisma.project.create({
+    data: {
+      code,
+      ...refs,
+      engineerName: (data.engenheiro_nome ?? "").trim() || null,
+      engineerPhone: (data.engenheiro_celular ?? "").trim() || null,
+      status: initialStatus,
+      priority: "NORMAL",
+      projectReceived,
+      cabinLocationDefined,
+      alignmentCompleted,
+      alignmentDate: data.data_alinhamento ? new Date(data.data_alinhamento) : null,
+      currentStatusEnteredAt: now,
+      createdById: actor.id,
+      statusHistory: {
+        create: { fromStatus: null, toStatus: initialStatus, enteredAt: now, source: "formulario", changedById: actor.id },
+      },
+    },
+    include: PROJECT_INCLUDE,
+  });
+
+  await writeAudit({
+    action: "PROJECT_CREATED",
+    actorUserId: actor.id,
+    actorName: actor.name,
+    entityType: "project",
+    entityId: created.id,
+    message: `${actor.name} criou o projeto ${code} (status inicial ${DB_TO_UI_STATUS[initialStatus]}).`,
+  });
+
+  return serializeProject(created);
+}
+
+export async function updateProject(actor: SessionUser, id: string, data: ProjectInput): Promise<SerializedProject> {
+  assertPermission(actor, (p) => p.projects.edit);
+  const existing = await prisma.project.findUnique({ where: { id } });
+  if (!existing) throw new HttpError(404, "Projeto não encontrado.");
+
+  // Reaproveita resolução de cadastros (edição mantém os relacionamentos por nome).
+  const refs = await resolveRefs(data);
+
+  const updated = await prisma.project.update({
+    where: { id },
+    data: {
+      ...refs,
+      engineerName: data.engenheiro_nome !== undefined ? (data.engenheiro_nome.trim() || null) : undefined,
+      engineerPhone: data.engenheiro_celular !== undefined ? (data.engenheiro_celular.trim() || null) : undefined,
+      projectReceived: data.proj_obra_recebido,
+      cabinLocationDefined: data.local_cabine_definido,
+      alignmentCompleted: data.alinhamento,
+      alignmentDate: data.data_alinhamento !== undefined ? (data.data_alinhamento ? new Date(data.data_alinhamento) : null) : undefined,
+      updatedById: actor.id,
+    },
+    include: PROJECT_INCLUDE,
+  });
+
+  await writeAudit({
+    action: "PROJECT_UPDATED",
+    actorUserId: actor.id,
+    actorName: actor.name,
+    entityType: "project",
+    entityId: id,
+    message: `${actor.name} editou o projeto ${updated.code}.`,
+  });
+
+  return serializeProject(updated);
+}
+
+export async function changeStatus(
+  actor: SessionUser,
+  id: string,
+  toStatusInput: string,
+  opts: { reason?: string; source?: string; note?: string } = {},
+): Promise<SerializedProject> {
+  assertPermission(actor, (p) => p.projects.changeStatus);
+
+  const project = await prisma.project.findUnique({ where: { id } });
+  if (!project) throw new HttpError(404, "Projeto não encontrado.");
+
+  const from = project.status as DbStatus;
+  const to = toDbStatus(toStatusInput);
+  if (from === to) return serializeProject(await reload(id));
+
+  if (!(ALLOWED_DB_TRANSITIONS[from] ?? []).includes(to)) {
+    throw new HttpError(
+      400,
+      `Movimentação de "${DB_TO_UI_STATUS[from]}" para "${DB_TO_UI_STATUS[to]}" não é permitida no fluxo.`,
+    );
+  }
+
+  // Pré-requisitos para liberar a elaboração do ante-projeto.
+  if (from === "CADASTRO_INICIAL" && to === "ELABORAR_ANTE_PROJETO") {
+    const missing: string[] = [];
+    if (!project.projectReceived) missing.push("Projeto de obra recebido");
+    if (!project.cabinLocationDefined) missing.push("Local da cabine definido");
+    if (!project.alignmentCompleted) missing.push("Alinhamento concluído");
+    if (missing.length) throw new HttpError(400, `Alinhamento não concluído: ${missing.join(", ")}.`);
+  }
+
+  const enteringReview = to === REVIEW_STUDY || to === REVIEW_FINAL;
+  if (enteringReview && !opts.reason?.trim()) {
+    throw new HttpError(400, "Informe o motivo da revisão.");
+  }
+
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    // Fecha o registro de histórico aberto do status anterior.
+    await tx.projectStatusHistory.updateMany({
+      where: { projectId: id, exitedAt: null },
+      data: { exitedAt: now },
+    });
+    await tx.projectStatusHistory.create({
+      data: {
+        projectId: id,
+        fromStatus: from,
+        toStatus: to,
+        enteredAt: now,
+        source: opts.source ?? "sistema",
+        note: opts.note ?? null,
+        changedById: actor.id,
+      },
+    });
+
+    // Revisão de Estudo
+    if (to === REVIEW_STUDY) {
+      await tx.projectReviewStudyHistory.create({
+        data: { projectId: id, enteredAt: now, reason: opts.reason ?? null, requestedBy: actor.name, changedById: actor.id },
+      });
+    }
+    if (from === REVIEW_STUDY) {
+      await tx.projectReviewStudyHistory.updateMany({ where: { projectId: id, exitedAt: null }, data: { exitedAt: now } });
+    }
+    // Revisão de Projeto Final
+    if (to === REVIEW_FINAL) {
+      await tx.projectFinalReviewHistory.create({
+        data: { projectId: id, enteredAt: now, reason: opts.reason ?? null, requestedBy: actor.name, changedById: actor.id },
+      });
+    }
+    if (from === REVIEW_FINAL) {
+      await tx.projectFinalReviewHistory.updateMany({ where: { projectId: id, exitedAt: null }, data: { exitedAt: now } });
+    }
+
+    await tx.project.update({
+      where: { id },
+      data: {
+        status: to,
+        currentStatusEnteredAt: now,
+        updatedById: actor.id,
+        ...(to === REVIEW_STUDY ? { reviewStudyCount: { increment: 1 } } : {}),
+        ...(to === REVIEW_FINAL ? { finalReviewCount: { increment: 1 } } : {}),
+      },
+    });
+  });
+
+  await writeAudit({
+    action: "PROJECT_STATUS_CHANGED",
+    actorUserId: actor.id,
+    actorName: actor.name,
+    entityType: "project",
+    entityId: id,
+    message: `${actor.name} alterou o status do projeto ${project.code}: ${DB_TO_UI_STATUS[from]} → ${DB_TO_UI_STATUS[to]}.`,
+    metadata: opts.reason ? { reason: opts.reason } : undefined,
+  });
+
+  return serializeProject(await reload(id));
+}
+
+export async function setUrgency(
+  actor: SessionUser,
+  id: string,
+  urgent: boolean,
+  reason?: string,
+): Promise<SerializedProject> {
+  assertPermission(actor, (p) => p.projects.markUrgent);
+  const project = await prisma.project.findUnique({ where: { id } });
+  if (!project) throw new HttpError(404, "Projeto não encontrado.");
+
+  await prisma.project.update({
+    where: { id },
+    data: { priority: urgent ? "URGENTE" : "NORMAL", updatedById: actor.id },
+  });
+
+  if (reason?.trim()) {
+    await prisma.projectObservation.create({
+      data: {
+        projectId: id,
+        author: actor.name,
+        text: urgent ? `Marcado como urgente: ${reason.trim()}` : `Urgência removida: ${reason.trim()}`,
+      },
+    });
+  }
+
+  await writeAudit({
+    action: urgent ? "PROJECT_MARKED_URGENT" : "PROJECT_URGENCY_REMOVED",
+    actorUserId: actor.id,
+    actorName: actor.name,
+    entityType: "project",
+    entityId: id,
+    message: `${actor.name} ${urgent ? "marcou como urgente" : "removeu a urgência d"}o projeto ${project.code}.`,
+  });
+
+  return serializeProject(await reload(id));
+}
+
+export async function addObservation(actor: SessionUser, id: string, text: string) {
+  assertPermission(actor, (p) => p.projects.edit);
+  if (!text?.trim()) throw new HttpError(400, "A observação não pode ser vazia.");
+  const project = await prisma.project.findUnique({ where: { id } });
+  if (!project) throw new HttpError(404, "Projeto não encontrado.");
+
+  const obs = await prisma.projectObservation.create({
+    data: { projectId: id, author: actor.name, text: text.trim() },
+  });
+
+  await writeAudit({
+    action: "PROJECT_OBSERVATION_ADDED",
+    actorUserId: actor.id,
+    actorName: actor.name,
+    entityType: "project",
+    entityId: id,
+    message: `${actor.name} adicionou uma observação ao projeto ${project.code}.`,
+  });
+
+  return { id: obs.id, projeto_id: id, usuario: obs.author, texto: obs.text, criado_em: obs.createdAt.toISOString() };
+}
+
+export async function getHistory(actor: SessionUser, id: string) {
+  assertPermission(actor, (p) => p.projects.viewHistory || p.projects.view);
+  const project = await prisma.project.findUnique({ where: { id } });
+  if (!project) throw new HttpError(404, "Projeto não encontrado.");
+
+  const [status, observations, reviewStudy, reviewFinal] = await Promise.all([
+    prisma.projectStatusHistory.findMany({ where: { projectId: id }, orderBy: { enteredAt: "asc" } }),
+    prisma.projectObservation.findMany({ where: { projectId: id }, orderBy: { createdAt: "asc" } }),
+    prisma.projectReviewStudyHistory.findMany({ where: { projectId: id }, orderBy: { enteredAt: "asc" } }),
+    prisma.projectFinalReviewHistory.findMany({ where: { projectId: id }, orderBy: { enteredAt: "asc" } }),
+  ]);
+
+  return {
+    statusHistory: status.map((h) => ({
+      id: h.id,
+      projeto_id: id,
+      status_de: h.fromStatus ? DB_TO_UI_STATUS[h.fromStatus as DbStatus] : null,
+      status_para: DB_TO_UI_STATUS[h.toStatus as DbStatus],
+      alterado_em: h.enteredAt.toISOString(),
+      origem: (h.source ?? "sistema") as any,
+      nota: h.note ?? undefined,
+    })),
+    observations: observations.map((o) => ({
+      id: o.id,
+      projeto_id: id,
+      usuario: o.author,
+      texto: o.text,
+      criado_em: o.createdAt.toISOString(),
+    })),
+    reviewStudyHistory: reviewStudy.map((r) => ({
+      id: r.id,
+      enteredAt: r.enteredAt.toISOString(),
+      exitedAt: r.exitedAt ? r.exitedAt.toISOString() : null,
+      reason: r.reason ?? "",
+      changedBy: r.requestedBy ?? "",
+    })),
+    finalReviewHistory: reviewFinal.map((r) => ({
+      id: r.id,
+      enteredAt: r.enteredAt.toISOString(),
+      exitedAt: r.exitedAt ? r.exitedAt.toISOString() : null,
+      reason: r.reason ?? "",
+      changedBy: r.requestedBy ?? "",
+    })),
+  };
+}
+
+async function reload(id: string) {
+  return prisma.project.findUniqueOrThrow({ where: { id }, include: PROJECT_INCLUDE });
+}
