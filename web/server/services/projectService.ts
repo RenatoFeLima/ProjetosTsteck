@@ -18,13 +18,13 @@ import { writeAudit } from "./auditService";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const PROJECT_INCLUDE = {
-  builder: { select: { name: true } },
-  work: { select: { name: true } },
-  seller: { select: { name: true } },
-  equipment: { select: { code: true } },
-  cabinType: { select: { name: true } },
-  engineer: { select: { name: true, phone: true } },
-} satisfies Prisma.ProjectInclude;
+  builder: { select: { id: true, name: true } },
+  work: { select: { id: true, name: true } },
+  seller: { select: { id: true, name: true, email: true } },
+  equipment: { select: { id: true, code: true, description: true } },
+  cabinType: { select: { id: true, name: true } },
+  engineer: { select: { id: true, name: true, phone: true, email: true } },
+} as unknown as Prisma.ProjectInclude;
 
 const REVIEW_STUDY = "REVISAO_DE_ESTUDO" as const;
 const REVIEW_FINAL = "REVISAO_DE_PROJETO_FINAL" as const;
