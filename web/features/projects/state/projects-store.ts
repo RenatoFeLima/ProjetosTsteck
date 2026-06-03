@@ -15,6 +15,20 @@ import type {
   FinalReviewHistoryItem,
   StatusHistoryItem,
 } from "@/features/projects/domain/project-types";
+import {
+  apiAddObservation,
+  apiChangeStatus,
+  apiCreateProject,
+  apiListProjects,
+  apiSetUrgency,
+  apiUpdateProject,
+} from "@/features/projects/lib/projects-api";
+
+// Persistência em background: cada mutação otimista local dispara a chamada à API
+// (MySQL é a fonte da verdade) e re-hidrata o estado a partir do banco.
+function logApiError(action: string) {
+  return (e: unknown) => console.error(`[projects] falha ao persistir ${action}:`, e);
+}
 
 export type ProjectsView = "table" | "kanban" | "kpis" | "alerts";
 
@@ -54,6 +68,8 @@ type StoreState = {
   getProjectStatusHistory: (projectId: string) => StatusHistoryItem[];
   getProjectObservations: (projectId: string) => ProjectObservation[];
   isCodigoProjetoDuplicado: (codigo: string, ignoreId?: string) => boolean;
+  /** Recarrega os projetos a partir do MySQL (fonte da verdade). */
+  hydrate: () => Promise<void>;
 };
 
 const nowDate = () => formatISO(new Date(), { representation: "date" });
@@ -241,6 +257,11 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       statusHistory: [...historyEntries, ...state.statusHistory],
     }));
 
+    // Persiste no MySQL e re-hidrata (substitui o registro otimista pelo real).
+    void apiCreateProject(input)
+      .then(() => get().hydrate())
+      .catch(logApiError("criação de projeto"));
+
     return { ok: true, project: next };
   },
 
@@ -292,6 +313,15 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
         : state.statusHistory,
     }));
 
+    // Persiste no MySQL: campos via PATCH (envia o projeto mesclado para resolver
+    // os cadastros por nome) e, se o status mudou, transição separada.
+    void apiUpdateProject(id, merged).then(() => get().hydrate()).catch(logApiError("edição de projeto"));
+    if (statusChanged) {
+      void apiChangeStatus(id, merged.status_atual, { source: "formulario" })
+        .then(() => get().hydrate())
+        .catch(logApiError("mudança de status (edição)"));
+    }
+
     return { ok: true };
   },
 
@@ -304,11 +334,13 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
   },
 
   toggleUrgente: (id) => {
+    const willBeUrgent = !get().projects.find((p) => p.id === id)?.urgente;
     set((state) => ({
       projects: state.projects.map((project) =>
         project.id === id ? { ...project, urgente: !project.urgente, updated_at: nowDate() } : project,
       ),
     }));
+    void apiSetUrgency(id, willBeUrgent).then(() => get().hydrate()).catch(logApiError("urgência"));
   },
 
   moveStatus: (id, nextStatus, origem, nota) => {
@@ -417,6 +449,10 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       ],
     }));
 
+    void apiChangeStatus(id, nextStatus, { source: origem, reason: nota, note: nota })
+      .then(() => get().hydrate())
+      .catch(logApiError("mudança de status"));
+
     return { ok: true };
   },
 
@@ -435,6 +471,8 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
         ...state.observations,
       ],
     }));
+    // Persiste a observação (ignora se o id ainda for otimista — será reconciliado).
+    void apiAddObservation(projetoId, message).catch(logApiError("observação"));
   },
 
   getProjectStatusHistory: (projectId) =>
@@ -446,4 +484,13 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     get()
       .observations.filter((item) => item.projeto_id === projectId)
       .sort((a, b) => (a.criado_em < b.criado_em ? 1 : -1)),
+
+  hydrate: async () => {
+    try {
+      const projects = await apiListProjects();
+      set({ projects });
+    } catch (e) {
+      logApiError("listagem de projetos")(e);
+    }
+  },
 }));

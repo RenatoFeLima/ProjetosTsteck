@@ -15,6 +15,7 @@ import { KpiDashboardErrorBoundary } from "./kpi-dashboard-error-boundary";
 import { PageContainer } from "./page-container";
 import { useProjectsStore } from "@/features/projects/state/projects-store";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
+import { hydrateMasterDataFromApi } from "@/features/master-data/lib/master-data-hydrate";
 import { computePrazoBadge, computePrazoEntrega, todayIsoDate } from "@/features/projects/domain/project-rules";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
 import { sendProjectNotification } from "@/features/projects/services/project-notification-service";
@@ -122,6 +123,9 @@ export function ProjectsPageShell() {
 
   useEffect(() => {
     setLastUpdatedAt(new Date().toLocaleString());
+    // Hidrata projetos e cadastros mestres a partir do MySQL (fonte da verdade).
+    void useProjectsStore.getState().hydrate();
+    void hydrateMasterDataFromApi();
     const timer = window.setTimeout(() => setTableState("ready"), 420);
     return () => window.clearTimeout(timer);
   }, []);
