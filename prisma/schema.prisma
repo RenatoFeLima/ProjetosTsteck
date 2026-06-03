@@ -111,8 +111,8 @@ model Work {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  constructor Constructor @relation(fields: [constructorId], references: [id])
-  projects    Project[]
+  builder  Constructor @relation(fields: [constructorId], references: [id])
+  projects Project[]
 
   @@index([constructorId])
   @@index([active])
@@ -210,7 +210,7 @@ model Project {
   createdById String?
   updatedById String?
 
-  constructor Constructor? @relation(fields: [constructorId], references: [id])
+  builder     Constructor? @relation(fields: [constructorId], references: [id])
   work        Work?        @relation(fields: [workId], references: [id])
   seller      Seller?      @relation(fields: [sellerId], references: [id])
   equipment   Equipment?   @relation(fields: [equipmentId], references: [id])
