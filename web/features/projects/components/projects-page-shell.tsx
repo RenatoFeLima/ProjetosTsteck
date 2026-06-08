@@ -13,7 +13,7 @@ import { ProjectsKpiDashboard } from "./projects-kpi-dashboard";
 import { ProjectStatusChangeDialog } from "./project-status-change-dialog";
 import { KpiDashboardErrorBoundary } from "./kpi-dashboard-error-boundary";
 import { PageContainer } from "./page-container";
-import { useProjectsStore } from "@/features/projects/state/projects-store";
+import { useProjectsStore, setProjectsErrorSink } from "@/features/projects/state/projects-store";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import { hydrateMasterDataFromApi } from "@/features/master-data/lib/master-data-hydrate";
 import { computePrazoBadge, computePrazoEntrega, todayIsoDate } from "@/features/projects/domain/project-rules";
@@ -123,11 +123,19 @@ export function ProjectsPageShell() {
 
   useEffect(() => {
     setLastUpdatedAt(new Date().toLocaleString());
+    // Erros de ação real do store (ex.: validação 400 ao salvar) viram toast.
+    setProjectsErrorSink((message) => {
+      setToast(message);
+      window.setTimeout(() => setToast(""), 4000);
+    });
     // Hidrata projetos e cadastros mestres a partir do MySQL (fonte da verdade).
     void useProjectsStore.getState().hydrate();
     void hydrateMasterDataFromApi();
     const timer = window.setTimeout(() => setTableState("ready"), 420);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      setProjectsErrorSink(null);
+    };
   }, []);
 
   function touchLastUpdated() {

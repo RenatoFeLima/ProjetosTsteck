@@ -24,18 +24,43 @@ import {
   apiUpdateProject,
 } from "@/features/projects/lib/projects-api";
 
-// Persistência em background: cada mutação otimista local dispara a chamada à API
-// (MySQL é a fonte da verdade) e re-hidrata o estado a partir do banco.
-function logApiError(action: string) {
-  return (e: unknown) => console.error(`[projects] falha ao persistir ${action}:`, e);
+// ─── Persistência em background + reconciliação de IDs otimistas ──────────────
+// Cada mutação otimista local dispara a chamada à API (MySQL é a fonte da verdade).
+// Projetos recém-criados recebem um id temporário (client-side). Enquanto não são
+// persistidos, ficam registrados aqui para que ações secundárias NÃO disparem
+// requests com id inexistente — o que geraria 404 "Projeto não encontrado".
+const pendingCreateIds = new Set<string>();
+const isPending = (id: string) => pendingCreateIds.has(id);
+
+// Canal para reportar erros de AÇÃO REAL do usuário à UI sem acoplar o store ao
+// React (a shell registra um handler que exibe um toast). Tentativas secundárias
+// não-críticas não passam por aqui — ficam apenas em debug, sem poluir o DevTools.
+let errorSink: ((message: string) => void) | null = null;
+export function setProjectsErrorSink(fn: ((message: string) => void) | null) {
+  errorSink = fn;
+}
+function reportUserError(message: string) {
+  errorSink?.(message);
 }
 
-// Em caso de falha da API, reidrata do MySQL para reverter a alteração otimista
-// (ex.: rollback do card no Kanban quando /status falha). Falha de NOTIFICAÇÃO
-// não passa por aqui — ela é independente e nunca desfaz o status já salvo.
-function onPersistFailure(action: string) {
+// Logger controlado: ruído conhecido (tentativas secundárias) fica em debug e
+// some em produção; logs úteis ficam no backend/Vercel.
+function debugLog(...args: unknown[]) {
+  if (process.env.NODE_ENV !== "production") console.debug("[projects]", ...args);
+}
+
+function messageFrom(e: unknown, fallback: string): string {
+  const msg = e instanceof Error ? e.message.trim() : "";
+  return msg && msg !== "Erro na requisição." ? msg : fallback;
+}
+
+// Falha de uma AÇÃO REAL: reidrata do MySQL para reverter a alteração otimista
+// (ex.: rollback do card no Kanban quando /status falha) e informa o usuário.
+// Falha de NOTIFICAÇÃO não passa por aqui — é independente e nunca desfaz o status.
+function onPersistFailure(action: string, friendly: string) {
   return (e: unknown) => {
-    logApiError(action)(e);
+    debugLog(`falha ao persistir ${action}`, e);
+    reportUserError(messageFrom(e, friendly));
     void useProjectsStore.getState().hydrate();
   };
 }
@@ -267,15 +292,36 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       statusHistory: [...historyEntries, ...state.statusHistory],
     }));
 
-    // Persiste no MySQL e substitui APENAS o registro otimista pelo real
-    // (sem refetch da lista inteira — evita lentidão e "card voltando").
+    // Persiste no MySQL e reconcilia o id temporário pelo id REAL devolvido pelo
+    // backend — em projetos, histórico e observações — para que nenhuma ação
+    // posterior use o id antigo. Sem refetch da lista inteira.
+    const tempId = next.id;
+    pendingCreateIds.add(tempId);
     void apiCreateProject(input)
-      .then((real) =>
+      .then((real) => {
+        pendingCreateIds.delete(tempId);
         set((state) => ({
-          projects: state.projects.map((p) => (p.codigo_projeto === real.codigo_projeto ? real : p)),
-        })),
-      )
-      .catch(onPersistFailure("criação de projeto"));
+          projects: state.projects.map((p) => (p.id === tempId ? real : p)),
+          statusHistory: state.statusHistory.map((h) =>
+            h.projeto_id === tempId ? { ...h, projeto_id: real.id } : h,
+          ),
+          observations: state.observations.map((o) =>
+            o.projeto_id === tempId ? { ...o, projeto_id: real.id } : o,
+          ),
+        }));
+      })
+      .catch((e) => {
+        pendingCreateIds.delete(tempId);
+        // Criação real falhou (ex.: validação 400/409). Remove o registro otimista
+        // e informa o usuário — sem console.error genérico poluindo o DevTools.
+        set((state) => ({
+          projects: state.projects.filter((p) => p.id !== tempId),
+          statusHistory: state.statusHistory.filter((h) => h.projeto_id !== tempId),
+          observations: state.observations.filter((o) => o.projeto_id !== tempId),
+        }));
+        debugLog("falha ao criar projeto", e);
+        reportUserError(messageFrom(e, "Não foi possível salvar o projeto."));
+      });
 
     return { ok: true, project: next };
   },
@@ -328,6 +374,13 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
         : state.statusHistory,
     }));
 
+    // Projeto ainda não persistido: não há id real no banco para editar. A criação
+    // em andamento já gravará o estado; evita PATCH 404 com id temporário.
+    if (isPending(id)) {
+      debugLog("edição adiada: projeto ainda não persistido", id);
+      return { ok: true };
+    }
+
     // Persiste no MySQL e funde só este projeto (sem refetch da lista).
     const applyUpdated = (real: Project) =>
       set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) }));
@@ -337,7 +390,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
           ? apiChangeStatus(id, merged.status_atual, { source: "formulario" }).then(applyUpdated)
           : applyUpdated(real),
       )
-      .catch(onPersistFailure("edição de projeto"));
+      .catch(onPersistFailure("edição de projeto", "Não foi possível salvar as alterações do projeto."));
 
     return { ok: true };
   },
@@ -357,9 +410,13 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
         project.id === id ? { ...project, urgente: !project.urgente, updated_at: nowDate() } : project,
       ),
     }));
+    if (isPending(id)) {
+      debugLog("urgência adiada: projeto ainda não persistido", id);
+      return;
+    }
     void apiSetUrgency(id, willBeUrgent)
       .then((real) => set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) })))
-      .catch(onPersistFailure("urgência"));
+      .catch(onPersistFailure("urgência", "Não foi possível atualizar a urgência do projeto."));
   },
 
   moveStatus: (id, nextStatus, origem, nota) => {
@@ -468,9 +525,14 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       ],
     }));
 
+    if (isPending(id)) {
+      // Projeto ainda não persistido — não dispara mudança de status com id antigo.
+      debugLog("mudança de status adiada: projeto ainda não persistido", id);
+      return { ok: true };
+    }
     void apiChangeStatus(id, nextStatus, { source: origem, reason: nota, note: nota })
       .then((real) => set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) })))
-      .catch(onPersistFailure("mudança de status"));
+      .catch(onPersistFailure("mudança de status", "Não foi possível alterar o status do projeto."));
 
     return { ok: true };
   },
@@ -490,8 +552,13 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
         ...state.observations,
       ],
     }));
-    // Persiste a observação (ignora se o id ainda for otimista — será reconciliado).
-    void apiAddObservation(projetoId, message).catch(logApiError("observação"));
+    // Observação é secundária/não-crítica. Se o projeto ainda não foi persistido
+    // (id temporário), a chamada cairia em 404 — então fica só local/debug.
+    if (isPending(projetoId)) {
+      debugLog("observação não persistida: projeto ainda não criado no banco", projetoId);
+      return;
+    }
+    void apiAddObservation(projetoId, message).catch((e) => debugLog("falha ao persistir observação", e));
   },
 
   getProjectStatusHistory: (projectId) =>
@@ -509,7 +576,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       const projects = await apiListProjects();
       set({ projects });
     } catch (e) {
-      logApiError("listagem de projetos")(e);
+      debugLog("falha ao listar projetos", e);
     }
   },
 }));
