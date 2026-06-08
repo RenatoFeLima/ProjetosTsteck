@@ -14,6 +14,7 @@ import {
   type DbStatus,
 } from "@/features/projects/domain/project-status-map";
 import { writeAudit } from "./auditService";
+import { startTimer, logPerf } from "@/server/perf";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -89,27 +90,25 @@ async function resolveRefs(data: ProjectInput) {
     : null;
   if (!constructor) throw new HttpError(400, `Construtora "${construtora}" não encontrada nos cadastros ativos.`);
 
+  // Obra depende da construtora; o resto é independente → roda em paralelo
+  // (1 round-trip em vez de ~5 sequenciais entre Vercel e o MySQL).
   const obra = (data.obra ?? "").trim();
-  const work = obra
-    ? await prisma.work.findFirst({ where: { name: obra, constructorId: constructor.id, active: true } })
-    : null;
-  if (!work) throw new HttpError(400, `Obra "${obra}" não encontrada para a construtora selecionada.`);
-
   const vendedor = (data.vendedor ?? "").trim();
-  const seller = vendedor ? await prisma.seller.findFirst({ where: { name: vendedor, active: true } }) : null;
-  if (!seller) throw new HttpError(400, `Vendedor "${vendedor}" não encontrado nos cadastros ativos.`);
-
   const equipamento = (data.equipamento ?? "").trim();
-  const equipment = equipamento
-    ? await prisma.equipment.findFirst({ where: { code: equipamento, active: true } })
-    : null;
-  if (!equipment) throw new HttpError(400, `Equipamento "${equipamento}" não encontrado nos cadastros ativos.`);
-
   const tipo = (data.tipo_cabine ?? "").trim();
-  const cabinType = tipo ? await prisma.cabinType.findFirst({ where: { name: tipo, active: true } }) : null;
-
   const engNome = (data.engenheiro_nome ?? "").trim();
-  const engineer = engNome ? await prisma.engineer.findFirst({ where: { name: engNome, active: true } }) : null;
+
+  const [work, seller, equipment, cabinType, engineer] = await Promise.all([
+    obra ? prisma.work.findFirst({ where: { name: obra, constructorId: constructor.id, active: true }, select: { id: true } }) : null,
+    vendedor ? prisma.seller.findFirst({ where: { name: vendedor, active: true }, select: { id: true } }) : null,
+    equipamento ? prisma.equipment.findFirst({ where: { code: equipamento, active: true }, select: { id: true } }) : null,
+    tipo ? prisma.cabinType.findFirst({ where: { name: tipo, active: true }, select: { id: true } }) : null,
+    engNome ? prisma.engineer.findFirst({ where: { name: engNome, active: true }, select: { id: true } }) : null,
+  ]);
+
+  if (!work) throw new HttpError(400, `Obra "${obra}" não encontrada para a construtora selecionada.`);
+  if (!seller) throw new HttpError(400, `Vendedor "${vendedor}" não encontrado nos cadastros ativos.`);
+  if (!equipment) throw new HttpError(400, `Equipamento "${equipamento}" não encontrado nos cadastros ativos.`);
 
   return {
     constructorId: constructor.id,
@@ -145,13 +144,16 @@ export async function getProject(actor: SessionUser, id: string): Promise<Serial
 export async function createProject(actor: SessionUser, data: ProjectInput): Promise<SerializedProject> {
   assertPermission(actor, (p) => p.projects.create);
 
+  const stop = startTimer();
   const code = (data.codigo_projeto ?? "").trim();
   if (!code) throw new HttpError(400, "Código do projeto é obrigatório.");
-  if (await prisma.project.findUnique({ where: { code } })) {
+  if (await prisma.project.findUnique({ where: { code }, select: { id: true } })) {
     throw new HttpError(409, `Já existe um projeto com o código "${code}".`);
   }
 
+  const tRefs = startTimer();
   const refs = await resolveRefs(data);
+  const refsMs = tRefs();
 
   const projectReceived = !!data.proj_obra_recebido;
   const cabinLocationDefined = !!data.local_cabine_definido;
@@ -165,6 +167,7 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
 
   const now = new Date();
 
+  const tCreate = startTimer();
   const created = await prisma.project.create({
     data: {
       code,
@@ -185,7 +188,9 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
     },
     include: PROJECT_INCLUDE,
   });
+  const createMs = tCreate();
 
+  const tAudit = startTimer();
   await writeAudit({
     action: "PROJECT_CREATED",
     actorUserId: actor.id,
@@ -194,6 +199,7 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
     entityId: created.id,
     message: `${actor.name} criou o projeto ${code} (status inicial ${DB_TO_UI_STATUS[initialStatus]}).`,
   });
+  logPerf("service.createProject", stop(), { success: true, phases: { refs: refsMs, prismaCreate: createMs, audit: tAudit() } });
 
   return serializeProject(created);
 }
@@ -255,7 +261,10 @@ export async function changeStatus(
 ): Promise<SerializedProject> {
   assertPermission(actor, (p) => p.projects.changeStatus);
 
+  const stop = startTimer();
+  const tQuery = startTimer();
   const project = await prisma.project.findUnique({ where: { id } });
+  const queryMs = tQuery();
   if (!project) throw new HttpError(404, "Projeto não encontrado.");
 
   const from = project.status as DbStatus;
@@ -285,6 +294,7 @@ export async function changeStatus(
 
   const now = new Date();
 
+  const tTx = startTimer();
   await prisma.$transaction(async (tx) => {
     // Fecha o registro de histórico aberto do status anterior.
     await tx.projectStatusHistory.updateMany({
@@ -333,7 +343,9 @@ export async function changeStatus(
       },
     });
   });
+  const txMs = tTx();
 
+  const tAudit = startTimer();
   await writeAudit({
     action: "PROJECT_STATUS_CHANGED",
     actorUserId: actor.id,
@@ -343,8 +355,14 @@ export async function changeStatus(
     message: `${actor.name} alterou o status do projeto ${project.code}: ${DB_TO_UI_STATUS[from]} → ${DB_TO_UI_STATUS[to]}.`,
     metadata: opts.reason ? { reason: opts.reason } : undefined,
   });
+  const auditMs = tAudit();
 
-  return serializeProject(await reload(id));
+  const result = serializeProject(await reload(id));
+  logPerf("service.changeStatus", stop(), {
+    success: true,
+    phases: { query: queryMs, transaction: txMs, audit: auditMs },
+  });
+  return result;
 }
 
 export async function setUrgency(

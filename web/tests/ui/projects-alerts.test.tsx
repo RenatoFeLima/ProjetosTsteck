@@ -92,6 +92,10 @@ describe("projects alerts", () => {
   });
 
   it("mostra estado vazio quando nao ha alertas", () => {
+    // updated_at recente para o projeto não cair no grupo "Parados ha muitos dias"
+    // (regra isStalled = sem atualização há >= 10 dias). Data dinâmica evita que o
+    // teste quebre com o passar do tempo real.
+    const hoje = new Date().toISOString().slice(0, 10);
     render(
       <ProjectsAlerts
         projects={[
@@ -102,7 +106,7 @@ describe("projects alerts", () => {
             urgente: false,
             status_atual: "CADASTRO INICIAL",
             data_alinhamento: null,
-            updated_at: "2026-05-27",
+            updated_at: hoje,
           }),
         ]}
         onOpen={vi.fn()}

@@ -5,6 +5,7 @@ import {
   isValidEmail,
   type ProjectNotificationPayload,
 } from "@/features/projects/services/project-notification-service";
+import { startTimer, logPerf } from "@/server/perf";
 
 /** Escapa caracteres HTML para evitar injeção no template do e-mail. */
 function escapeHtml(str: unknown): string {
@@ -60,7 +61,20 @@ export async function POST(request: NextRequest) {
   };
 
   const recipients = getProjectNotificationRecipients(sellerEmailValid ? body.sellerEmail : undefined);
-  const result = await sendProjectMovementEmail(sanitized, recipients.to, recipients.cc);
 
-  return NextResponse.json(result, { status: result.success ? 200 : 500 });
+  // Notificação é secundária: nunca derruba o fluxo nem retorna 500.
+  // Falha de e-mail é reportada no corpo (success:false), com status 200.
+  const stop = startTimer();
+  try {
+    const result = await sendProjectMovementEmail(sanitized, recipients.to, recipients.cc);
+    logPerf("POST /api/notifications/project-movement", stop(), { success: result.success });
+    return NextResponse.json(result, { status: 200 });
+  } catch (err) {
+    logPerf("POST /api/notifications/project-movement", stop(), { success: false });
+    console.error("[notifications/project-movement] falha ao enviar e-mail:", err);
+    return NextResponse.json(
+      { success: false, message: "Falha ao enviar e-mail (registrada, fluxo não afetado)." },
+      { status: 200 },
+    );
+  }
 }

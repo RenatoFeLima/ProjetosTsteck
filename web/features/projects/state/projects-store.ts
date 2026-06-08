@@ -30,6 +30,16 @@ function logApiError(action: string) {
   return (e: unknown) => console.error(`[projects] falha ao persistir ${action}:`, e);
 }
 
+// Em caso de falha da API, reidrata do MySQL para reverter a alteração otimista
+// (ex.: rollback do card no Kanban quando /status falha). Falha de NOTIFICAÇÃO
+// não passa por aqui — ela é independente e nunca desfaz o status já salvo.
+function onPersistFailure(action: string) {
+  return (e: unknown) => {
+    logApiError(action)(e);
+    void useProjectsStore.getState().hydrate();
+  };
+}
+
 export type ProjectsView = "table" | "kanban" | "kpis" | "alerts";
 
 type Filters = {
@@ -257,10 +267,15 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       statusHistory: [...historyEntries, ...state.statusHistory],
     }));
 
-    // Persiste no MySQL e re-hidrata (substitui o registro otimista pelo real).
+    // Persiste no MySQL e substitui APENAS o registro otimista pelo real
+    // (sem refetch da lista inteira — evita lentidão e "card voltando").
     void apiCreateProject(input)
-      .then(() => get().hydrate())
-      .catch(logApiError("criação de projeto"));
+      .then((real) =>
+        set((state) => ({
+          projects: state.projects.map((p) => (p.codigo_projeto === real.codigo_projeto ? real : p)),
+        })),
+      )
+      .catch(onPersistFailure("criação de projeto"));
 
     return { ok: true, project: next };
   },
@@ -313,14 +328,16 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
         : state.statusHistory,
     }));
 
-    // Persiste no MySQL: campos via PATCH (envia o projeto mesclado para resolver
-    // os cadastros por nome) e, se o status mudou, transição separada.
-    void apiUpdateProject(id, merged).then(() => get().hydrate()).catch(logApiError("edição de projeto"));
-    if (statusChanged) {
-      void apiChangeStatus(id, merged.status_atual, { source: "formulario" })
-        .then(() => get().hydrate())
-        .catch(logApiError("mudança de status (edição)"));
-    }
+    // Persiste no MySQL e funde só este projeto (sem refetch da lista).
+    const applyUpdated = (real: Project) =>
+      set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) }));
+    void apiUpdateProject(id, merged)
+      .then((real) =>
+        statusChanged
+          ? apiChangeStatus(id, merged.status_atual, { source: "formulario" }).then(applyUpdated)
+          : applyUpdated(real),
+      )
+      .catch(onPersistFailure("edição de projeto"));
 
     return { ok: true };
   },
@@ -340,7 +357,9 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
         project.id === id ? { ...project, urgente: !project.urgente, updated_at: nowDate() } : project,
       ),
     }));
-    void apiSetUrgency(id, willBeUrgent).then(() => get().hydrate()).catch(logApiError("urgência"));
+    void apiSetUrgency(id, willBeUrgent)
+      .then((real) => set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) })))
+      .catch(onPersistFailure("urgência"));
   },
 
   moveStatus: (id, nextStatus, origem, nota) => {
@@ -450,8 +469,8 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     }));
 
     void apiChangeStatus(id, nextStatus, { source: origem, reason: nota, note: nota })
-      .then(() => get().hydrate())
-      .catch(logApiError("mudança de status"));
+      .then((real) => set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) })))
+      .catch(onPersistFailure("mudança de status"));
 
     return { ok: true };
   },

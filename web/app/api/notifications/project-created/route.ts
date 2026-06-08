@@ -64,7 +64,14 @@ export async function POST(request: NextRequest) {
     sellerEmailValid ? body.sellerEmail : undefined,
   );
 
-  const result = await sendProjectCreatedEmail(sanitized, recipients.to, recipients.cc);
-
-  return NextResponse.json(result, { status: result.success ? 200 : 500 });
+  try {
+    const result = await sendProjectCreatedEmail(sanitized, recipients.to, recipients.cc);
+    return NextResponse.json(result, { status: 200 });
+  } catch (err) {
+    console.error("[notifications/project-created] falha ao enviar e-mail:", err);
+    return NextResponse.json(
+      { success: false, message: "Falha ao enviar e-mail (registrada, fluxo não afetado)." },
+      { status: 200 },
+    );
+  }
 }

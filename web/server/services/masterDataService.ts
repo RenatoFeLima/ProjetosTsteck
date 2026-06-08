@@ -8,6 +8,7 @@ import { assertPermission, HttpError } from "@/server/auth/guards";
 import type { SessionUser } from "@/server/auth/session";
 import { type MasterEntityKey } from "@/features/master-data/lib/master-entity-keys";
 import { writeAudit } from "./auditService";
+import { startTimer, logPerf } from "@/server/perf";
 
 export type { MasterEntityKey };
 
@@ -159,6 +160,7 @@ export async function createEntity(
   data: Record<string, unknown>,
 ): Promise<any> {
   assertPermission(actor, (p) => p.masterData.create);
+  const stopCreate = startTimer();
   const cfg = configOf(entity);
   const key = entity as MasterEntityKey;
 
@@ -174,10 +176,15 @@ export async function createEntity(
     if (!exists) throw new HttpError(400, "Construtora informada não existe.");
   }
 
+  const tDedup = startTimer();
   await assertNoDuplicate(key, cfg, clean);
+  const dedupMs = tDedup();
 
+  const tCreate = startTimer();
   const created = await cfg.delegate().create({ data: clean, include: cfg.include });
+  const createMs = tCreate();
 
+  const tAudit = startTimer();
   await writeAudit({
     action: "MASTER_DATA_CREATED",
     actorUserId: actor.id,
@@ -185,6 +192,10 @@ export async function createEntity(
     entityType: key,
     entityId: created.id,
     message: `${actor.name} criou ${cfg.label.toLowerCase()} "${created[cfg.displayField]}".`,
+  });
+  logPerf(`service.createEntity:${key}`, stopCreate(), {
+    success: true,
+    phases: { dedup: dedupMs, prismaCreate: createMs, audit: tAudit() },
   });
 
   return serialize(key, created);
