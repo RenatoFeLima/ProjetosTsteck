@@ -19,6 +19,7 @@ import {
   apiAddObservation,
   apiChangeStatus,
   apiCreateProject,
+  apiGetHistory,
   apiListProjects,
   apiSetUrgency,
   apiUpdateProject,
@@ -105,6 +106,8 @@ type StoreState = {
   isCodigoProjetoDuplicado: (codigo: string, ignoreId?: string) => boolean;
   /** Recarrega os projetos a partir do MySQL (fonte da verdade). */
   hydrate: () => Promise<void>;
+  /** Carrega histórico + observações reais de um projeto do MySQL (ao abrir o drawer). */
+  loadProjectDetail: (id: string) => Promise<void>;
 };
 
 const nowDate = () => formatISO(new Date(), { representation: "date" });
@@ -577,6 +580,27 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       set({ projects });
     } catch (e) {
       debugLog("falha ao listar projetos", e);
+    }
+  },
+
+  // Busca o histórico/observações persistidos no MySQL e SUBSTITUI as entradas
+  // deste projeto no store (mantém as dos demais). Resolve o caso de projetos
+  // antigos cujo histórico/observações nunca foram carregados na sessão.
+  loadProjectDetail: async (id) => {
+    try {
+      const detail = await apiGetHistory(id);
+      set((state) => ({
+        statusHistory: [
+          ...detail.statusHistory,
+          ...state.statusHistory.filter((h) => h.projeto_id !== id),
+        ],
+        observations: [
+          ...detail.observations,
+          ...state.observations.filter((o) => o.projeto_id !== id),
+        ],
+      }));
+    } catch (e) {
+      debugLog("falha ao carregar detalhe do projeto", e);
     }
   },
 }));

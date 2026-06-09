@@ -9,6 +9,7 @@ vi.mock("@/features/projects/lib/projects-api", () => ({
   apiChangeStatus: vi.fn(),
   apiSetUrgency: vi.fn(),
   apiAddObservation: vi.fn(),
+  apiGetHistory: vi.fn(),
 }));
 
 import {
@@ -175,5 +176,36 @@ describe("urgência", () => {
       "u3",
       expect.objectContaining({ urgente: true }),
     );
+  });
+});
+
+describe("carregamento do detalhe (drawer)", () => {
+  it("carrega histórico/observações do MySQL e substitui só as entradas do projeto", async () => {
+    useProjectsStore.setState({
+      projects: [realProject("d1", "DET-000-0001")],
+      statusHistory: [],
+      // Observação de OUTRO projeto deve ser preservada.
+      observations: [
+        { id: "obsOutro", projeto_id: "outro", usuario: "x", texto: "de outro", criado_em: "2026-01-01" },
+      ],
+    });
+    vi.mocked(api.apiGetHistory).mockResolvedValue({
+      statusHistory: [
+        { id: "s1", projeto_id: "d1", status_de: null, status_para: "CADASTRO INICIAL", alterado_em: "2026-02-01", origem: "formulario" },
+        { id: "s2", projeto_id: "d1", status_de: "CADASTRO INICIAL", status_para: "ELABORAR ANTE-PROJETO", alterado_em: "2026-02-02", origem: "sistema" },
+      ],
+      observations: [{ id: "o1", projeto_id: "d1", usuario: "ana", texto: "obs antiga", criado_em: "2026-02-01" }],
+      reviewStudyHistory: [],
+      finalReviewHistory: [],
+    });
+
+    await useProjectsStore.getState().loadProjectDetail("d1");
+
+    const sh = useProjectsStore.getState().getProjectStatusHistory("d1");
+    const obs = useProjectsStore.getState().getProjectObservations("d1");
+    expect(sh.map((h) => h.id).sort()).toEqual(["s1", "s2"]);
+    expect(obs.map((o) => o.id)).toEqual(["o1"]);
+    // Entradas de outros projetos preservadas.
+    expect(useProjectsStore.getState().observations.some((o) => o.id === "obsOutro")).toBe(true);
   });
 });

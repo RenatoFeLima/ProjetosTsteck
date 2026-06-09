@@ -34,6 +34,7 @@ export function ProjectsPageShell() {
     toggleUrgente,
     moveStatus,
     statusHistory,
+    observations: allObservations,
     getProjectStatusHistory,
     getProjectObservations,
     isCodigoProjetoDuplicado,
@@ -72,12 +73,13 @@ export function ProjectsPageShell() {
 
   const history = useMemo(
     () => (drawerContext ? getProjectStatusHistory(drawerContext.projectId) : []),
-    [drawerContext, getProjectStatusHistory],
+    // statusHistory na dep p/ recomputar quando o detalhe é carregado do MySQL.
+    [drawerContext, getProjectStatusHistory, statusHistory],
   );
 
   const observations = useMemo(
     () => (drawerContext ? getProjectObservations(drawerContext.projectId) : []),
-    [drawerContext, getProjectObservations],
+    [drawerContext, getProjectObservations, allObservations],
   );
 
   const kpis = useMemo(() => {

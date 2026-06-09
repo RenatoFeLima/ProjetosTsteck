@@ -21,6 +21,7 @@ import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { SearchableCombobox } from "./searchable-combobox";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 import { formatPhone, formatProjectCode, normalizeEngineerName, stripPhone } from "./project-form-utils";
+import { useProjectsStore } from "@/features/projects/state/projects-store";
 
 // ─── types ─────────────────────────────────────────────────────────────────
 
@@ -152,6 +153,9 @@ export function ProjectDetailsDrawer({
 }: ProjectDetailsDrawerProps) {
   // view-mode state
   const [note, setNote] = useState("");
+  // Carrega histórico + observações reais do MySQL ao abrir (projetos antigos não
+  // têm esses dados no store até alguma ação acontecer).
+  const [detailLoading, setDetailLoading] = useState(false);
 
   // edit-mode state
   const [mode, setMode] = useState<DrawerMode>(initialMode);
@@ -200,6 +204,24 @@ export function ProjectDetailsDrawer({
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [open, onClose, mode, editDirty]);
+
+  // Ao abrir o drawer, busca do MySQL o histórico/observações reais do projeto.
+  // Substitui no store as entradas deste projeto (mantém otimistas dos demais).
+  const projectId = project?.id;
+  useEffect(() => {
+    if (!open || !projectId) return;
+    let active = true;
+    setDetailLoading(true);
+    void useProjectsStore
+      .getState()
+      .loadProjectDetail(projectId)
+      .finally(() => {
+        if (active) setDetailLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open, projectId]);
 
   const timeline = useMemo(
     () => buildTimeline(statusHistory, observations),
@@ -735,7 +757,7 @@ export function ProjectDetailsDrawer({
                   <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Timeline operacional completa</h3>
                   {timeline.length === 0 && (
                     <p className="rounded-xl border border-dashed border-zinc-300 dark:border-white/15 bg-zinc-50 dark:bg-panel-soft px-3 py-4 text-sm text-zinc-500 dark:text-muted">
-                      Nenhum evento registrado ainda.
+                      {detailLoading ? "Carregando histórico e observações..." : "Nenhum evento registrado ainda."}
                     </p>
                   )}
                   <div className="space-y-2">
@@ -834,7 +856,7 @@ export function ProjectDetailsDrawer({
                 <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Timeline operacional</h3>
                 {timeline.length === 0 && (
                   <p className="rounded-xl border border-dashed border-zinc-300 dark:border-white/15 bg-zinc-50 dark:bg-panel-soft px-3 py-4 text-sm text-zinc-500 dark:text-muted">
-                    Nenhum evento registrado ainda.
+                    {detailLoading ? "Carregando histórico e observações..." : "Nenhum evento registrado ainda."}
                   </p>
                 )}
                 <div className="space-y-2">
