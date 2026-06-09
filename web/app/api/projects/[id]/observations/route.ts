@@ -16,7 +16,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const body = await req.json().catch(() => ({}));
     const { text } = body as { text?: unknown };
     if (typeof text !== "string") {
-      return NextResponse.json({ error: "text é obrigatório." }, { status: 400 });
+      return NextResponse.json(
+        { error: "VALIDATION_ERROR", message: "Texto da observação é obrigatório." },
+        { status: 400 },
+      );
     }
     const observation = await addObservation(actor, id, text);
     logPerf("POST /api/projects/[id]/observations", stop(), { success: true });

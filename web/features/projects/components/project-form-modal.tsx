@@ -165,13 +165,15 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
     return props.isCodigoDuplicado(code, props.project?.id);
   }, [form.codigo_projeto, props]);
 
-  const obraOptions = useMemo(() => {
-    if (form.construtora) {
-      const obrasByConstrutora = masterData.getActiveObraNames(form.construtora);
-      if (obrasByConstrutora.length > 0) return obrasByConstrutora;
-    }
-    return masterData.getActiveObraNames();
-  }, [masterData, form.construtora]);
+  // SOMENTE obras vinculadas à construtora selecionada. O backend exige obra
+  // existente e vinculada — listar obras de outras construtoras geraria 400.
+  const obraOptions = useMemo(
+    () => (form.construtora ? masterData.getActiveObraNames(form.construtora) : []),
+    [masterData, form.construtora],
+  );
+
+  // Construtora selecionada não tem nenhuma obra ativa cadastrada.
+  const construtoraSemObras = Boolean(form.construtora) && obraOptions.length === 0;
 
   const construtoraOptions = useMemo(() => {
     const all = masterData.getActiveContrutoraNames();
@@ -181,10 +183,12 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
     return Array.from(new Set(all)).map((value) => ({ value }));
   }, [masterData, form.construtora]);
 
-  const obraComboboxOptions = useMemo(
-    () => Array.from(new Set(obraOptions)).map((value) => ({ value })),
-    [obraOptions],
-  );
+  const obraComboboxOptions = useMemo(() => {
+    const list = [...obraOptions];
+    // Em edição, mantém a obra já salva visível mesmo se ficou inativa.
+    if (props.mode === "edit" && form.obra && !list.includes(form.obra)) list.unshift(form.obra);
+    return Array.from(new Set(list)).map((value) => ({ value }));
+  }, [obraOptions, form.obra, props.mode]);
 
   const vendedorComboboxOptions = useMemo(() => {
     const list = masterData.getActiveVendedorNames();
@@ -258,6 +262,14 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
   }
 
   function validateBeforeSave(normalized: Partial<Project>): boolean {
+    // Construtora sem nenhuma obra cadastrada: bloqueia com mensagem acionável
+    // (o backend exige obra existente e vinculada → evita o 400 no servidor).
+    if (normalized.construtora && masterData.getActiveObraNames(normalized.construtora).length === 0) {
+      setObraError("Nenhuma obra cadastrada para esta construtora.");
+      props.notify("Cadastre uma obra para esta construtora antes de criar o projeto.");
+      return false;
+    }
+
     const missing = validateRequiredFields(normalized as Project);
     if (missing.length > 0) {
       const labels = missing.map((key) => REQUIRED_FIELD_LABELS[key] ?? key);
@@ -275,8 +287,19 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
       return false;
     }
 
+    // Obra precisa pertencer à construtora selecionada (vínculo Work→Constructor).
+    if (
+      normalized.obra &&
+      normalized.construtora &&
+      !masterData.getActiveObraNames(normalized.construtora).includes(normalized.obra)
+    ) {
+      setObraError("A obra selecionada não pertence a esta construtora.");
+      props.notify("A obra selecionada não pertence à construtora escolhida. Escolha uma obra válida.");
+      return false;
+    }
+
     if (duplicated) {
-      props.notify("Codigo de projeto duplicado.");
+      props.notify("Já existe um projeto com este código.");
       return false;
     }
 
@@ -438,12 +461,19 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                     value={form.obra ?? ""}
                     options={obraComboboxOptions}
                     onChange={(value) => patch({ obra: value })}
-                    placeholder="Selecione a obra"
+                    placeholder={form.construtora ? "Selecione a obra" : "Selecione a construtora primeiro"}
                     searchPlaceholder="Buscar obra..."
-                    emptyMessage="Nenhuma obra encontrada."
+                    emptyMessage="Nenhuma obra vinculada a esta construtora."
                     ariaLabel="Selecionar obra"
                     error={obraError}
+                    disabled={!form.construtora}
                   />
+                  {construtoraSemObras && (
+                    <p className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                      <AlertCircle size={11} />
+                      Cadastre uma obra para esta construtora antes de criar o projeto.
+                    </p>
+                  )}
                 </FormField>
 
                 <FormField label="Código do Projeto" required error={duplicated ? "Código de projeto já existe." : ""}>

@@ -8,7 +8,10 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as { error?: string }).error ?? "Erro na requisição.");
+  if (!res.ok) {
+    const d = data as { error?: string; message?: string };
+    throw new Error(d.message ?? d.error ?? "Erro na requisição.");
+  }
   return data as T;
 }
 

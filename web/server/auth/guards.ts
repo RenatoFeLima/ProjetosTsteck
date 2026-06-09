@@ -5,7 +5,9 @@ import type { UserPermissions } from "@/features/auth/lib/auth-types";
 import { getSession, type SessionUser } from "./session";
 
 export class HttpError extends Error {
-  constructor(public status: number, message: string) {
+  // `code` é o identificador estável do erro (ex.: "VALIDATION_ERROR"); `message`
+  // é a mensagem amigável exibida ao usuário. Quando omitido, é derivado do status.
+  constructor(public status: number, message: string, public code?: string) {
     super(message);
     this.name = "HttpError";
   }

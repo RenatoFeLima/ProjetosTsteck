@@ -21,7 +21,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       note?: string;
     };
     if (typeof status !== "string") {
-      return NextResponse.json({ error: "status é obrigatório." }, { status: 400 });
+      return NextResponse.json(
+        { error: "VALIDATION_ERROR", message: "Status é obrigatório." },
+        { status: 400 },
+      );
     }
     const project = await changeStatus(actor, id, status, { reason, source, note });
     logPerf("POST /api/projects/[id]/status", stop(), { success: true });
