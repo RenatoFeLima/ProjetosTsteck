@@ -27,7 +27,8 @@ export function ProjectStatusChangeDialog({
     setTouched(false);
   }
 
-  const requiresObservation = nextStatus === "REVISAO DE ESTUDO";
+  const requiresObservation =
+    nextStatus === "REVISAO DE ESTUDO" || nextStatus === "REVISAO DE PROJETO FINAL";
   const observationValid = observation.trim().length >= 10;
   const canSubmit = Boolean(nextStatus) && (!requiresObservation || observationValid);
 

@@ -186,7 +186,8 @@ export function ProjectsPageShell() {
     if (!project) return;
 
     const oldStatus = project.status_atual;
-    const result = moveStatus(project.id, nextStatus, "acao-rapida");
+    // Observação vira o MOTIVO da revisão (reason) exigido pelo backend.
+    const result = moveStatus(project.id, nextStatus, "acao-rapida", observation);
     if (!result.ok) {
       notify(result.error ?? "Nao foi possivel alterar o status.");
       return;
@@ -458,7 +459,9 @@ export function ProjectsPageShell() {
             onMoveStatus={(projectId, status, observation) => {
               const current = projects.find((item) => item.id === projectId);
               const oldStatus = current?.status_atual;
-              const result = moveStatus(projectId, status, "kanban");
+              // Passa a observação como MOTIVO da revisão (reason) — o backend exige
+              // motivo ao entrar em REVISAO DE ESTUDO / REVISAO DE PROJETO FINAL.
+              const result = moveStatus(projectId, status, "kanban", observation);
 
               if (result.ok && current) {
                 const message = observation?.trim()

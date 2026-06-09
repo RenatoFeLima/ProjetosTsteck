@@ -236,3 +236,27 @@ describe("carregamento do detalhe (drawer)", () => {
     expect(s.finalReviewAgg[0].exitedAt).toBeNull();
   });
 });
+
+describe("mudança de status para revisão", () => {
+  it("envia o motivo (reason) ao backend ao mover para revisão", () => {
+    useProjectsStore.setState({
+      projects: [{ ...realProject("rev1", "REV-100-0001"), status_atual: "ANTE-PROJETO ENVIADO" }],
+    });
+    vi.mocked(api.apiChangeStatus).mockResolvedValue({
+      ...realProject("rev1", "REV-100-0001"),
+      status_atual: "REVISAO DE ESTUDO",
+    });
+
+    const res = useProjectsStore
+      .getState()
+      .moveStatus("rev1", "REVISAO DE ESTUDO", "kanban", "Cliente pediu ajuste");
+
+    expect(res.ok).toBe(true);
+    // O 4º argumento (nota) deve chegar como reason — sem isso o backend retorna 400.
+    expect(api.apiChangeStatus).toHaveBeenCalledWith(
+      "rev1",
+      "REVISAO DE ESTUDO",
+      expect.objectContaining({ reason: "Cliente pediu ajuste" }),
+    );
+  });
+});
