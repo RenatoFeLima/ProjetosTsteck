@@ -494,6 +494,23 @@ export async function listAllStatusHistory(actor: SessionUser) {
   }));
 }
 
+// Revisões agregadas de TODOS os projetos (entrada/saída) — base dos SLAs de
+// revisão (20 dias). O cálculo de prazo e o respeito aos filtros são feitos no
+// cliente, cruzando projectId com os projetos filtrados.
+export async function listAllReviews(actor: SessionUser) {
+  assertPermission(actor, (p) => p.projects.view);
+  const [study, finalRev] = await Promise.all([
+    prisma.projectReviewStudyHistory.findMany({ select: { projectId: true, enteredAt: true, exitedAt: true } }),
+    prisma.projectFinalReviewHistory.findMany({ select: { projectId: true, enteredAt: true, exitedAt: true } }),
+  ]);
+  const map = (r: { projectId: string; enteredAt: Date; exitedAt: Date | null }) => ({
+    projectId: r.projectId,
+    enteredAt: r.enteredAt.toISOString(),
+    exitedAt: r.exitedAt ? r.exitedAt.toISOString() : null,
+  });
+  return { reviewStudy: study.map(map), finalReview: finalRev.map(map) };
+}
+
 async function reload(id: string) {
   return prisma.project.findUniqueOrThrow({ where: { id }, include: PROJECT_INCLUDE });
 }

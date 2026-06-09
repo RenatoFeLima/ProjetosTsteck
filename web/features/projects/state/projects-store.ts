@@ -19,11 +19,12 @@ import {
   apiAddObservation,
   apiChangeStatus,
   apiCreateProject,
-  apiGetAllStatusHistory,
+  apiGetAnalytics,
   apiGetHistory,
   apiListProjects,
   apiSetUrgency,
   apiUpdateProject,
+  type ReviewAggItem,
 } from "@/features/projects/lib/projects-api";
 
 // ─── Persistência em background + reconciliação de IDs otimistas ──────────────
@@ -90,6 +91,9 @@ type StoreState = {
   projects: Project[];
   observations: ProjectObservation[];
   statusHistory: StatusHistoryItem[];
+  /** Revisões agregadas (todos os projetos) — base dos SLAs de revisão nos KPIs. */
+  reviewStudyAgg: ReviewAggItem[];
+  finalReviewAgg: ReviewAggItem[];
   filters: Filters;
   activeView: ProjectsView;
   setActiveView: (view: ProjectsView) => void;
@@ -109,8 +113,8 @@ type StoreState = {
   hydrate: () => Promise<void>;
   /** Carrega histórico + observações reais de um projeto do MySQL (ao abrir o drawer). */
   loadProjectDetail: (id: string) => Promise<void>;
-  /** Carrega o histórico de status de TODOS os projetos (base real dos KPIs). */
-  loadAllStatusHistory: () => Promise<void>;
+  /** Carrega dados agregados de TODOS os projetos (histórico + revisões) p/ KPIs. */
+  loadAnalytics: () => Promise<void>;
 };
 
 const nowDate = () => formatISO(new Date(), { representation: "date" });
@@ -142,6 +146,8 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
   projects: initialProjects,
   observations: [],
   statusHistory: buildInitialHistory(initialProjects),
+  reviewStudyAgg: [],
+  finalReviewAgg: [],
   activeView: "table",
   filters: {
     search: "",
@@ -607,14 +613,14 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     }
   },
 
-  // Substitui o statusHistory do store pelo histórico COMPLETO do MySQL — usado
-  // pela aba KPIs para que tempo médio por status, SLA e gargalos sejam reais.
-  loadAllStatusHistory: async () => {
+  // Carrega os dados agregados do MySQL (histórico de status completo + revisões)
+  // usados pela aba KPIs: tempo médio por status, SLA, gargalos e SLAs de revisão.
+  loadAnalytics: async () => {
     try {
-      const statusHistory = await apiGetAllStatusHistory();
-      set({ statusHistory });
+      const { statusHistory, reviewStudy, finalReview } = await apiGetAnalytics();
+      set({ statusHistory, reviewStudyAgg: reviewStudy, finalReviewAgg: finalReview });
     } catch (e) {
-      debugLog("falha ao carregar histórico agregado dos KPIs", e);
+      debugLog("falha ao carregar dados agregados dos KPIs", e);
     }
   },
 }));

@@ -71,8 +71,16 @@ export async function apiGetHistory(id: string): Promise<ProjectHistoryResponse>
   return request<ProjectHistoryResponse>(`/api/projects/${id}/history`);
 }
 
-/** Histórico de status de TODOS os projetos (base real dos KPIs de tempo). */
-export async function apiGetAllStatusHistory(): Promise<StatusHistoryItem[]> {
-  const data = await request<{ statusHistory: StatusHistoryItem[] }>("/api/projects/analytics");
-  return data.statusHistory;
+/** Item agregado de revisão (estudo/final) — base dos SLAs de revisão. */
+export type ReviewAggItem = { projectId: string; enteredAt: string; exitedAt: string | null };
+
+export type AnalyticsBundle = {
+  statusHistory: StatusHistoryItem[];
+  reviewStudy: ReviewAggItem[];
+  finalReview: ReviewAggItem[];
+};
+
+/** Dados agregados de TODOS os projetos (KPIs de tempo + SLAs de revisão). */
+export async function apiGetAnalytics(): Promise<AnalyticsBundle> {
+  return request<AnalyticsBundle>("/api/projects/analytics");
 }

@@ -213,15 +213,18 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
 
   const today = useMemo(() => parseISO(todayIsoDate()), []);
 
-  // Ao abrir a aba KPIs, carrega o histórico de status COMPLETO do MySQL para que
-  // os indicadores de tempo (médias por status, fluxo, SLA, gargalos) sejam reais.
+  // Ao abrir a aba KPIs, carrega do MySQL os dados agregados (histórico de status
+  // completo + revisões) para que os indicadores de tempo e os SLAs de revisão
+  // sejam reais.
   const [historyLoading, setHistoryLoading] = useState(true);
+  const reviewStudyAgg = useProjectsStore((s) => s.reviewStudyAgg);
+  const finalReviewAgg = useProjectsStore((s) => s.finalReviewAgg);
   useEffect(() => {
     let active = true;
     setHistoryLoading(true);
     void useProjectsStore
       .getState()
-      .loadAllStatusHistory()
+      .loadAnalytics()
       .finally(() => {
         if (active) setHistoryLoading(false);
       });
@@ -463,6 +466,17 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       .sort((a, b) => b.totalProjetos - a.totalProjetos)
       .slice(0, 10);
 
+    const byEquipamento = Array.from(
+      filteredProjects.reduce((acc, project) => {
+        const key = project.equipamento || "Sem equipamento";
+        acc.set(key, (acc.get(key) ?? 0) + 1);
+        return acc;
+      }, new Map<string, number>()),
+    )
+      .map(([nome, totalProjetos]) => ({ nome, totalProjetos }))
+      .sort((a, b) => b.totalProjetos - a.totalProjetos)
+      .slice(0, 10);
+
     const priority = [
       { nome: "Urgente", total: urgent.length, color: "#9e0b0f" },
       { nome: "Normal", total: total - urgent.length, color: "#9ca3af" },
@@ -685,6 +699,31 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       byObra: finalReviewsByObra,
     };
 
+    // ─── SLA de revisões (20 dias) ─────────────────────────────────────────────
+    // Cruza as revisões agregadas (entrada/saída) com os projetos filtrados.
+    // Fechada: dentro do SLA se (saída - entrada) <= 20 dias.
+    // Aberta: dentro enquanto (hoje - entrada) <= 20; acima disso conta como fora.
+    const SLA_REVIEW_DAYS = 20;
+    const filteredIds = new Set(filteredProjects.map((p) => p.id));
+    const computeReviewSla = (entries: { projectId: string; enteredAt: string; exitedAt: string | null }[]) => {
+      const relevant = entries.filter((e) => filteredIds.has(e.projectId));
+      let within = 0;
+      for (const entry of relevant) {
+        const start = parseDate(entry.enteredAt);
+        if (!start) continue;
+        const end = entry.exitedAt ? parseDate(entry.exitedAt) : today;
+        const days = end ? Math.max(differenceInCalendarDays(end, start), 0) : 0;
+        if (days <= SLA_REVIEW_DAYS) within += 1;
+      }
+      return {
+        total: relevant.length,
+        within,
+        rate: relevant.length ? (within / relevant.length) * 100 : null,
+      };
+    };
+    const reviewStudySla = computeReviewSla(reviewStudyAgg);
+    const finalReviewSla = computeReviewSla(finalReviewAgg);
+
     return {
       total,
       ongoing,
@@ -695,6 +734,8 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       avgDelivery,
       completionRate,
       slaRate,
+      reviewStudySla,
+      finalReviewSla,
       avgAgeOpen,
       estimatedByFallback,
       statusCounts,
@@ -702,6 +743,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       monthly,
       bySeller,
       byConstrutora,
+      byEquipamento,
       priority,
       deadlineSituation,
       funnel,
@@ -714,7 +756,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       reviews,
       finalReviews,
     };
-  }, [filteredProjects, historyByProject, today]);
+  }, [filteredProjects, historyByProject, today, reviewStudyAgg, finalReviewAgg]);
 
   const previousMetrics = useMemo(() => {
     const total = previousPeriodProjects.length;
@@ -797,7 +839,21 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
         key: "sla",
         label: "SLA no Prazo",
         value: `${analytics.slaRate.toFixed(1)}%`,
-        tooltip: "Percentual de finalizados dentro do prazo.",
+        tooltip: "Percentual de finalizados dentro do prazo (45 dias de Elaborar Ante-Projeto).",
+        icon: CheckCircle2,
+      },
+      {
+        key: "slaRevisaoEstudo",
+        label: "SLA Revisao de Estudo",
+        value: analytics.reviewStudySla.rate === null ? "N/D" : `${analytics.reviewStudySla.rate.toFixed(1)}%`,
+        tooltip: "Percentual de revisoes de estudo dentro de 20 dias (abertas ha mais de 20 dias contam como fora).",
+        icon: CheckCircle2,
+      },
+      {
+        key: "slaRevisaoFinal",
+        label: "SLA Revisao Proj. Final",
+        value: analytics.finalReviewSla.rate === null ? "N/D" : `${analytics.finalReviewSla.rate.toFixed(1)}%`,
+        tooltip: "Percentual de revisoes de projeto final dentro de 20 dias (abertas ha mais de 20 dias contam como fora).",
         icon: CheckCircle2,
       },
       {
@@ -1193,6 +1249,21 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <YAxis dataKey="nome" type="category" width={120} tick={{ fontSize: 10, fill: 'currentColor' }} />
                 <Tooltip contentStyle={{ backgroundColor: 'var(--panel)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: 'var(--foreground)' }} />
                 <Bar dataKey="totalProjetos" fill="#9e0b0f" radius={[0, 6, 6, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartFrame>
+        </article>
+
+        <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
+          <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Projetos por Equipamento</h3>
+          <ChartFrame isEmpty={analytics.byEquipamento.length === 0}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <BarChart data={analytics.byEquipamento} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis type="number" allowDecimals={false} tick={{ fill: 'currentColor' }} />
+                <YAxis dataKey="nome" type="category" width={120} tick={{ fontSize: 10, fill: 'currentColor' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--panel)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: 'var(--foreground)' }} />
+                <Bar dataKey="totalProjetos" fill="#0ea5e9" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </ChartFrame>

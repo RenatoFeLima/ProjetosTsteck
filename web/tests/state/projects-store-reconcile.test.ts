@@ -10,7 +10,7 @@ vi.mock("@/features/projects/lib/projects-api", () => ({
   apiSetUrgency: vi.fn(),
   apiAddObservation: vi.fn(),
   apiGetHistory: vi.fn(),
-  apiGetAllStatusHistory: vi.fn(),
+  apiGetAnalytics: vi.fn(),
 }));
 
 import {
@@ -210,20 +210,29 @@ describe("carregamento do detalhe (drawer)", () => {
     expect(useProjectsStore.getState().observations.some((o) => o.id === "obsOutro")).toBe(true);
   });
 
-  it("carrega o histórico de status completo do MySQL para os KPIs", async () => {
+  it("carrega histórico completo + revisões agregadas do MySQL para os KPIs", async () => {
     useProjectsStore.setState({
       statusHistory: [
         { id: "stale", projeto_id: "x", status_de: null, status_para: "CADASTRO INICIAL", alterado_em: "2026-01-01", origem: "formulario" },
       ],
+      reviewStudyAgg: [],
+      finalReviewAgg: [],
     });
-    vi.mocked(api.apiGetAllStatusHistory).mockResolvedValue([
-      { id: "a1", projeto_id: "p1", status_de: null, status_para: "CADASTRO INICIAL", alterado_em: "2026-02-01", origem: "formulario" },
-      { id: "a2", projeto_id: "p2", status_de: "CADASTRO INICIAL", status_para: "ELABORAR ANTE-PROJETO", alterado_em: "2026-02-02", origem: "sistema" },
-    ]);
+    vi.mocked(api.apiGetAnalytics).mockResolvedValue({
+      statusHistory: [
+        { id: "a1", projeto_id: "p1", status_de: null, status_para: "CADASTRO INICIAL", alterado_em: "2026-02-01", origem: "formulario" },
+        { id: "a2", projeto_id: "p2", status_de: "CADASTRO INICIAL", status_para: "ELABORAR ANTE-PROJETO", alterado_em: "2026-02-02", origem: "sistema" },
+      ],
+      reviewStudy: [{ projectId: "p1", enteredAt: "2026-02-01T00:00:00.000Z", exitedAt: "2026-02-10T00:00:00.000Z" }],
+      finalReview: [{ projectId: "p2", enteredAt: "2026-02-01T00:00:00.000Z", exitedAt: null }],
+    });
 
-    await useProjectsStore.getState().loadAllStatusHistory();
+    await useProjectsStore.getState().loadAnalytics();
 
-    // Substitui pelo histórico completo do servidor (stale removido).
-    expect(useProjectsStore.getState().statusHistory.map((h) => h.id).sort()).toEqual(["a1", "a2"]);
+    const s = useProjectsStore.getState();
+    // Substitui pelo histórico completo do servidor (stale removido) + revisões.
+    expect(s.statusHistory.map((h) => h.id).sort()).toEqual(["a1", "a2"]);
+    expect(s.reviewStudyAgg).toHaveLength(1);
+    expect(s.finalReviewAgg[0].exitedAt).toBeNull();
   });
 });
