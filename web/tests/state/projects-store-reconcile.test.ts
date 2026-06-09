@@ -134,3 +134,46 @@ describe("reconciliação de id otimista", () => {
     expect(errors[0]).toContain("Obra");
   });
 });
+
+describe("urgência", () => {
+  it("marca urgente e mantém após a resposta da API (não some ao reidratar)", async () => {
+    useProjectsStore.setState({ projects: [realProject("u1", "URG-000-0001")] });
+    // A API persiste e devolve o projeto urgente (priority -> urgente=true).
+    vi.mocked(api.apiSetUrgency).mockResolvedValue({ ...realProject("u1", "URG-000-0001"), urgente: true });
+
+    useProjectsStore.getState().toggleUrgente("u1");
+    expect(useProjectsStore.getState().projects.find((p) => p.id === "u1")?.urgente).toBe(true); // otimista
+    expect(api.apiSetUrgency).toHaveBeenCalledWith("u1", true);
+
+    await flush();
+    // Após a resposta da API, continua urgente (antes o real podia sobrescrever p/ false).
+    expect(useProjectsStore.getState().projects.find((p) => p.id === "u1")?.urgente).toBe(true);
+  });
+
+  it("faz rollback e reporta erro se a API de urgência falhar", async () => {
+    useProjectsStore.setState({ projects: [realProject("u2", "URG-000-0002")] });
+    const errors: string[] = [];
+    setProjectsErrorSink((m) => errors.push(m));
+    vi.mocked(api.apiSetUrgency).mockRejectedValue(new Error("403"));
+    // hydrate (rollback) relê do MySQL: projeto volta NÃO urgente.
+    vi.mocked(api.apiListProjects).mockResolvedValue([realProject("u2", "URG-000-0002")]);
+
+    useProjectsStore.getState().toggleUrgente("u2");
+    await flush();
+
+    expect(useProjectsStore.getState().projects.find((p) => p.id === "u2")?.urgente).toBe(false);
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it("edição envia a urgência ao backend (persistir em priority)", () => {
+    useProjectsStore.setState({ projects: [realProject("u3", "URG-000-0003")] });
+    vi.mocked(api.apiUpdateProject).mockResolvedValue({ ...realProject("u3", "URG-000-0003"), urgente: true });
+
+    useProjectsStore.getState().updateProject("u3", { urgente: true });
+
+    expect(api.apiUpdateProject).toHaveBeenCalledWith(
+      "u3",
+      expect.objectContaining({ urgente: true }),
+    );
+  });
+});

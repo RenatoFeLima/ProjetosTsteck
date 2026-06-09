@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -81,6 +81,30 @@ const STATUS_COLORS: Record<ProjectStatus, string> = {
   "REVISAO DE ESTUDO": "#ea580c",
   "REVISAO DE PROJETO FINAL": "#f43f5e",
 };
+
+// Container padrão dos gráficos: altura fixa + min-w-0 + overflow-hidden.
+// - Renderiza o gráfico só APÓS o mount (1 paint), quando o container já tem
+//   dimensões reais — evita o warning do Recharts "width(-1) height(-1)" que
+//   ocorre quando o ResponsiveContainer mede o container antes do layout.
+// - Sem dados: mostra estado vazio em vez de tentar renderizar o gráfico.
+function ChartFrame({ isEmpty, children }: { isEmpty?: boolean; children: ReactNode }) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setReady(true);
+  }, []);
+
+  return (
+    <div className="h-72 w-full min-w-0 overflow-hidden">
+      {isEmpty ? (
+        <div className="grid h-full place-items-center px-3 text-center text-xs text-zinc-500 dark:text-muted">
+          Nenhum dado disponível para este gráfico.
+        </div>
+      ) : ready ? (
+        children
+      ) : null}
+    </div>
+  );
+}
 
 function parseDate(value?: string | null): Date | null {
   if (!value) return null;
@@ -1066,8 +1090,8 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       <section className="grid gap-3 xl:grid-cols-2">
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Projetos por Status</h3>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <ChartFrame isEmpty={analytics.statusCounts.length === 0}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={analytics.statusCounts}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" className="[.light_&]:stroke-gray-200" />
                 <XAxis dataKey="status" tick={{ fontSize: 10, fill: 'currentColor' }} interval={0} angle={-15} textAnchor="end" height={60} />
@@ -1086,12 +1110,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Tempo Medio por Status (dias)</h3>
-          <div className="h-72 w-full">
+          <ChartFrame isEmpty={analytics.avgByStatus.length === 0}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={analytics.avgByStatus} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -1101,12 +1125,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <Bar dataKey="dias" fill="#262626" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Evolucao Mensal (Criados vs Finalizados)</h3>
-          <div className="h-72 w-full">
+          <ChartFrame isEmpty={analytics.monthly.length === 0}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <AreaChart data={analytics.monthly}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -1118,12 +1142,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <Area type="monotone" dataKey="finalizados" name="Finalizados" stroke="#9e0b0f" fill="rgba(158,11,15,0.2)" />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Projetos por Vendedor</h3>
-          <div className="h-72 w-full">
+          <ChartFrame isEmpty={analytics.bySeller.length === 0}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={analytics.bySeller} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -1133,12 +1157,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <Bar dataKey="totalProjetos" fill="#6366f1" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Projetos por Construtora</h3>
-          <div className="h-72 w-full">
+          <ChartFrame isEmpty={analytics.byConstrutora.length === 0}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={analytics.byConstrutora} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -1148,12 +1172,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <Bar dataKey="totalProjetos" fill="#9e0b0f" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Distribuicao de Prioridade</h3>
-          <div className="h-72 w-full">
+          <ChartFrame isEmpty={analytics.priority.length === 0}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie data={analytics.priority} dataKey="total" nameKey="nome" outerRadius={96} label>
@@ -1165,12 +1189,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Situacao de Prazo</h3>
-          <div className="h-72 w-full">
+          <ChartFrame isEmpty={analytics.deadlineSituation.length === 0}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie data={analytics.deadlineSituation} dataKey="total" nameKey="nome" innerRadius={40} outerRadius={96} label>
@@ -1182,12 +1206,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Funil do Fluxo de Projetos</h3>
-          <div className="h-72 w-full">
+          <ChartFrame isEmpty={analytics.funnel.length === 0}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={analytics.funnel}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -1197,7 +1221,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <Bar dataKey="total" fill="#6366f1" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
       </section>
 

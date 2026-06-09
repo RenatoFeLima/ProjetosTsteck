@@ -81,6 +81,7 @@ export type ProjectInput = {
   local_cabine_definido?: boolean;
   alinhamento?: boolean;
   data_alinhamento?: string | null;
+  urgente?: boolean;
 };
 
 async function resolveRefs(data: ProjectInput) {
@@ -175,7 +176,7 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
       engineerName: (data.engenheiro_nome ?? "").trim() || null,
       engineerPhone: (data.engenheiro_celular ?? "").trim() || null,
       status: initialStatus,
-      priority: "NORMAL",
+      priority: data.urgente ? "URGENTE" : "NORMAL",
       projectReceived,
       cabinLocationDefined,
       alignmentCompleted,
@@ -222,6 +223,9 @@ export async function updateProject(actor: SessionUser, id: string, data: Projec
       cabinLocationDefined: data.local_cabine_definido,
       alignmentCompleted: data.alinhamento,
       alignmentDate: data.data_alinhamento !== undefined ? (data.data_alinhamento ? new Date(data.data_alinhamento) : null) : undefined,
+      // Urgência editável pelo formulário: persiste em priority (antes era ignorado,
+      // então o badge "voltava" ao reidratar do MySQL).
+      priority: data.urgente === undefined ? undefined : data.urgente ? "URGENTE" : "NORMAL",
       updatedById: actor.id,
     },
     include: PROJECT_INCLUDE,
