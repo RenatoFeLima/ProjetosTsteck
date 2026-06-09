@@ -158,6 +158,23 @@ export function todayIsoDate(): string {
   return formatISO(new Date(), { representation: "date" });
 }
 
+/**
+ * Normaliza qualquer data (ISO completo, Date ou já yyyy-MM-dd) para o formato
+ * exigido por <input type="date"> (yyyy-MM-dd). Nunca passe ISO completo para um
+ * input date — gera o warning "does not conform to the required format".
+ * Para strings já em yyyy-MM-dd (ou ISO), usa a porção de data literal, evitando
+ * deslocamento de fuso horário.
+ */
+export function toDateInputValue(value?: string | Date | null): string {
+  if (!value) return "";
+  if (typeof value === "string") {
+    const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+  }
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+}
+
 export function computePrazoEntrega(dataAlinhamento: string | null, prazoPrerequisitosOk = true): string | null {
   if (!prazoPrerequisitosOk || !dataAlinhamento) return null;
   return formatISO(addDays(parseISO(dataAlinhamento), 45), { representation: "date" });

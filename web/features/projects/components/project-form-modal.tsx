@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
-import { todayIsoDate, validateRequiredFields } from "@/features/projects/domain/project-rules";
+import { todayIsoDate, toDateInputValue, validateRequiredFields } from "@/features/projects/domain/project-rules";
 import type { Project, ProjectStatus, StatusHistoryItem } from "@/features/projects/domain/project-types";
 import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { SearchableCombobox } from "./searchable-combobox";
@@ -249,6 +249,9 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
       codigo_projeto: formatProjectCode(form.codigo_projeto ?? ""),
       engenheiro_nome: normalizeEngineerName(form.engenheiro_nome ?? ""),
       engenheiro_celular: stripPhone(form.engenheiro_celular ?? ""),
+      // Datas sempre em yyyy-MM-dd (o backend converte para Date); nunca ISO.
+      data_lancamento: toDateInputValue(form.data_lancamento),
+      data_alinhamento: toDateInputValue(form.data_alinhamento) || null,
     };
 
     if (props.mode === "create") {
@@ -513,7 +516,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                   <input
                     type="date"
                     className={modalInputCls()}
-                    value={form.data_lancamento ?? ""}
+                    value={toDateInputValue(form.data_lancamento)}
                     onChange={(e) => patch({ data_lancamento: e.target.value })}
                   />
                 </FormField>
@@ -603,7 +606,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                     </p>
                   )}
                   <FormField label="Data do Alinhamento">
-                    <input type="date" className={modalInputCls()} value={form.data_alinhamento ?? ""} onChange={(e) => patch({ data_alinhamento: e.target.value || null })} />
+                    <input type="date" className={modalInputCls()} value={toDateInputValue(form.data_alinhamento)} onChange={(e) => patch({ data_alinhamento: e.target.value || null })} />
                   </FormField>
                 </div>
               </SectionCard>

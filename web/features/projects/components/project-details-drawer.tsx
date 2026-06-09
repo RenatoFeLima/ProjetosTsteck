@@ -12,6 +12,7 @@ import {
 import {
   computeNextAction,
   computeOperationalKpis,
+  toDateInputValue,
   todayIsoDate,
   validateRequiredFields,
 } from "@/features/projects/domain/project-rules";
@@ -587,7 +588,7 @@ export function ProjectDetailsDrawer({
                     <input
                       type="date"
                       className={inputCls(Boolean(dataLancamentoError))}
-                      value={editForm.data_lancamento ?? ""}
+                      value={toDateInputValue(editForm.data_lancamento)}
                       onChange={(e) => patchEdit({ data_lancamento: e.target.value })}
                     />
                   </FormField>
@@ -703,7 +704,7 @@ export function ProjectDetailsDrawer({
                     <input
                       type="date"
                       className={inputCls()}
-                      value={editForm.data_alinhamento ?? ""}
+                      value={toDateInputValue(editForm.data_alinhamento)}
                       onChange={(e) => patchEdit({ data_alinhamento: e.target.value || null })}
                     />
                   </FormField>

@@ -4,6 +4,7 @@ import {
   computeOperationalKpis,
   computePrazoBadge,
   computePrazoEntrega,
+  toDateInputValue,
   transitionStatus,
 } from "@/features/projects/domain/project-rules";
 import type { Project } from "@/features/projects/domain/project-types";
@@ -41,6 +42,19 @@ function makeProject(overrides: Partial<Project> = {}): Project {
 }
 
 describe("project rules", () => {
+  it("normaliza datas para input type=date (yyyy-MM-dd)", () => {
+    // ISO completo (origem do warning) -> só a porção de data, sem deslocar fuso.
+    expect(toDateInputValue("2026-06-09T15:47:39.159Z")).toBe("2026-06-09");
+    // Já em yyyy-MM-dd -> inalterado.
+    expect(toDateInputValue("2026-06-09")).toBe("2026-06-09");
+    // Date object -> yyyy-MM-dd.
+    expect(toDateInputValue(new Date("2026-06-09T00:00:00.000Z"))).toBe("2026-06-09");
+    // Vazio/nulo/ inválido -> string vazia.
+    expect(toDateInputValue(null)).toBe("");
+    expect(toDateInputValue(undefined)).toBe("");
+    expect(toDateInputValue("")).toBe("");
+  });
+
   it("calcula prazo de entrega com +45 dias", () => {
     expect(computePrazoEntrega("2026-05-01")).toBe("2026-06-15");
   });
