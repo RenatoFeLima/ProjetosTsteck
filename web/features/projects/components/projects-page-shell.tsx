@@ -17,6 +17,7 @@ import { useProjectsStore, setProjectsErrorSink } from "@/features/projects/stat
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import { hydrateMasterDataFromApi } from "@/features/master-data/lib/master-data-hydrate";
 import { computePrazoBadge, computePrazoEntrega, todayIsoDate } from "@/features/projects/domain/project-rules";
+import { countAlerts } from "@/features/projects/domain/project-alerts";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
 import { sendProjectNotification } from "@/features/projects/services/project-notification-service";
 
@@ -108,19 +109,13 @@ export function ProjectsPageShell() {
     return baseProjects.filter((project) => project.status_atual !== "PROJETO FINAL ENVIADO");
   }, [baseProjects, kpiFilter]);
 
-  const alerts = useMemo(
-    () =>
-      projects.filter((project) => {
-        const prazo = computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido);
-        const badge = computePrazoBadge(todayIsoDate(), prazo);
-        return project.urgente || badge === "atrasado" || badge === "atencao";
-      }),
-    [projects],
-  );
+  // Contador da aba Alertas = projetos distintos com ao menos um alerta (mesma
+  // regra da aba Alertas), já respeitando os filtros globais aplicados em `projects`.
+  const alertCount = useMemo(() => countAlerts(projects), [projects]);
 
   const tabCounts = useMemo(
-    () => ({ table: projects.length, kanban: projects.length, kpis: allProjects.length, alerts: alerts.length }),
-    [projects.length, allProjects.length, alerts.length],
+    () => ({ table: projects.length, kanban: projects.length, kpis: allProjects.length, alerts: alertCount }),
+    [projects.length, allProjects.length, alertCount],
   );
 
   useEffect(() => {
@@ -512,7 +507,15 @@ export function ProjectsPageShell() {
               />
             </KpiDashboardErrorBoundary>
           )}
-          {activeView === "alerts" && <ProjectsAlerts projects={alerts} onOpen={openDetails} />}
+          {activeView === "alerts" && (
+            <ProjectsAlerts
+              projects={projects}
+              onOpen={openDetails}
+              loading={tableState === "loading"}
+              error={tableState === "error"}
+              onRetry={retryTableLoad}
+            />
+          )}
         </section>
 
         {tableState === "error" && (
