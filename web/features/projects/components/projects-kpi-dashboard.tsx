@@ -36,6 +36,7 @@ import { PROJECT_STATUSES, type Project, type ProjectStatus, type StatusHistoryI
 import { computeNextAction, getCurrentStatusDeadline, todayIsoDate } from "@/features/projects/domain/project-rules";
 import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { KpiCard } from "./kpi-card";
+import { useProjectsStore } from "@/features/projects/state/projects-store";
 
 type ProjectsKpiDashboardProps = {
   projects: Project[];
@@ -211,6 +212,23 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
   });
 
   const today = useMemo(() => parseISO(todayIsoDate()), []);
+
+  // Ao abrir a aba KPIs, carrega o histórico de status COMPLETO do MySQL para que
+  // os indicadores de tempo (médias por status, fluxo, SLA, gargalos) sejam reais.
+  const [historyLoading, setHistoryLoading] = useState(true);
+  useEffect(() => {
+    let active = true;
+    setHistoryLoading(true);
+    void useProjectsStore
+      .getState()
+      .loadAllStatusHistory()
+      .finally(() => {
+        if (active) setHistoryLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const historyByProject = useMemo(() => {
     const map = new Map<string, StatusHistoryItem[]>();
@@ -886,6 +904,11 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             <p className="inline-flex items-center gap-1 rounded-full bg-zinc-100 dark:bg-white/8 px-2 py-1 font-semibold">
               <BarChart3 size={12} /> Projetos considerados: {filteredProjects.length}
             </p>
+            {historyLoading && (
+              <p className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-1 font-semibold text-amber-700 dark:text-amber-300">
+                <RefreshCcw size={12} className="animate-spin" /> Carregando indicadores de tempo...
+              </p>
+            )}
           </div>
         </div>
       </section>

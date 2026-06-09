@@ -70,3 +70,9 @@ export type ProjectHistoryResponse = {
 export async function apiGetHistory(id: string): Promise<ProjectHistoryResponse> {
   return request<ProjectHistoryResponse>(`/api/projects/${id}/history`);
 }
+
+/** Histórico de status de TODOS os projetos (base real dos KPIs de tempo). */
+export async function apiGetAllStatusHistory(): Promise<StatusHistoryItem[]> {
+  const data = await request<{ statusHistory: StatusHistoryItem[] }>("/api/projects/analytics");
+  return data.statusHistory;
+}

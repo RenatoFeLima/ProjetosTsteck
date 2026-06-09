@@ -474,6 +474,26 @@ export async function getHistory(actor: SessionUser, id: string) {
   };
 }
 
+// Histórico de status de TODOS os projetos — base real para os KPIs de tempo
+// (tempo médio por status, fluxo completo, SLA, gargalos). Sem isso o dashboard
+// só teria o histórico carregado pontualmente na sessão.
+export async function listAllStatusHistory(actor: SessionUser) {
+  assertPermission(actor, (p) => p.projects.view);
+  const rows = await prisma.projectStatusHistory.findMany({
+    orderBy: { enteredAt: "asc" },
+    select: { id: true, projectId: true, fromStatus: true, toStatus: true, enteredAt: true, source: true, note: true },
+  });
+  return rows.map((h) => ({
+    id: h.id,
+    projeto_id: h.projectId,
+    status_de: h.fromStatus ? DB_TO_UI_STATUS[h.fromStatus as DbStatus] : null,
+    status_para: DB_TO_UI_STATUS[h.toStatus as DbStatus],
+    alterado_em: h.enteredAt.toISOString(),
+    origem: (h.source ?? "sistema") as any,
+    nota: h.note ?? undefined,
+  }));
+}
+
 async function reload(id: string) {
   return prisma.project.findUniqueOrThrow({ where: { id }, include: PROJECT_INCLUDE });
 }

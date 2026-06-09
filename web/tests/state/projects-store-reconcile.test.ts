@@ -10,6 +10,7 @@ vi.mock("@/features/projects/lib/projects-api", () => ({
   apiSetUrgency: vi.fn(),
   apiAddObservation: vi.fn(),
   apiGetHistory: vi.fn(),
+  apiGetAllStatusHistory: vi.fn(),
 }));
 
 import {
@@ -207,5 +208,22 @@ describe("carregamento do detalhe (drawer)", () => {
     expect(obs.map((o) => o.id)).toEqual(["o1"]);
     // Entradas de outros projetos preservadas.
     expect(useProjectsStore.getState().observations.some((o) => o.id === "obsOutro")).toBe(true);
+  });
+
+  it("carrega o histórico de status completo do MySQL para os KPIs", async () => {
+    useProjectsStore.setState({
+      statusHistory: [
+        { id: "stale", projeto_id: "x", status_de: null, status_para: "CADASTRO INICIAL", alterado_em: "2026-01-01", origem: "formulario" },
+      ],
+    });
+    vi.mocked(api.apiGetAllStatusHistory).mockResolvedValue([
+      { id: "a1", projeto_id: "p1", status_de: null, status_para: "CADASTRO INICIAL", alterado_em: "2026-02-01", origem: "formulario" },
+      { id: "a2", projeto_id: "p2", status_de: "CADASTRO INICIAL", status_para: "ELABORAR ANTE-PROJETO", alterado_em: "2026-02-02", origem: "sistema" },
+    ]);
+
+    await useProjectsStore.getState().loadAllStatusHistory();
+
+    // Substitui pelo histórico completo do servidor (stale removido).
+    expect(useProjectsStore.getState().statusHistory.map((h) => h.id).sort()).toEqual(["a1", "a2"]);
   });
 });

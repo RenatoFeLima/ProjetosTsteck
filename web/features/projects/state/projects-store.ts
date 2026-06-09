@@ -19,6 +19,7 @@ import {
   apiAddObservation,
   apiChangeStatus,
   apiCreateProject,
+  apiGetAllStatusHistory,
   apiGetHistory,
   apiListProjects,
   apiSetUrgency,
@@ -108,6 +109,8 @@ type StoreState = {
   hydrate: () => Promise<void>;
   /** Carrega histórico + observações reais de um projeto do MySQL (ao abrir o drawer). */
   loadProjectDetail: (id: string) => Promise<void>;
+  /** Carrega o histórico de status de TODOS os projetos (base real dos KPIs). */
+  loadAllStatusHistory: () => Promise<void>;
 };
 
 const nowDate = () => formatISO(new Date(), { representation: "date" });
@@ -601,6 +604,17 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       }));
     } catch (e) {
       debugLog("falha ao carregar detalhe do projeto", e);
+    }
+  },
+
+  // Substitui o statusHistory do store pelo histórico COMPLETO do MySQL — usado
+  // pela aba KPIs para que tempo médio por status, SLA e gargalos sejam reais.
+  loadAllStatusHistory: async () => {
+    try {
+      const statusHistory = await apiGetAllStatusHistory();
+      set({ statusHistory });
+    } catch (e) {
+      debugLog("falha ao carregar histórico agregado dos KPIs", e);
     }
   },
 }));
