@@ -7,18 +7,19 @@ import { startTimer, logPerf } from "@/server/perf";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// body: { status: string (UI ou enum), reason?: string, source?: string, note?: string }
+// body: { status, reason?, source?, note?, finalCode? }
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const stop = startTimer();
   try {
     const actor = await requireUser();
     const { id } = await ctx.params;
     const body = await req.json().catch(() => ({}));
-    const { status, reason, source, note } = body as {
+    const { status, reason, source, note, finalCode } = body as {
       status?: unknown;
       reason?: string;
       source?: string;
       note?: string;
+      finalCode?: string;
     };
     if (typeof status !== "string") {
       return NextResponse.json(
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         { status: 400 },
       );
     }
-    const project = await changeStatus(actor, id, status, { reason, source, note });
+    const project = await changeStatus(actor, id, status, { reason, source, note, finalCode });
     logPerf("POST /api/projects/[id]/status", stop(), { success: true });
     return ok({ project });
   } catch (e) {

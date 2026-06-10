@@ -212,10 +212,9 @@ export function ProjectsPageShell() {
     touchLastUpdated();
     notify("Status atualizado com sucesso.");
 
-    // Entrada em Elaborar Ante-Projeto tem e-mail próprio disparado pelo backend
-    // (mensagem da esteira/45 dias) — aqui evitamos o e-mail genérico duplicado.
-    if (nextStatus !== "ELABORAR ANTE-PROJETO") {
-      const isFinished = nextStatus === "PROJETO FINAL ENVIADO";
+    // Elaborar Ante-Projeto e Projeto Final Enviado têm e-mail próprio no backend
+    // (esteira/45d e finalização) — evita o e-mail genérico duplicado.
+    if (nextStatus !== "ELABORAR ANTE-PROJETO" && nextStatus !== "PROJETO FINAL ENVIADO") {
       dispatchSellerEmail(project.id, {
         projectId: project.id,
         projectCode: project.codigo_projeto,
@@ -225,7 +224,7 @@ export function ProjectsPageShell() {
         sellerEmail: getVendorEmail(project.vendedor) ?? "",
         oldStatus,
         newStatus: nextStatus,
-        eventType: isFinished ? "PROJECT_FINISHED" : "STATUS_CHANGED",
+        eventType: "STATUS_CHANGED",
         changedBy: "usuario.local",
         changedAt: new Date().toISOString(),
         notes: observation?.trim() || undefined,
@@ -432,12 +431,13 @@ export function ProjectsPageShell() {
             projects={projects}
             onOpen={openDetails}
             notify={notify}
-            onMoveStatus={(projectId, status, observation) => {
+            isCodigoDuplicado={isCodigoProjetoDuplicado}
+            onMoveStatus={(projectId, status, observation, finalCode) => {
               const current = projects.find((item) => item.id === projectId);
               const oldStatus = current?.status_atual;
-              // Passa a observação como MOTIVO da revisão (reason) — o backend exige
-              // motivo ao entrar em REVISAO DE ESTUDO / REVISAO DE PROJETO FINAL.
-              const result = moveStatus(projectId, status, "kanban", observation);
+              // observation = MOTIVO da revisão (reason); finalCode = código final ao
+              // concluir. O backend exige motivo p/ revisão e atualiza o código no final.
+              const result = moveStatus(projectId, status, "kanban", observation, finalCode);
 
               if (result.ok && current) {
                 const message = observation?.trim()
@@ -446,9 +446,9 @@ export function ProjectsPageShell() {
                 addObservation(projectId, message, "usuario.local");
                 touchLastUpdated();
 
-                // ELABORAR ANTE-PROJETO: e-mail próprio vem do backend (esteira/45d).
-                if (status !== "ELABORAR ANTE-PROJETO") {
-                  const isFinished = status === "PROJETO FINAL ENVIADO";
+                // ELABORAR e PROJETO FINAL ENVIADO têm e-mail próprio no backend
+                // (esteira/45d e finalização com o código final). Evita duplicidade.
+                if (status !== "ELABORAR ANTE-PROJETO" && status !== "PROJETO FINAL ENVIADO") {
                   dispatchSellerEmail(projectId, {
                     projectId: current.id,
                     projectCode: current.codigo_projeto,
@@ -458,7 +458,7 @@ export function ProjectsPageShell() {
                     sellerEmail: getVendorEmail(current.vendedor) ?? "",
                     oldStatus,
                     newStatus: status,
-                    eventType: isFinished ? "PROJECT_FINISHED" : "STATUS_CHANGED",
+                    eventType: "STATUS_CHANGED",
                     changedBy: "usuario.local",
                     changedAt: new Date().toISOString(),
                     notes: observation?.trim() || undefined,

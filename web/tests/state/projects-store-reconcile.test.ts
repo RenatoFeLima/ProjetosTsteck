@@ -259,4 +259,30 @@ describe("mudança de status para revisão", () => {
       expect.objectContaining({ reason: "Cliente pediu ajuste" }),
     );
   });
+
+  it("mover para o status final envia o código final e atualiza otimisticamente", () => {
+    useProjectsStore.setState({
+      projects: [{ ...realProject("f1", "CRE-POÇ-0000"), status_atual: "PROJETO APROVADO" }],
+    });
+    vi.mocked(api.apiChangeStatus).mockResolvedValue({
+      ...realProject("f1", "CRE-POÇ-0007"),
+      status_atual: "PROJETO FINAL ENVIADO",
+    });
+
+    const res = useProjectsStore
+      .getState()
+      .moveStatus("f1", "PROJETO FINAL ENVIADO", "kanban", undefined, "CRE-POÇ-0007");
+
+    expect(res.ok).toBe(true);
+    // código final aplicado otimisticamente
+    expect(useProjectsStore.getState().projects.find((p) => p.id === "f1")?.codigo_projeto).toBe(
+      "CRE-POÇ-0007",
+    );
+    // e enviado ao backend
+    expect(api.apiChangeStatus).toHaveBeenCalledWith(
+      "f1",
+      "PROJETO FINAL ENVIADO",
+      expect.objectContaining({ finalCode: "CRE-POÇ-0007" }),
+    );
+  });
 });

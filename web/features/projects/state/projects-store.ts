@@ -104,7 +104,7 @@ type StoreState = {
   updateProject: (id: string, patch: Partial<Project>) => { ok: boolean; error?: string };
   deleteProject: (id: string) => void;
   toggleUrgente: (id: string) => void;
-  moveStatus: (id: string, nextStatus: ProjectStatus, origem: StatusHistoryItem["origem"], nota?: string) => { ok: boolean; error?: string };
+  moveStatus: (id: string, nextStatus: ProjectStatus, origem: StatusHistoryItem["origem"], nota?: string, finalCode?: string) => { ok: boolean; error?: string };
   addObservation: (projetoId: string, texto: string, usuario: string) => void;
   getProjectStatusHistory: (projectId: string) => StatusHistoryItem[];
   getProjectObservations: (projectId: string) => ProjectObservation[];
@@ -431,7 +431,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       .catch(onPersistFailure("urgência", "Não foi possível atualizar a urgência do projeto."));
   },
 
-  moveStatus: (id, nextStatus, origem, nota) => {
+  moveStatus: (id, nextStatus, origem, nota, finalCode) => {
     const current = get().projects.find((project) => project.id === id);
     if (!current) return { ok: false, error: "Projeto nao encontrado." };
 
@@ -439,6 +439,9 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     if (!validation.allowed) {
       return { ok: false, error: validation.reason ?? "Transicao de status nao permitida." };
     }
+
+    // Código final (ao entrar em Projeto Final Enviado): atualiza otimisticamente.
+    const codeToApply = finalCode?.trim() ? finalCode.trim() : current.codigo_projeto;
 
     const now = nowDate();
 
@@ -511,6 +514,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
         project.id === id
           ? {
               ...project,
+              codigo_projeto: codeToApply,
               status_atual: nextStatus,
               status_entered_at: now,
               data_envio,
@@ -542,7 +546,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       debugLog("mudança de status adiada: projeto ainda não persistido", id);
       return { ok: true };
     }
-    void apiChangeStatus(id, nextStatus, { source: origem, reason: nota, note: nota })
+    void apiChangeStatus(id, nextStatus, { source: origem, reason: nota, note: nota, finalCode: finalCode?.trim() || undefined })
       .then((real) => set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) })))
       .catch(onPersistFailure("mudança de status", "Não foi possível alterar o status do projeto."));
 

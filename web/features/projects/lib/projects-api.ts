@@ -39,13 +39,18 @@ export async function apiUpdateProject(id: string, patch: Partial<Project>): Pro
 export async function apiChangeStatus(
   id: string,
   status: string,
-  opts: { reason?: string; source?: string; note?: string } = {},
+  opts: { reason?: string; source?: string; note?: string; finalCode?: string } = {},
 ): Promise<Project> {
   const data = await request<{ project: Project }>(`/api/projects/${id}/status`, {
     method: "POST",
     body: JSON.stringify({ status, ...opts }),
   });
   return data.project;
+}
+
+/** Sugestão do próximo código (sufixo global +1). */
+export async function apiGetNextCodeSuggestion(): Promise<{ maxSuffix: number; nextSuffix: string }> {
+  return request<{ maxSuffix: number; nextSuffix: string }>("/api/projects/next-code-suggestion");
 }
 
 export async function apiSetUrgency(id: string, urgent: boolean, reason?: string): Promise<Project> {

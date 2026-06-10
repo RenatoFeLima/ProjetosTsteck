@@ -20,6 +20,7 @@ import {
   QUEUE_MESSAGE,
   ELABORATE_MESSAGE,
 } from "@/lib/mail/notify-project";
+import { maxCodeSuffix, padSuffix, hasValidFinalCode } from "@/features/projects/domain/project-code";
 
 /** Extrai relações (vendedor/construtora/obra) do row Prisma para a notificação. */
 function relProject(row: unknown): {
@@ -294,7 +295,7 @@ export async function changeStatus(
   actor: SessionUser,
   id: string,
   toStatusInput: string,
-  opts: { reason?: string; source?: string; note?: string } = {},
+  opts: { reason?: string; source?: string; note?: string; finalCode?: string } = {},
 ): Promise<SerializedProject> {
   assertPermission(actor, (p) => p.projects.changeStatus);
 
@@ -327,6 +328,21 @@ export async function changeStatus(
   const enteringReview = to === REVIEW_STUDY || to === REVIEW_FINAL;
   if (enteringReview && !opts.reason?.trim()) {
     throw new HttpError(400, "Informe o motivo da revisão.");
+  }
+
+  // Código final: ao entrar em "Projeto Final Enviado" pode-se confirmar/atualizar
+  // o código. Valida formato e duplicidade ANTES da transação.
+  let finalCodeToApply: string | null = null;
+  if (to === "PROJETO_FINAL_ENVIADO" && opts.finalCode?.trim()) {
+    const code = opts.finalCode.trim();
+    if (!hasValidFinalCode(code)) {
+      throw new HttpError(400, "Código final inválido: deve terminar com 4 dígitos numéricos.");
+    }
+    if (code !== project.code) {
+      const clash = await prisma.project.findFirst({ where: { code, id: { not: id } }, select: { id: true } });
+      if (clash) throw new HttpError(409, `Já existe um projeto com o código "${code}".`);
+      finalCodeToApply = code;
+    }
   }
 
   const now = new Date();
@@ -375,6 +391,8 @@ export async function changeStatus(
         status: to,
         currentStatusEnteredAt: now,
         updatedById: actor.id,
+        // Código final atualizado JUNTO com o status (mesma transação).
+        ...(finalCodeToApply ? { code: finalCodeToApply } : {}),
         ...(to === REVIEW_STUDY ? { reviewStudyCount: { increment: 1 } } : {}),
         ...(to === REVIEW_FINAL ? { finalReviewCount: { increment: 1 } } : {}),
       },
@@ -389,8 +407,11 @@ export async function changeStatus(
     actorName: actor.name,
     entityType: "project",
     entityId: id,
-    message: `${actor.name} alterou o status do projeto ${project.code}: ${DB_TO_UI_STATUS[from]} → ${DB_TO_UI_STATUS[to]}.`,
-    metadata: opts.reason ? { reason: opts.reason } : undefined,
+    message: `${actor.name} alterou o status do projeto ${project.code}: ${DB_TO_UI_STATUS[from]} → ${DB_TO_UI_STATUS[to]}.${finalCodeToApply ? ` Código final: ${project.code} → ${finalCodeToApply}.` : ""}`,
+    metadata: {
+      ...(opts.reason ? { reason: opts.reason } : {}),
+      ...(finalCodeToApply ? { finalCode: finalCodeToApply, previousCode: project.code } : {}),
+    },
   });
   const auditMs = tAudit();
 
@@ -401,21 +422,23 @@ export async function changeStatus(
     phases: { query: queryMs, transaction: txMs, audit: auditMs },
   });
 
-  // Entrada em Elaborar Ante-Projeto -> e-mail ao vendedor (best-effort, awaitado).
-  if (to === "ELABORAR_ANTE_PROJETO") {
+  // E-mails de etapa ao vendedor (best-effort, awaitado): liberação para
+  // anteprojeto e finalização — esta usa o CÓDIGO FINAL já atualizado (reloaded).
+  if (to === "ELABORAR_ANTE_PROJETO" || to === "PROJETO_FINAL_ENVIADO") {
     const rel = relProject(reloaded);
+    const isFinal = to === "PROJETO_FINAL_ENVIADO";
     await dispatchProjectNotification({
       projectId: id,
-      projectCode: project.code,
+      projectCode: reloaded.code,
       constructorName: rel.builder?.name ?? "",
       workName: rel.work?.name ?? "",
       sellerName: rel.seller?.name ?? "",
       sellerEmail: rel.seller?.email ?? "",
       newStatus: DB_TO_UI_STATUS[to],
-      eventType: "PROJECT_RELEASED_TO_ELABORATE_ANTE_PROJECT",
+      eventType: isFinal ? "PROJECT_FINISHED" : "PROJECT_RELEASED_TO_ELABORATE_ANTE_PROJECT",
       changedBy: actor.name,
       changedAt: now.toISOString(),
-      notes: ELABORATE_MESSAGE,
+      notes: isFinal ? undefined : ELABORATE_MESSAGE,
     });
   }
 
@@ -562,6 +585,15 @@ export async function listAllReviews(actor: SessionUser) {
     exitedAt: r.exitedAt ? r.exitedAt.toISOString() : null,
   });
   return { reviewStudy: study.map(map), finalReview: finalRev.map(map) };
+}
+
+/** Sugestão do próximo código: maior sufixo numérico GLOBAL + 1 (padding 4). O
+ *  prefixo é escolhido no cliente (mantém o do projeto, mas editável). */
+export async function nextCodeSuggestion(actor: SessionUser): Promise<{ maxSuffix: number; nextSuffix: string }> {
+  assertPermission(actor, (p) => p.projects.view);
+  const rows = await prisma.project.findMany({ select: { code: true } });
+  const max = maxCodeSuffix(rows.map((r) => r.code));
+  return { maxSuffix: max, nextSuffix: padSuffix(max + 1) };
 }
 
 async function reload(id: string) {

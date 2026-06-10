@@ -26,6 +26,18 @@ import {
 import { getStatusTheme } from "@/features/projects/domain/status-theme";
 import { PrazoBadge, UrgenteBadge } from "./pill-badges";
 import { KanbanStatusChangeDialog } from "./kanban-status-change-dialog";
+import { FinalCodeDialog } from "./final-code-dialog";
+
+const FINAL_STATUS: ProjectStatus = "PROJETO FINAL ENVIADO";
+
+/** Cadastro Inicial com documentação + local da cabine recebidos → pronto p/ alinhamento. */
+function isReadyForAlignment(project: Project): boolean {
+  return (
+    project.status_atual === "CADASTRO INICIAL" &&
+    Boolean(project.proj_obra_recebido) &&
+    Boolean(project.local_cabine_definido)
+  );
+}
 
 const COLUMNS: ProjectStatus[] = [
   "CADASTRO INICIAL",
@@ -57,9 +69,12 @@ type ProjectsKanbanProps = {
     projectId: string,
     nextStatus: ProjectStatus,
     observation?: string,
+    finalCode?: string,
   ) => { ok: boolean; error?: string };
   onOpen: (project: Project) => void;
   notify: (message: string) => void;
+  /** Verifica duplicidade do código (usado no modal de código final). */
+  isCodigoDuplicado: (codigo: string, ignoreId?: string) => boolean;
   /** Quando false, o arraste é desabilitado (usuário sem permissão kanban.dragAndDrop). */
   canDrag?: boolean;
 };
@@ -108,6 +123,12 @@ function CardContent({ project }: { project: Project }) {
 
         {/* Row 4: deadline badge + review badges */}
         <div className="mt-2 flex flex-wrap items-center gap-1">
+          {isReadyForAlignment(project) && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:border-emerald-700/50 dark:bg-emerald-900/30 dark:text-emerald-300">
+              <CheckCircle2 size={11} />
+              Pronto para alinhamento
+            </span>
+          )}
           <PrazoBadge project={project} />
           {project.reviewCount > 0 && (
             <span
@@ -166,6 +187,7 @@ function KanbanCard({
     id: project.id,
     data: { projectId: project.id },
   });
+  const ready = isReadyForAlignment(project);
 
   return (
     <article
@@ -180,10 +202,13 @@ function KanbanCard({
         isDragging
           ? "cursor-grabbing border-dashed border-zinc-200 dark:border-white/8 bg-zinc-50/60 dark:bg-white/[0.03] opacity-35 shadow-none"
           : [
-              "cursor-grab bg-white dark:bg-panel-soft transition-all duration-150",
+              "cursor-grab transition-all duration-150",
               "shadow-[0_1px_4px_-1px_rgba(0,0,0,0.06),0_4px_16px_-6px_rgba(0,0,0,0.10)]",
               "hover:shadow-[0_2px_8px_-2px_rgba(0,0,0,0.10),0_8px_24px_-6px_rgba(0,0,0,0.16)]",
               "hover:-translate-y-px",
+              ready
+                ? "border-emerald-300 bg-emerald-50/60 dark:border-emerald-700/50 dark:bg-emerald-900/[0.12]"
+                : "border-zinc-200 bg-white dark:border-white/8 dark:bg-panel-soft",
             ].join(" "),
       ].join(" ")}
       style={isDragging ? { minHeight: CARD_HEIGHT } : undefined}
@@ -432,10 +457,11 @@ function KanbanColumn({
 
 // ─── Board ────────────────────────────────────────────────────────────────────
 
-export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, canDrag = true }: ProjectsKanbanProps) {
+export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodigoDuplicado, canDrag = true }: ProjectsKanbanProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overStatus, setOverStatus] = useState<ProjectStatus | null>(null);
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
+  const [finalCodeMove, setFinalCodeMove] = useState<PendingMove | null>(null);
   const [blockedMove, setBlockedMove] = useState<{ projectId: string; reasons: string[] } | null>(null);
   const [recentlyMovedProjectId, setRecentlyMovedProjectId] = useState<string | null>(null);
   // Bug #4: capture the dragged card's measured width for the overlay
@@ -497,6 +523,17 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, canDrag
       return;
     }
 
+    const move: PendingMove = {
+      projectId,
+      projectCode: current.codigo_projeto,
+      fromStatus: current.status_atual,
+      nextStatus: targetStatus,
+    };
+    // Status final: confirma/atualiza o código final antes de concluir.
+    if (targetStatus === FINAL_STATUS) {
+      setFinalCodeMove(move);
+      return;
+    }
     setPendingMove({
       projectId,
       projectCode: current.codigo_projeto,
@@ -534,6 +571,26 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, canDrag
   function handleCancel() {
     setPendingMove(null);
     notify("Alteracao cancelada.");
+  }
+
+  function handleConfirmFinalCode(finalCode: string) {
+    if (!finalCodeMove) return;
+    const result = onMoveStatus(finalCodeMove.projectId, finalCodeMove.nextStatus, undefined, finalCode);
+    if (!result.ok) {
+      notify(result.error ?? "Falha ao concluir o projeto.");
+    } else {
+      notify(`Projeto concluido com o codigo ${finalCode}.`);
+      const movedId = finalCodeMove.projectId;
+      setRecentlyMovedProjectId(movedId);
+      setTimeout(() => setRecentlyMovedProjectId((cur) => (cur === movedId ? null : cur)), 1800);
+    }
+    setFinalCodeMove(null);
+  }
+
+  function handleCancelFinalCode() {
+    // Cancelar o modal NÃO move o card.
+    setFinalCodeMove(null);
+    notify("Movimentacao cancelada.");
   }
 
   return (
@@ -597,6 +654,14 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, canDrag
         toStatus={pendingMove?.nextStatus}
         onCancel={handleCancel}
         onConfirm={handleConfirm}
+      />
+      <FinalCodeDialog
+        open={Boolean(finalCodeMove)}
+        currentCode={finalCodeMove?.projectCode}
+        ignoreId={finalCodeMove?.projectId}
+        isCodigoDuplicado={isCodigoDuplicado}
+        onConfirm={handleConfirmFinalCode}
+        onCancel={handleCancelFinalCode}
       />
       <BlockedMoveDialog
         open={Boolean(blockedMove)}
