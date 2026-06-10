@@ -1,4 +1,5 @@
 import type { ProjectNotificationPayload } from "@/features/projects/services/project-notification-service";
+import { formatDateTimeBR } from "@/lib/mail/format-datetime";
 
 function statusLabel(status: string): string {
   const labels: Record<string, string> = {
@@ -14,19 +15,7 @@ function statusLabel(status: string): string {
   return labels[status] ?? status;
 }
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
+const formatDate = formatDateTimeBR;
 
 export function buildProjectMovementTemplate(data: ProjectNotificationPayload): string {
   const statusRow = data.oldStatus && data.newStatus

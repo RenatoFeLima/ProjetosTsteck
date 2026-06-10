@@ -10,6 +10,7 @@ import {
   notificationAlreadySent,
   recordNotification,
 } from "@/lib/mail/notification-log";
+import { getSession } from "@/server/auth/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,6 +54,12 @@ export async function POST(request: NextRequest) {
   // Validate seller email if provided
   const sellerEmailValid = body.sellerEmail && isValidEmail(body.sellerEmail);
 
+  // "Criado por" = usuário autenticado da sessão (não o placeholder do front).
+  const session = await getSession();
+  const changedByName = session
+    ? session.name || session.username || "Usuário do sistema"
+    : body.changedBy || "Usuário do sistema";
+
   const sanitized: ProjectNotificationPayload = {
     projectId: escapeHtml(body.projectId),
     projectCode: escapeHtml(body.projectCode),
@@ -63,7 +70,7 @@ export async function POST(request: NextRequest) {
     equipamento: body.equipamento ? escapeHtml(body.equipamento) : undefined,
     tipoCabine: body.tipoCabine ? escapeHtml(body.tipoCabine) : undefined,
     eventType: body.eventType,
-    changedBy: escapeHtml(body.changedBy),
+    changedBy: escapeHtml(changedByName),
     changedAt: body.changedAt,
     nextAction: body.nextAction ? escapeHtml(body.nextAction) : undefined,
   };

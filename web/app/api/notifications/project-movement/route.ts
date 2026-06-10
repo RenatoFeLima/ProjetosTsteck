@@ -11,6 +11,7 @@ import {
   notificationAlreadySent,
   recordNotification,
 } from "@/lib/mail/notification-log";
+import { getSession } from "@/server/auth/session";
 
 /** Escapa caracteres HTML para evitar injeção no template do e-mail. */
 function escapeHtml(str: unknown): string {
@@ -44,6 +45,12 @@ export async function POST(request: NextRequest) {
   // Valida o e-mail do vendedor apenas se informado.
   const sellerEmailValid = typeof body.sellerEmail === "string" && isValidEmail(body.sellerEmail);
 
+  // "Alterado por" = usuário autenticado da sessão (não o placeholder do front).
+  const session = await getSession();
+  const changedByName = session
+    ? session.name || session.username || "Usuário do sistema"
+    : body.changedBy || "Usuário do sistema";
+
   // Sanitiza todos os campos de texto usados no HTML do e-mail.
   const sanitized: ProjectNotificationPayload = {
     projectId: escapeHtml(body.projectId),
@@ -55,7 +62,7 @@ export async function POST(request: NextRequest) {
     oldStatus: body.oldStatus ? escapeHtml(body.oldStatus) : undefined,
     newStatus: body.newStatus ? escapeHtml(body.newStatus) : undefined,
     eventType: body.eventType,
-    changedBy: escapeHtml(body.changedBy),
+    changedBy: escapeHtml(changedByName),
     changedAt: body.changedAt,
     urgencyReason: body.urgencyReason ? escapeHtml(body.urgencyReason) : undefined,
     notes: body.notes ? escapeHtml(body.notes) : undefined,

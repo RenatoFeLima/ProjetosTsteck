@@ -1,18 +1,7 @@
 import type { ProjectNotificationPayload } from "@/features/projects/services/project-notification-service";
+import { formatDateTimeBR } from "@/lib/mail/format-datetime";
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
+const formatDate = formatDateTimeBR;
 
 export function buildProjectCreatedTemplate(data: ProjectNotificationPayload): string {
   const equipamentoRow = data.equipamento
