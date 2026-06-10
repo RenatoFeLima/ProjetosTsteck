@@ -68,12 +68,21 @@ export async function POST(request: NextRequest) {
   const recipients = getProjectNotificationRecipients(sellerEmailValid ? body.sellerEmail : undefined);
   const key = notificationKeyFor(body);
 
+  // Log seguro (sem expor o e-mail completo) para rastrear o fluxo nos Runtime Logs.
+  const logLine = (resultado: string) =>
+    console.info(
+      `[notify/movement] project=${body.projectId} code=${body.projectCode} ` +
+        `${body.oldStatus ?? "-"}->${body.newStatus ?? "-"} sellerEmail=${sellerEmailValid ? "sim" : "nao"} ` +
+        `key=${key} resultado=${resultado}`,
+    );
+
   // Notificação é secundária: nunca derruba o fluxo nem retorna 500.
   const stop = startTimer();
 
   // Sem destinatário (vendedor sem e-mail válido): não envia e registra ignorado.
   if (recipients.to.length === 0) {
     await recordNotification({ payload: body, key, sentTo: [], success: false, ignored: true });
+    logLine("ignored");
     logPerf("POST /api/notifications/project-movement", stop(), { success: false });
     return NextResponse.json(
       { success: false, message: "Notificação ignorada: vendedor sem e-mail cadastrado." },
@@ -83,6 +92,7 @@ export async function POST(request: NextRequest) {
 
   // Idempotência: não reenvia o mesmo evento (mesma chave) já enviado com sucesso.
   if (await notificationAlreadySent(key)) {
+    logLine("duplicate");
     logPerf("POST /api/notifications/project-movement", stop(), { success: true });
     return NextResponse.json(
       { success: true, message: "Notificação já enviada anteriormente (sem duplicar)." },
@@ -99,10 +109,12 @@ export async function POST(request: NextRequest) {
       success: result.success,
       error: result.success ? undefined : result.message,
     });
+    logLine(result.success ? "sent" : "failed");
     logPerf("POST /api/notifications/project-movement", stop(), { success: result.success });
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
     await recordNotification({ payload: body, key, sentTo: recipients.to, success: false, error: (err as Error)?.message });
+    logLine("failed");
     logPerf("POST /api/notifications/project-movement", stop(), { success: false });
     console.error("[notifications/project-movement] falha ao enviar e-mail:", err);
     return NextResponse.json(
