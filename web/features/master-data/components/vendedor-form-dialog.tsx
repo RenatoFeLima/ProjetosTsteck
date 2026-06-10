@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { Vendedor } from "@/features/master-data/domain/master-data-types";
+import { formatPhoneBR, onlyDigits } from "@/features/master-data/lib/masks";
 
 type Props = {
   open: boolean;
@@ -33,7 +34,7 @@ export function VendedorFormDialog({ open, mode, item, onClose, onSave }: Props)
     if (open) {
       setName(item?.name ?? "");
       setEmail(item?.email ?? "");
-      setPhone(item?.phone ?? "");
+      setPhone(formatPhoneBR(item?.phone ?? ""));
       setTimeout(() => nameRef.current?.focus(), 50);
     }
   }, [open, item]);
@@ -48,7 +49,7 @@ export function VendedorFormDialog({ open, mode, item, onClose, onSave }: Props)
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    onSave({ name: name.trim(), email: email.trim(), phone: phone.trim() });
+    onSave({ name: name.trim(), email: email.trim(), phone: onlyDigits(phone) });
   }
 
   if (!open) return null;
@@ -70,7 +71,7 @@ export function VendedorFormDialog({ open, mode, item, onClose, onSave }: Props)
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} className={inputCls} />
             </Field>
             <Field label="Telefone">
-              <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="(11) 9xxxx-xxxx" className={inputCls} />
+              <input value={phone} onChange={e => setPhone(formatPhoneBR(e.target.value))} inputMode="numeric" placeholder="(11) 99999-9999" className={inputCls} />
             </Field>
           </div>
           <div className="flex justify-end gap-2 pt-2">

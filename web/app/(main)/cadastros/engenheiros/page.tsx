@@ -7,6 +7,7 @@ import { MasterDataTable } from "@/features/master-data/components/master-data-t
 import { MasterDataStates } from "@/features/master-data/components/master-data-states";
 import { useMasterDataEntity } from "@/features/master-data/hooks/use-master-data-entity";
 import type { Engenheiro } from "@/features/master-data/domain/master-data-types";
+import { formatPhoneBR } from "@/features/master-data/lib/masks";
 
 export default function EngenheirosPage() {
   const { items, loading, error, create, update, setActive } = useMasterDataEntity<Engenheiro>("engenheiros", { includeInactive: true });
@@ -43,7 +44,7 @@ export default function EngenheirosPage() {
           columns={[
             { key: "name", label: "Nome" },
             { key: "email", label: "E-mail" },
-            { key: "phone", label: "Telefone" },
+            { key: "phone", label: "Telefone", render: (item) => formatPhoneBR(item.phone) || "—" },
             {
               key: "active",
               label: "Status",

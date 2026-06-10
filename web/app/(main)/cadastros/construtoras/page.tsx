@@ -7,6 +7,7 @@ import { MasterDataTable } from "@/features/master-data/components/master-data-t
 import { MasterDataStates } from "@/features/master-data/components/master-data-states";
 import { useMasterDataEntity } from "@/features/master-data/hooks/use-master-data-entity";
 import type { Construtora } from "@/features/master-data/domain/master-data-types";
+import { formatCnpj, formatPhoneBR, onlyDigits } from "@/features/master-data/lib/masks";
 
 export default function ConstrutorasPage() {
   const { items, loading, error, create, update, setActive } = useMasterDataEntity<Construtora>("construtoras", { includeInactive: true });
@@ -17,7 +18,13 @@ export default function ConstrutorasPage() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    return items.filter((c) => !q || c.name.toLowerCase().includes(q) || (c.cnpj ?? "").includes(q));
+    const qDigits = onlyDigits(q);
+    return items.filter(
+      (c) =>
+        !q ||
+        c.name.toLowerCase().includes(q) ||
+        (qDigits.length > 0 && onlyDigits(c.cnpj).includes(qDigits)),
+    );
   }, [items, search]);
 
   async function handleSave(data: Partial<Construtora>) {
@@ -42,8 +49,8 @@ export default function ConstrutorasPage() {
           items={filtered}
           columns={[
             { key: "name", label: "Nome" },
-            { key: "cnpj", label: "CNPJ" },
-            { key: "phone", label: "Telefone" },
+            { key: "cnpj", label: "CNPJ", render: (item) => formatCnpj(item.cnpj) || "—" },
+            { key: "phone", label: "Telefone", render: (item) => formatPhoneBR(item.phone) || "—" },
             { key: "email", label: "E-mail" },
             {
               key: "active",

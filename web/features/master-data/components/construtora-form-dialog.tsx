@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { Construtora } from "@/features/master-data/domain/master-data-types";
+import { formatCnpj, formatPhoneBR, isValidCnpj, onlyDigits } from "@/features/master-data/lib/masks";
 
 type Props = {
   open: boolean;
@@ -19,14 +20,17 @@ export function ConstrutoraFormDialog({ open, mode, item, onClose, onSave }: Pro
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
+  const [cnpjError, setCnpjError] = useState("");
 
   useEffect(() => {
     if (open) {
       setName(item?.name ?? "");
-      setCnpj(item?.cnpj ?? "");
-      setPhone(item?.phone ?? "");
+      // Formata na abertura — funciona com dados antigos (formatados ou só dígitos).
+      setCnpj(formatCnpj(item?.cnpj ?? ""));
+      setPhone(formatPhoneBR(item?.phone ?? ""));
       setEmail(item?.email ?? "");
       setNotes(item?.notes ?? "");
+      setCnpjError("");
       setTimeout(() => nameRef.current?.focus(), 50);
     }
   }, [open, item]);
@@ -41,7 +45,19 @@ export function ConstrutoraFormDialog({ open, mode, item, onClose, onSave }: Pro
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    onSave({ name: name.trim(), cnpj: cnpj.trim(), phone: phone.trim(), email: email.trim(), notes: notes.trim() });
+    // CNPJ é opcional; se preenchido, precisa ser válido.
+    if (onlyDigits(cnpj) && !isValidCnpj(cnpj)) {
+      setCnpjError("CNPJ inválido. Verifique os dígitos.");
+      return;
+    }
+    // Salva apenas dígitos (consistente no banco); a tela exibe formatado.
+    onSave({
+      name: name.trim(),
+      cnpj: onlyDigits(cnpj),
+      phone: onlyDigits(phone),
+      email: email.trim(),
+      notes: notes.trim(),
+    });
   }
 
   if (!open) return null;
@@ -64,10 +80,23 @@ export function ConstrutoraFormDialog({ open, mode, item, onClose, onSave }: Pro
           </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="CNPJ">
-              <input value={cnpj} onChange={e => setCnpj(e.target.value)} placeholder="00.000.000/0001-00" className={inputCls} />
+              <input
+                value={cnpj}
+                onChange={e => { setCnpj(formatCnpj(e.target.value)); setCnpjError(""); }}
+                inputMode="numeric"
+                placeholder="00.000.000/0000-00"
+                className={inputCls}
+              />
+              {cnpjError && <span className="text-xs font-medium text-red-500">{cnpjError}</span>}
             </Field>
             <Field label="Telefone">
-              <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="(11) 9xxxx-xxxx" className={inputCls} />
+              <input
+                value={phone}
+                onChange={e => setPhone(formatPhoneBR(e.target.value))}
+                inputMode="numeric"
+                placeholder="(11) 99999-9999"
+                className={inputCls}
+              />
             </Field>
           </div>
           <Field label="E-mail">

@@ -7,6 +7,7 @@ import { MasterDataStates } from "@/features/master-data/components/master-data-
 import { VendedorFormDialog } from "@/features/master-data/components/vendedor-form-dialog";
 import { useMasterDataEntity } from "@/features/master-data/hooks/use-master-data-entity";
 import type { Vendedor } from "@/features/master-data/domain/master-data-types";
+import { formatPhoneBR } from "@/features/master-data/lib/masks";
 
 export default function VendedoresPage() {
   const { items, loading, error, create, update, setActive } = useMasterDataEntity<Vendedor>("vendedores", { includeInactive: true });
@@ -43,7 +44,7 @@ export default function VendedoresPage() {
           columns={[
             { key: "name", label: "Nome" },
             { key: "email", label: "E-mail" },
-            { key: "phone", label: "Telefone" },
+            { key: "phone", label: "Telefone", render: (item) => formatPhoneBR(item.phone) || "—" },
             {
               key: "active",
               label: "Status",
