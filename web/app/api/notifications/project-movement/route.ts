@@ -6,6 +6,11 @@ import {
   type ProjectNotificationPayload,
 } from "@/features/projects/services/project-notification-service";
 import { startTimer, logPerf } from "@/server/perf";
+import {
+  notificationKeyFor,
+  notificationAlreadySent,
+  recordNotification,
+} from "@/lib/mail/notification-log";
 
 /** Escapa caracteres HTML para evitar injeção no template do e-mail. */
 function escapeHtml(str: unknown): string {
@@ -61,15 +66,43 @@ export async function POST(request: NextRequest) {
   };
 
   const recipients = getProjectNotificationRecipients(sellerEmailValid ? body.sellerEmail : undefined);
+  const key = notificationKeyFor(body);
 
   // Notificação é secundária: nunca derruba o fluxo nem retorna 500.
-  // Falha de e-mail é reportada no corpo (success:false), com status 200.
   const stop = startTimer();
+
+  // Sem destinatário (vendedor sem e-mail válido): não envia e registra ignorado.
+  if (recipients.to.length === 0) {
+    await recordNotification({ payload: body, key, sentTo: [], success: false, ignored: true });
+    logPerf("POST /api/notifications/project-movement", stop(), { success: false });
+    return NextResponse.json(
+      { success: false, message: "Notificação ignorada: vendedor sem e-mail cadastrado." },
+      { status: 200 },
+    );
+  }
+
+  // Idempotência: não reenvia o mesmo evento (mesma chave) já enviado com sucesso.
+  if (await notificationAlreadySent(key)) {
+    logPerf("POST /api/notifications/project-movement", stop(), { success: true });
+    return NextResponse.json(
+      { success: true, message: "Notificação já enviada anteriormente (sem duplicar)." },
+      { status: 200 },
+    );
+  }
+
   try {
-    const result = await sendProjectMovementEmail(sanitized, recipients.to, recipients.cc);
+    const result = await sendProjectMovementEmail(sanitized, recipients.to);
+    await recordNotification({
+      payload: body,
+      key,
+      sentTo: recipients.to,
+      success: result.success,
+      error: result.success ? undefined : result.message,
+    });
     logPerf("POST /api/notifications/project-movement", stop(), { success: result.success });
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
+    await recordNotification({ payload: body, key, sentTo: recipients.to, success: false, error: (err as Error)?.message });
     logPerf("POST /api/notifications/project-movement", stop(), { success: false });
     console.error("[notifications/project-movement] falha ao enviar e-mail:", err);
     return NextResponse.json(

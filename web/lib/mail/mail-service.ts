@@ -5,9 +5,6 @@ import { buildProjectUrgencyTemplate } from "./templates/project-urgency-templat
 import { buildProjectCreatedTemplate } from "./templates/project-created-template";
 import { buildDeadlineWarningTemplate } from "./templates/deadline-warning-template";
 
-const PROJECTS_TEAM_EMAIL =
-  process.env.PROJECTS_TEAM_EMAIL ?? "projetos@tsteck.com.br";
-
 function createTransporter() {
   const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS } = process.env;
 
@@ -74,22 +71,18 @@ function buildHtml(payload: ProjectNotificationPayload): string {
 export async function sendProjectMovementEmail(
   payload: ProjectNotificationPayload,
   to: string[],
-  cc?: string[],
 ): Promise<{ success: boolean; message: string }> {
   try {
     const transporter = createTransporter();
     const from = process.env.MAIL_FROM ?? process.env.SMTP_USER;
 
     console.info(
-      `[MAIL] Enviando ${payload.eventType} para projeto ${payload.projectCode} → to:[${to.join(", ")}]${
-        cc?.length ? ` cc:[${cc.join(", ")}]` : ""
-      }`,
+      `[MAIL] Enviando ${payload.eventType} para projeto ${payload.projectCode} → to:[${to.join(", ")}]`,
     );
 
     await transporter.sendMail({
       from,
       to: to.join(", "),
-      ...(cc && cc.length ? { cc: cc.join(", ") } : {}),
       subject: buildSubject(payload),
       html: buildHtml(payload),
     });
@@ -108,7 +101,6 @@ export async function sendProjectMovementEmail(
 export async function sendProjectCreatedEmail(
   payload: ProjectNotificationPayload,
   to: string[],
-  cc?: string[],
 ): Promise<{ success: boolean; message: string }> {
   try {
     const transporter = createTransporter();
@@ -117,7 +109,6 @@ export async function sendProjectCreatedEmail(
     await transporter.sendMail({
       from,
       to: to.join(", "),
-      ...(cc && cc.length ? { cc: cc.join(", ") } : {}),
       subject: buildSubject(payload),
       html: buildProjectCreatedTemplate(payload),
     });
@@ -132,7 +123,6 @@ export async function sendProjectCreatedEmail(
 export async function sendDeadlineWarningEmail(
   payload: ProjectNotificationPayload,
   to: string[],
-  cc?: string[],
 ): Promise<{ success: boolean; message: string }> {
   try {
     const transporter = createTransporter();
@@ -141,7 +131,6 @@ export async function sendDeadlineWarningEmail(
     await transporter.sendMail({
       from,
       to: to.join(", "),
-      ...(cc && cc.length ? { cc: cc.join(", ") } : {}),
       subject: buildSubject(payload),
       html: buildDeadlineWarningTemplate(payload),
     });

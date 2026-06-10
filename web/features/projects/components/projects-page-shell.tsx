@@ -52,6 +52,18 @@ export function ProjectsPageShell() {
     return found?.email?.trim() || undefined;
   }
 
+  // Notifica SOMENTE o vendedor (fire-and-forget). Chama sempre o backend, que
+  // decide enviar (vendedor com e-mail) ou ignorar (sem e-mail) e registra o
+  // resultado; nunca bloqueia o fluxo. A observação reflete a mensagem retornada.
+  function dispatchSellerEmail(
+    projectId: string,
+    payload: Parameters<typeof sendProjectNotification>[0],
+  ) {
+    void sendProjectNotification(payload).then((emailResult) => {
+      addObservation(projectId, `Notificacao por e-mail ao vendedor: ${emailResult.message}`, "sistema");
+    });
+  }
+
   const [modalOpen, setModalOpen] = useState(false);
   const [quickCreate, setQuickCreate] = useState(false);
   const [drawerContext, setDrawerContext] = useState<{
@@ -200,34 +212,21 @@ export function ProjectsPageShell() {
     touchLastUpdated();
     notify("Status atualizado com sucesso.");
 
-    // Disparar e-mail ao vendedor (fire-and-forget)
-    const sellerEmail = getVendorEmail(project.vendedor);
-    if (sellerEmail) {
-      const isFinished = nextStatus === "PROJETO FINAL ENVIADO";
-      sendProjectNotification({
-        projectId: project.id,
-        projectCode: project.codigo_projeto,
-        constructorName: project.construtora,
-        workName: project.obra,
-        sellerName: project.vendedor,
-        sellerEmail,
-        oldStatus,
-        newStatus: nextStatus,
-        eventType: isFinished ? "PROJECT_FINISHED" : "STATUS_CHANGED",
-        changedBy: "usuario.local",
-        changedAt: new Date().toISOString(),
-        notes: observation?.trim() || undefined,
-      }).then((emailResult) => {
-        if (!emailResult.success) {
-          addObservation(project.id, `Falha ao enviar e-mail para [${sellerEmail}].`, "sistema");
-          notify("Status atualizado, mas não foi possível enviar o e-mail ao vendedor.");
-        } else {
-          addObservation(project.id, `E-mail enviado para [${sellerEmail}] sobre alteração de status.`, "sistema");
-        }
-      });
-    } else if (project.vendedor && project.vendedor !== "SEM VENDEDOR") {
-      addObservation(project.id, "E-mail não enviado: vendedor sem e-mail cadastrado.", "sistema");
-    }
+    const isFinished = nextStatus === "PROJETO FINAL ENVIADO";
+    dispatchSellerEmail(project.id, {
+      projectId: project.id,
+      projectCode: project.codigo_projeto,
+      constructorName: project.construtora,
+      workName: project.obra,
+      sellerName: project.vendedor,
+      sellerEmail: getVendorEmail(project.vendedor) ?? "",
+      oldStatus,
+      newStatus: nextStatus,
+      eventType: isFinished ? "PROJECT_FINISHED" : "STATUS_CHANGED",
+      changedBy: "usuario.local",
+      changedAt: new Date().toISOString(),
+      notes: observation?.trim() || undefined,
+    });
   }
 
   function notify(message: string) {
@@ -251,31 +250,19 @@ export function ProjectsPageShell() {
     touchLastUpdated();
     notify("Projeto marcado como urgente.");
 
-    // Disparar e-mail ao vendedor (fire-and-forget)
-    const sellerEmail = getVendorEmail(target.vendedor);
-    if (sellerEmail) {
-      sendProjectNotification({
-        projectId: target.id,
-        projectCode: target.codigo_projeto,
-        constructorName: target.construtora,
-        workName: target.obra,
-        sellerName: target.vendedor,
-        sellerEmail,
-        newStatus: target.status_atual,
-        eventType: "MARKED_URGENT",
-        changedBy: payload.updatedBy,
-        changedAt: payload.updatedAt,
-        urgencyReason: payload.urgencyReason,
-      }).then((emailResult) => {
-        if (!emailResult.success) {
-          addObservation(target.id, `Falha ao enviar e-mail para [${sellerEmail}].`, "sistema");
-        } else {
-          addObservation(target.id, `E-mail enviado para [${sellerEmail}] sobre marcação de urgência.`, "sistema");
-        }
-      });
-    } else if (target.vendedor && target.vendedor !== "SEM VENDEDOR") {
-      addObservation(target.id, "E-mail não enviado: vendedor sem e-mail cadastrado.", "sistema");
-    }
+    dispatchSellerEmail(target.id, {
+      projectId: target.id,
+      projectCode: target.codigo_projeto,
+      constructorName: target.construtora,
+      workName: target.obra,
+      sellerName: target.vendedor,
+      sellerEmail: getVendorEmail(target.vendedor) ?? "",
+      newStatus: target.status_atual,
+      eventType: "MARKED_URGENT",
+      changedBy: payload.updatedBy,
+      changedAt: payload.updatedAt,
+      urgencyReason: payload.urgencyReason,
+    });
   }
 
   function removeUrgent(project: Project) {
@@ -289,28 +276,18 @@ export function ProjectsPageShell() {
     touchLastUpdated();
     notify("Urgencia removida do projeto.");
 
-    // Disparar e-mail ao vendedor (fire-and-forget)
-    const sellerEmail = getVendorEmail(project.vendedor);
-    if (sellerEmail) {
-      sendProjectNotification({
-        projectId: project.id,
-        projectCode: project.codigo_projeto,
-        constructorName: project.construtora,
-        workName: project.obra,
-        sellerName: project.vendedor,
-        sellerEmail,
-        newStatus: project.status_atual,
-        eventType: "URGENCY_REMOVED",
-        changedBy: by,
-        changedAt: new Date().toISOString(),
-      }).then((emailResult) => {
-        if (!emailResult.success) {
-          addObservation(project.id, `Falha ao enviar e-mail para [${sellerEmail}].`, "sistema");
-        } else {
-          addObservation(project.id, `E-mail enviado para [${sellerEmail}] sobre remoção de urgência.`, "sistema");
-        }
-      });
-    }
+    dispatchSellerEmail(project.id, {
+      projectId: project.id,
+      projectCode: project.codigo_projeto,
+      constructorName: project.construtora,
+      workName: project.obra,
+      sellerName: project.vendedor,
+      sellerEmail: getVendorEmail(project.vendedor) ?? "",
+      newStatus: project.status_atual,
+      eventType: "URGENCY_REMOVED",
+      changedBy: by,
+      changedAt: new Date().toISOString(),
+    });
   }
 
   function retryTableLoad() {
@@ -465,33 +442,21 @@ export function ProjectsPageShell() {
                 addObservation(projectId, message, "usuario.local");
                 touchLastUpdated();
 
-                // Disparar e-mail ao vendedor (fire-and-forget)
-                const sellerEmail = getVendorEmail(current.vendedor);
-                if (sellerEmail) {
-                  const isFinished = status === "PROJETO FINAL ENVIADO";
-                  sendProjectNotification({
-                    projectId: current.id,
-                    projectCode: current.codigo_projeto,
-                    constructorName: current.construtora,
-                    workName: current.obra,
-                    sellerName: current.vendedor,
-                    sellerEmail,
-                    oldStatus,
-                    newStatus: status,
-                    eventType: isFinished ? "PROJECT_FINISHED" : "STATUS_CHANGED",
-                    changedBy: "usuario.local",
-                    changedAt: new Date().toISOString(),
-                    notes: observation?.trim() || undefined,
-                  }).then((emailResult) => {
-                    if (!emailResult.success) {
-                      addObservation(projectId, `Falha ao enviar e-mail para [${sellerEmail}].`, "sistema");
-                    } else {
-                      addObservation(projectId, `E-mail enviado para [${sellerEmail}] sobre alteração de status.`, "sistema");
-                    }
-                  });
-                } else if (current.vendedor && current.vendedor !== "SEM VENDEDOR") {
-                  addObservation(projectId, "E-mail não enviado: vendedor sem e-mail cadastrado.", "sistema");
-                }
+                const isFinished = status === "PROJETO FINAL ENVIADO";
+                dispatchSellerEmail(projectId, {
+                  projectId: current.id,
+                  projectCode: current.codigo_projeto,
+                  constructorName: current.construtora,
+                  workName: current.obra,
+                  sellerName: current.vendedor,
+                  sellerEmail: getVendorEmail(current.vendedor) ?? "",
+                  oldStatus,
+                  newStatus: status,
+                  eventType: isFinished ? "PROJECT_FINISHED" : "STATUS_CHANGED",
+                  changedBy: "usuario.local",
+                  changedAt: new Date().toISOString(),
+                  notes: observation?.trim() || undefined,
+                });
               }
 
               if (!result.ok) notify(result.error ?? "Falha na movimentacao");

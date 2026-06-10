@@ -5,6 +5,14 @@ import {
   isValidEmail,
 } from "@/features/projects/services/project-notification-service";
 import type { ProjectNotificationPayload } from "@/features/projects/services/project-notification-service";
+import {
+  notificationKeyFor,
+  notificationAlreadySent,
+  recordNotification,
+} from "@/lib/mail/notification-log";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 /** Escapa caracteres HTML para evitar injeção no template de e-mail. */
 function escapeHtml(str: unknown): string {
@@ -63,11 +71,35 @@ export async function POST(request: NextRequest) {
   const recipients = getProjectNotificationRecipients(
     sellerEmailValid ? body.sellerEmail : undefined,
   );
+  const key = notificationKeyFor(body);
+
+  if (recipients.to.length === 0) {
+    await recordNotification({ payload: body, key, sentTo: [], success: false, ignored: true });
+    return NextResponse.json(
+      { success: false, message: "Notificação ignorada: vendedor sem e-mail cadastrado." },
+      { status: 200 },
+    );
+  }
+
+  if (await notificationAlreadySent(key)) {
+    return NextResponse.json(
+      { success: true, message: "Notificação já enviada anteriormente (sem duplicar)." },
+      { status: 200 },
+    );
+  }
 
   try {
-    const result = await sendProjectCreatedEmail(sanitized, recipients.to, recipients.cc);
+    const result = await sendProjectCreatedEmail(sanitized, recipients.to);
+    await recordNotification({
+      payload: body,
+      key,
+      sentTo: recipients.to,
+      success: result.success,
+      error: result.success ? undefined : result.message,
+    });
     return NextResponse.json(result, { status: 200 });
   } catch (err) {
+    await recordNotification({ payload: body, key, sentTo: recipients.to, success: false, error: (err as Error)?.message });
     console.error("[notifications/project-created] falha ao enviar e-mail:", err);
     return NextResponse.json(
       { success: false, message: "Falha ao enviar e-mail (registrada, fluxo não afetado)." },
