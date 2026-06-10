@@ -16,6 +16,8 @@ function statusLabel(status: string): string {
 }
 
 const formatDate = formatDateTimeBR;
+const SYSTEM_URL =
+  process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://projetos-tsteck.vercel.app";
 
 export function buildProjectMovementTemplate(data: ProjectNotificationPayload): string {
   const statusRow = data.oldStatus && data.newStatus
@@ -140,6 +142,13 @@ export function buildProjectMovementTemplate(data: ProjectNotificationPayload): 
                   <td style="padding:8px 12px;font-size:13px;color:#262626;">${formatDate(data.changedAt)}</td>
                 </tr>
               </table>
+            </td>
+          </tr>
+
+          <!-- CTA link do sistema -->
+          <tr>
+            <td style="padding:0 32px 24px;" align="center">
+              <a href="${SYSTEM_URL}" style="display:inline-block;background:#9e0b0f;color:#fff;text-decoration:none;font-size:13px;font-weight:700;padding:11px 24px;border-radius:8px;">Abrir o sistema</a>
             </td>
           </tr>
 

@@ -15,6 +15,20 @@ import {
 } from "@/features/projects/domain/project-status-map";
 import { writeAudit } from "./auditService";
 import { startTimer, logPerf } from "@/server/perf";
+import {
+  dispatchProjectNotification,
+  QUEUE_MESSAGE,
+  ELABORATE_MESSAGE,
+} from "@/lib/mail/notify-project";
+
+/** Extrai relações (vendedor/construtora/obra) do row Prisma para a notificação. */
+function relProject(row: unknown): {
+  seller?: { name?: string; email?: string };
+  builder?: { name?: string };
+  work?: { name?: string };
+} {
+  return row as never;
+}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -202,6 +216,25 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
   });
   logPerf("service.createProject", stop(), { success: true, phases: { refs: refsMs, prismaCreate: createMs, audit: tAudit() } });
 
+  // E-mail ao vendedor (best-effort; awaitado para garantir o envio no serverless).
+  // Cadastro Inicial -> "em fila"; criado já em Elaborar Ante-Projeto -> "esteira".
+  const releasedOnCreate = initialStatus === "ELABORAR_ANTE_PROJETO";
+  const rel = relProject(created);
+  await dispatchProjectNotification({
+    projectId: created.id,
+    projectCode: code,
+    constructorName: rel.builder?.name ?? "",
+    workName: rel.work?.name ?? "",
+    sellerName: rel.seller?.name ?? "",
+    sellerEmail: rel.seller?.email ?? "",
+    newStatus: DB_TO_UI_STATUS[initialStatus],
+    eventType: releasedOnCreate ? "PROJECT_RELEASED_TO_ELABORATE_ANTE_PROJECT" : "PROJECT_CREATED",
+    changedBy: actor.name,
+    changedAt: now.toISOString(),
+    nextAction: releasedOnCreate ? undefined : QUEUE_MESSAGE,
+    notes: releasedOnCreate ? ELABORATE_MESSAGE : undefined,
+  });
+
   return serializeProject(created);
 }
 
@@ -361,11 +394,31 @@ export async function changeStatus(
   });
   const auditMs = tAudit();
 
-  const result = serializeProject(await reload(id));
+  const reloaded = await reload(id);
+  const result = serializeProject(reloaded);
   logPerf("service.changeStatus", stop(), {
     success: true,
     phases: { query: queryMs, transaction: txMs, audit: auditMs },
   });
+
+  // Entrada em Elaborar Ante-Projeto -> e-mail ao vendedor (best-effort, awaitado).
+  if (to === "ELABORAR_ANTE_PROJETO") {
+    const rel = relProject(reloaded);
+    await dispatchProjectNotification({
+      projectId: id,
+      projectCode: project.code,
+      constructorName: rel.builder?.name ?? "",
+      workName: rel.work?.name ?? "",
+      sellerName: rel.seller?.name ?? "",
+      sellerEmail: rel.seller?.email ?? "",
+      newStatus: DB_TO_UI_STATUS[to],
+      eventType: "PROJECT_RELEASED_TO_ELABORATE_ANTE_PROJECT",
+      changedBy: actor.name,
+      changedAt: now.toISOString(),
+      notes: ELABORATE_MESSAGE,
+    });
+  }
+
   return result;
 }
 

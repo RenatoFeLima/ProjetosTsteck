@@ -212,21 +212,25 @@ export function ProjectsPageShell() {
     touchLastUpdated();
     notify("Status atualizado com sucesso.");
 
-    const isFinished = nextStatus === "PROJETO FINAL ENVIADO";
-    dispatchSellerEmail(project.id, {
-      projectId: project.id,
-      projectCode: project.codigo_projeto,
-      constructorName: project.construtora,
-      workName: project.obra,
-      sellerName: project.vendedor,
-      sellerEmail: getVendorEmail(project.vendedor) ?? "",
-      oldStatus,
-      newStatus: nextStatus,
-      eventType: isFinished ? "PROJECT_FINISHED" : "STATUS_CHANGED",
-      changedBy: "usuario.local",
-      changedAt: new Date().toISOString(),
-      notes: observation?.trim() || undefined,
-    });
+    // Entrada em Elaborar Ante-Projeto tem e-mail próprio disparado pelo backend
+    // (mensagem da esteira/45 dias) — aqui evitamos o e-mail genérico duplicado.
+    if (nextStatus !== "ELABORAR ANTE-PROJETO") {
+      const isFinished = nextStatus === "PROJETO FINAL ENVIADO";
+      dispatchSellerEmail(project.id, {
+        projectId: project.id,
+        projectCode: project.codigo_projeto,
+        constructorName: project.construtora,
+        workName: project.obra,
+        sellerName: project.vendedor,
+        sellerEmail: getVendorEmail(project.vendedor) ?? "",
+        oldStatus,
+        newStatus: nextStatus,
+        eventType: isFinished ? "PROJECT_FINISHED" : "STATUS_CHANGED",
+        changedBy: "usuario.local",
+        changedAt: new Date().toISOString(),
+        notes: observation?.trim() || undefined,
+      });
+    }
   }
 
   function notify(message: string) {
@@ -442,21 +446,24 @@ export function ProjectsPageShell() {
                 addObservation(projectId, message, "usuario.local");
                 touchLastUpdated();
 
-                const isFinished = status === "PROJETO FINAL ENVIADO";
-                dispatchSellerEmail(projectId, {
-                  projectId: current.id,
-                  projectCode: current.codigo_projeto,
-                  constructorName: current.construtora,
-                  workName: current.obra,
-                  sellerName: current.vendedor,
-                  sellerEmail: getVendorEmail(current.vendedor) ?? "",
-                  oldStatus,
-                  newStatus: status,
-                  eventType: isFinished ? "PROJECT_FINISHED" : "STATUS_CHANGED",
-                  changedBy: "usuario.local",
-                  changedAt: new Date().toISOString(),
-                  notes: observation?.trim() || undefined,
-                });
+                // ELABORAR ANTE-PROJETO: e-mail próprio vem do backend (esteira/45d).
+                if (status !== "ELABORAR ANTE-PROJETO") {
+                  const isFinished = status === "PROJETO FINAL ENVIADO";
+                  dispatchSellerEmail(projectId, {
+                    projectId: current.id,
+                    projectCode: current.codigo_projeto,
+                    constructorName: current.construtora,
+                    workName: current.obra,
+                    sellerName: current.vendedor,
+                    sellerEmail: getVendorEmail(current.vendedor) ?? "",
+                    oldStatus,
+                    newStatus: status,
+                    eventType: isFinished ? "PROJECT_FINISHED" : "STATUS_CHANGED",
+                    changedBy: "usuario.local",
+                    changedAt: new Date().toISOString(),
+                    notes: observation?.trim() || undefined,
+                  });
+                }
               }
 
               if (!result.ok) notify(result.error ?? "Falha na movimentacao");
