@@ -6,13 +6,15 @@ import { startTimer, logPerf } from "@/server/perf";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Sugestão do próximo código (sufixo global +1). Segmento estático, sem conflito
-// com [id]. O cliente combina o sufixo com o prefixo do projeto (editável).
-export async function GET() {
+// Sugestão do próximo código final. A referência é o último projeto que chegou
+// em PROJETO_FINAL_ENVIADO. `currentCode` (query) é o código provisório do
+// projeto sendo movimentado — usado como fallback e info secundária no modal.
+export async function GET(req: Request) {
   const stop = startTimer();
   try {
     const actor = await requireUser();
-    const result = await nextCodeSuggestion(actor);
+    const currentCode = new URL(req.url).searchParams.get("currentCode") ?? undefined;
+    const result = await nextCodeSuggestion(actor, currentCode);
     logPerf("GET /api/projects/next-code-suggestion", stop(), { success: true });
     return ok(result);
   } catch (e) {

@@ -20,7 +20,13 @@ import {
   QUEUE_MESSAGE,
   ELABORATE_MESSAGE,
 } from "@/lib/mail/notify-project";
-import { maxCodeSuffix, padSuffix, hasValidFinalCode } from "@/features/projects/domain/project-code";
+import {
+  maxCodeSuffix,
+  padSuffix,
+  hasValidFinalCode,
+  extractCodeSuffix,
+  suggestNextCode,
+} from "@/features/projects/domain/project-code";
 
 /** Extrai relações (vendedor/construtora/obra) do row Prisma para a notificação. */
 function relProject(row: unknown): {
@@ -587,13 +593,81 @@ export async function listAllReviews(actor: SessionUser) {
   return { reviewStudy: study.map(map), finalReview: finalRev.map(map) };
 }
 
-/** Sugestão do próximo código: maior sufixo numérico GLOBAL + 1 (padding 4). O
- *  prefixo é escolhido no cliente (mantém o do projeto, mas editável). */
-export async function nextCodeSuggestion(actor: SessionUser): Promise<{ maxSuffix: number; nextSuffix: string }> {
+export type NextCodeSuggestion = {
+  /** Maior sufixo GLOBAL (compat) — usado como fallback quando não há finalizados. */
+  maxSuffix: number;
+  /** Próximo sufixo GLOBAL (compat). */
+  nextSuffix: string;
+  /** Código do último/maior projeto que já chegou em PROJETO_FINAL_ENVIADO. */
+  lastFinalCode: string | null;
+  /** Código provisório do projeto sendo movimentado (informação secundária). */
+  currentDraftCode: string | null;
+  /** Sugestão do código final: próximo sequencial sobre o último finalizado. */
+  suggestedFinalCode: string | null;
+};
+
+/** Sugestão do próximo código final. A referência principal é o ÚLTIMO projeto
+ *  que já chegou em PROJETO_FINAL_ENVIADO (maior sufixo numérico entre os
+ *  finalizados): "De:" = esse código, "Para:" = prefixo + sufixo + 1. Se não
+ *  existir finalizado anterior, usa o código provisório atual como fallback. */
+export async function nextCodeSuggestion(
+  actor: SessionUser,
+  currentCode?: string,
+): Promise<NextCodeSuggestion> {
   assertPermission(actor, (p) => p.projects.view);
-  const rows = await prisma.project.findMany({ select: { code: true } });
-  const max = maxCodeSuffix(rows.map((r) => r.code));
-  return { maxSuffix: max, nextSuffix: padSuffix(max + 1) };
+
+  // Compat: sufixo global (todos os projetos).
+  const allRows = await prisma.project.findMany({ select: { code: true } });
+  const globalMax = maxCodeSuffix(allRows.map((r) => r.code));
+
+  // Projetos que já chegaram em PROJETO_FINAL_ENVIADO (status atual OU histórico,
+  // pois um final pode voltar para revisão e retornar).
+  const ids = new Set<string>();
+  const [historyHits, currentFinal] = await Promise.all([
+    prisma.projectStatusHistory.findMany({
+      where: { toStatus: "PROJETO_FINAL_ENVIADO" },
+      select: { projectId: true },
+    }),
+    prisma.project.findMany({
+      where: { status: "PROJETO_FINAL_ENVIADO" },
+      select: { id: true },
+    }),
+  ]);
+  historyHits.forEach((r) => ids.add(r.projectId));
+  currentFinal.forEach((p) => ids.add(p.id));
+
+  const finalProjects = ids.size
+    ? await prisma.project.findMany({ where: { id: { in: [...ids] } }, select: { code: true } })
+    : [];
+
+  // Referência = código finalizado de maior sufixo numérico.
+  let lastFinalCode: string | null = null;
+  let maxFinalSuffix = -1;
+  for (const p of finalProjects) {
+    const n = extractCodeSuffix(p.code);
+    if (n !== null && n > maxFinalSuffix) {
+      maxFinalSuffix = n;
+      lastFinalCode = p.code;
+    }
+  }
+
+  // Base da sugestão: último finalizado; senão, código provisório atual.
+  const draft = currentCode?.trim() || null;
+  let suggestedFinalCode: string | null = null;
+  if (lastFinalCode) {
+    suggestedFinalCode = suggestNextCode(lastFinalCode, maxFinalSuffix);
+  } else if (draft) {
+    const draftSuffix = extractCodeSuffix(draft);
+    suggestedFinalCode = suggestNextCode(draft, draftSuffix ?? globalMax);
+  }
+
+  return {
+    maxSuffix: globalMax,
+    nextSuffix: padSuffix(globalMax + 1),
+    lastFinalCode,
+    currentDraftCode: draft,
+    suggestedFinalCode,
+  };
 }
 
 async function reload(id: string) {

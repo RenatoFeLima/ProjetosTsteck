@@ -48,9 +48,22 @@ export async function apiChangeStatus(
   return data.project;
 }
 
-/** Sugestão do próximo código (sufixo global +1). */
-export async function apiGetNextCodeSuggestion(): Promise<{ maxSuffix: number; nextSuffix: string }> {
-  return request<{ maxSuffix: number; nextSuffix: string }>("/api/projects/next-code-suggestion");
+export type NextCodeSuggestion = {
+  maxSuffix: number;
+  nextSuffix: string;
+  /** Código do último projeto que chegou em PROJETO FINAL ENVIADO (referência "De:"). */
+  lastFinalCode: string | null;
+  /** Código provisório do projeto sendo movimentado. */
+  currentDraftCode: string | null;
+  /** Sugestão do código final (editável). */
+  suggestedFinalCode: string | null;
+};
+
+/** Sugestão do código final, baseada no último projeto finalizado. `currentCode`
+ *  é o código provisório do projeto sendo movimentado (fallback/secundário). */
+export async function apiGetNextCodeSuggestion(currentCode?: string): Promise<NextCodeSuggestion> {
+  const qs = currentCode ? `?currentCode=${encodeURIComponent(currentCode)}` : "";
+  return request<NextCodeSuggestion>(`/api/projects/next-code-suggestion${qs}`);
 }
 
 export async function apiSetUrgency(id: string, urgent: boolean, reason?: string): Promise<Project> {

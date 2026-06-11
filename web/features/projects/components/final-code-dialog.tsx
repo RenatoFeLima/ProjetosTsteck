@@ -19,6 +19,8 @@ type Props = {
  *  o código final, com sugestão automática (maior sufixo global + 1). */
 export function FinalCodeDialog({ open, currentCode, ignoreId, isCodigoDuplicado, onConfirm, onCancel }: Props) {
   const [code, setCode] = useState("");
+  // Referência "De:": código do último projeto que chegou em PROJETO FINAL ENVIADO.
+  const [lastFinalCode, setLastFinalCode] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -32,11 +34,17 @@ export function FinalCodeDialog({ open, currentCode, ignoreId, isCodigoDuplicado
     setTouched(false);
     setLoading(true);
     setCode(currentCode);
-    apiGetNextCodeSuggestion()
+    setLastFinalCode(null);
+    apiGetNextCodeSuggestion(currentCode)
       .then((r) => {
         if (!active) return;
-        const prefix = extractCodePrefix(currentCode);
-        setCode(prefix ? `${prefix}-${r.nextSuffix}` : r.nextSuffix);
+        setLastFinalCode(r.lastFinalCode);
+        if (r.suggestedFinalCode) {
+          setCode(r.suggestedFinalCode);
+        } else {
+          const prefix = extractCodePrefix(currentCode);
+          setCode(prefix ? `${prefix}-${r.nextSuffix}` : r.nextSuffix);
+        }
       })
       .catch(() => {
         if (active) setCode(currentCode);
@@ -67,6 +75,8 @@ export function FinalCodeDialog({ open, currentCode, ignoreId, isCodigoDuplicado
   if (!mounted || !open || !currentCode) return null;
 
   const trimmed = code.trim();
+  // "De:" mostra o último finalizado; cai para o provisório atual se não houver.
+  const fromCode = lastFinalCode ?? currentCode;
   const formatErr = trimmed && !hasValidFinalCode(trimmed) ? "O código deve terminar com 4 dígitos numéricos." : "";
   const dupErr =
     trimmed && trimmed !== currentCode && isCodigoDuplicado(trimmed, ignoreId)
@@ -106,8 +116,16 @@ export function FinalCodeDialog({ open, currentCode, ignoreId, isCodigoDuplicado
         <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3 text-sm text-zinc-700 dark:text-zinc-300">
           <p>
             De:{" "}
-            <span className="font-mono font-semibold text-zinc-900 dark:text-foreground">{currentCode}</span>
+            <span className="font-mono font-semibold text-zinc-900 dark:text-foreground">
+              {loading ? "…" : fromCode}
+            </span>
           </p>
+          {currentCode && currentCode !== fromCode && (
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Código provisório atual:{" "}
+              <span className="font-mono text-zinc-600 dark:text-zinc-300">{currentCode}</span>
+            </p>
+          )}
         </div>
 
         <div className="mt-4">
