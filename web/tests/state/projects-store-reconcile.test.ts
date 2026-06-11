@@ -260,18 +260,19 @@ describe("mudança de status para revisão", () => {
     );
   });
 
-  it("mover para o status final envia o código final e atualiza otimisticamente", () => {
+  it("mover para o status final (Projeto Aprovado) envia o código final e atualiza otimisticamente", () => {
     useProjectsStore.setState({
-      projects: [{ ...realProject("f1", "CRE-POÇ-0000"), status_atual: "PROJETO APROVADO" }],
+      // Terminal agora é PROJETO APROVADO, alcançado a partir de PROJETO FINAL ENVIADO.
+      projects: [{ ...realProject("f1", "CRE-POÇ-0000"), status_atual: "PROJETO FINAL ENVIADO" }],
     });
     vi.mocked(api.apiChangeStatus).mockResolvedValue({
       ...realProject("f1", "CRE-POÇ-0007"),
-      status_atual: "PROJETO FINAL ENVIADO",
+      status_atual: "PROJETO APROVADO",
     });
 
     const res = useProjectsStore
       .getState()
-      .moveStatus("f1", "PROJETO FINAL ENVIADO", "kanban", undefined, "CRE-POÇ-0007");
+      .moveStatus("f1", "PROJETO APROVADO", "kanban", undefined, "CRE-POÇ-0007");
 
     expect(res.ok).toBe(true);
     // código final aplicado otimisticamente
@@ -281,7 +282,7 @@ describe("mudança de status para revisão", () => {
     // e enviado ao backend
     expect(api.apiChangeStatus).toHaveBeenCalledWith(
       "f1",
-      "PROJETO FINAL ENVIADO",
+      "PROJETO APROVADO",
       expect.objectContaining({ finalCode: "CRE-POÇ-0007" }),
     );
   });

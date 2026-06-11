@@ -19,7 +19,7 @@ type Props = {
  *  o código final, com sugestão automática (maior sufixo global + 1). */
 export function FinalCodeDialog({ open, currentCode, ignoreId, isCodigoDuplicado, onConfirm, onCancel }: Props) {
   const [code, setCode] = useState("");
-  // Referência "De:": código do último projeto que chegou em PROJETO FINAL ENVIADO.
+  // Referência "De:": código do último projeto que chegou em PROJETO APROVADO (terminal).
   const [lastFinalCode, setLastFinalCode] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
   const [loading, setLoading] = useState(false);

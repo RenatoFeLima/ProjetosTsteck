@@ -77,8 +77,8 @@ const STATUS_COLORS: Record<ProjectStatus, string> = {
   "ELABORAR ANTE-PROJETO": "#3b82f6",
   "ANTE-PROJETO ENVIADO": "#f59e0b",
   "ANTE-PROJETO APROVADO": "#10b981",
-  "PROJETO APROVADO": "#0ea5e9",
-  "PROJETO FINAL ENVIADO": "#027a48",
+  "PROJETO FINAL ENVIADO": "#0ea5e9",
+  "PROJETO APROVADO": "#027a48",
   "REVISAO DE ESTUDO": "#ea580c",
   "REVISAO DE PROJETO FINAL": "#f43f5e",
 };
@@ -135,9 +135,9 @@ function projectStartDate(project: Project): Date {
 
 function findFinalizedAt(project: Project, historyByProject: Map<string, StatusHistoryItem[]>): Date | null {
   const entries = historyByProject.get(project.id) ?? [];
-  const hit = entries.find((item) => item.status_para === "PROJETO FINAL ENVIADO");
+  const hit = entries.find((item) => item.status_para === "PROJETO APROVADO");
   if (hit) return parseDate(hit.alterado_em);
-  if (project.status_atual === "PROJETO FINAL ENVIADO") {
+  if (project.status_atual === "PROJETO APROVADO") {
     return parseDate(project.data_final) ?? parseDate(project.updated_at);
   }
   return null;
@@ -296,8 +296,8 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       if (filters.situacao === "sem_prazo" && dl.hasDeadline) return false;
       if (filters.situacao === "dentro_prazo" && (dl.isOverdue || !dl.hasDeadline)) return false;
 
-      if (filters.abertoFinalizado === "abertos" && project.status_atual === "PROJETO FINAL ENVIADO") return false;
-      if (filters.abertoFinalizado === "finalizados" && project.status_atual !== "PROJETO FINAL ENVIADO") return false;
+      if (filters.abertoFinalizado === "abertos" && project.status_atual === "PROJETO APROVADO") return false;
+      if (filters.abertoFinalizado === "finalizados" && project.status_atual !== "PROJETO APROVADO") return false;
 
       return true;
     });
@@ -329,12 +329,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
 
   const analytics = useMemo(() => {
     const total = filteredProjects.length;
-    const ongoing = filteredProjects.filter((item) => item.status_atual !== "PROJETO FINAL ENVIADO");
-    const finalized = filteredProjects.filter((item) => item.status_atual === "PROJETO FINAL ENVIADO");
+    const ongoing = filteredProjects.filter((item) => item.status_atual !== "PROJETO APROVADO");
+    const finalized = filteredProjects.filter((item) => item.status_atual === "PROJETO APROVADO");
     const urgent = filteredProjects.filter((item) => item.urgente);
 
     const overdue = filteredProjects.filter((item) => {
-      if (item.status_atual === "PROJETO FINAL ENVIADO") return false;
+      if (item.status_atual === "PROJETO APROVADO") return false;
       return getCurrentStatusDeadline(item).isOverdue;
     });
 
@@ -517,6 +517,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       "ANTE-PROJETO ENVIADO",
       "ANTE-PROJETO APROVADO",
       "PROJETO FINAL ENVIADO",
+      "PROJETO APROVADO",
     ].map((status) => ({
       etapa: status,
       total: filteredProjects.filter((item) => item.status_atual === status).length,
@@ -760,9 +761,9 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
 
   const previousMetrics = useMemo(() => {
     const total = previousPeriodProjects.length;
-    const finalized = previousPeriodProjects.filter((item) => item.status_atual === "PROJETO FINAL ENVIADO").length;
+    const finalized = previousPeriodProjects.filter((item) => item.status_atual === "PROJETO APROVADO").length;
     const overdue = previousPeriodProjects.filter((item) => {
-      if (item.status_atual === "PROJETO FINAL ENVIADO") return false;
+      if (item.status_atual === "PROJETO APROVADO") return false;
       return getCurrentStatusDeadline(item).isOverdue;
     }).length;
     const urgent = previousPeriodProjects.filter((item) => item.urgente).length;

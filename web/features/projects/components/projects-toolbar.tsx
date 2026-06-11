@@ -31,8 +31,8 @@ const STATUS_OPTIONS: Array<{ label: string; value: "all" | ProjectStatus }> = [
   { label: "Elaborar", value: "ELABORAR ANTE-PROJETO" },
   { label: "Ante-projeto enviado", value: "ANTE-PROJETO ENVIADO" },
   { label: "Ante-projeto aprovado", value: "ANTE-PROJETO APROVADO" },
-  { label: "Projeto aprovado", value: "PROJETO APROVADO" },
   { label: "Projeto final enviado", value: "PROJETO FINAL ENVIADO" },
+  { label: "Projeto aprovado", value: "PROJETO APROVADO" },
   { label: "Revisao de estudo", value: "REVISAO DE ESTUDO" },
 ];
 

@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Sugestão do próximo código final. A referência é o último projeto que chegou
-// em PROJETO_FINAL_ENVIADO. `currentCode` (query) é o código provisório do
+// em PROJETO_APROVADO (terminal). `currentCode` (query) é o código provisório do
 // projeto sendo movimentado — usado como fallback e info secundária no modal.
 export async function GET(req: Request) {
   const stop = startTimer();

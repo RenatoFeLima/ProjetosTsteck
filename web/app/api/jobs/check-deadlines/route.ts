@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
   // ─── 3. Percorre projetos ─────────────────────────────────────────────────
   for (const project of projects) {
-    if (project.status_atual === "PROJETO FINAL ENVIADO") continue;
+    if (project.status_atual === "PROJETO APROVADO") continue;
 
     const dl = getCurrentStatusDeadline(project, today);
     if (!dl.hasDeadline || !dl.dueDate) continue;

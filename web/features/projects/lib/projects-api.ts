@@ -51,7 +51,7 @@ export async function apiChangeStatus(
 export type NextCodeSuggestion = {
   maxSuffix: number;
   nextSuffix: string;
-  /** Código do último projeto que chegou em PROJETO FINAL ENVIADO (referência "De:"). */
+  /** Código do último projeto que chegou em PROJETO APROVADO / terminal (referência "De:"). */
   lastFinalCode: string | null;
   /** Código provisório do projeto sendo movimentado. */
   currentDraftCode: string | null;

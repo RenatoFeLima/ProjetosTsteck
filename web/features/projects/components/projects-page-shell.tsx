@@ -102,7 +102,7 @@ export function ProjectsPageShell() {
       return computePrazoBadge(todayIsoDate(), prazo) === "atrasado";
     }).length;
     const urgentes = baseProjects.filter((project) => project.urgente).length;
-    const finalizados = baseProjects.filter((project) => project.status_atual === "PROJETO FINAL ENVIADO").length;
+    const finalizados = baseProjects.filter((project) => project.status_atual === "PROJETO APROVADO").length;
     const andamento = Math.max(total - finalizados, 0);
 
     return { total, atrasados, urgentes, finalizados, andamento };
@@ -111,14 +111,14 @@ export function ProjectsPageShell() {
   const projects = useMemo(() => {
     if (kpiFilter === "all" || kpiFilter === "total") return baseProjects;
     if (kpiFilter === "urgentes") return baseProjects.filter((project) => project.urgente);
-    if (kpiFilter === "finalizados") return baseProjects.filter((project) => project.status_atual === "PROJETO FINAL ENVIADO");
+    if (kpiFilter === "finalizados") return baseProjects.filter((project) => project.status_atual === "PROJETO APROVADO");
     if (kpiFilter === "atrasados") {
       return baseProjects.filter((project) => {
         const prazo = computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido);
         return computePrazoBadge(todayIsoDate(), prazo) === "atrasado";
       });
     }
-    return baseProjects.filter((project) => project.status_atual !== "PROJETO FINAL ENVIADO");
+    return baseProjects.filter((project) => project.status_atual !== "PROJETO APROVADO");
   }, [baseProjects, kpiFilter]);
 
   // Contador da aba Alertas = projetos distintos com ao menos um alerta (mesma
@@ -212,9 +212,9 @@ export function ProjectsPageShell() {
     touchLastUpdated();
     notify("Status atualizado com sucesso.");
 
-    // Elaborar Ante-Projeto e Projeto Final Enviado têm e-mail próprio no backend
-    // (esteira/45d e finalização) — evita o e-mail genérico duplicado.
-    if (nextStatus !== "ELABORAR ANTE-PROJETO" && nextStatus !== "PROJETO FINAL ENVIADO") {
+    // Elaborar Ante-Projeto e Projeto Aprovado (terminal) têm e-mail próprio no
+    // backend (esteira/45d e finalização) — evita o e-mail genérico duplicado.
+    if (nextStatus !== "ELABORAR ANTE-PROJETO" && nextStatus !== "PROJETO APROVADO") {
       dispatchSellerEmail(project.id, {
         projectId: project.id,
         projectCode: project.codigo_projeto,
@@ -446,9 +446,9 @@ export function ProjectsPageShell() {
                 addObservation(projectId, message, "usuario.local");
                 touchLastUpdated();
 
-                // ELABORAR e PROJETO FINAL ENVIADO têm e-mail próprio no backend
-                // (esteira/45d e finalização com o código final). Evita duplicidade.
-                if (status !== "ELABORAR ANTE-PROJETO" && status !== "PROJETO FINAL ENVIADO") {
+                // ELABORAR e PROJETO APROVADO (terminal) têm e-mail próprio no
+                // backend (esteira/45d e finalização com o código final). Evita duplicidade.
+                if (status !== "ELABORAR ANTE-PROJETO" && status !== "PROJETO APROVADO") {
                   dispatchSellerEmail(projectId, {
                     projectId: current.id,
                     projectCode: current.codigo_projeto,

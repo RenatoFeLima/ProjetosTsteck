@@ -45,10 +45,12 @@ const ALLOWED_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
   "ELABORAR ANTE-PROJETO": ["ANTE-PROJETO ENVIADO"],
   "ANTE-PROJETO ENVIADO": ["ANTE-PROJETO APROVADO", "REVISAO DE ESTUDO"],
   "REVISAO DE ESTUDO": ["ANTE-PROJETO ENVIADO"],
-  "ANTE-PROJETO APROVADO": ["PROJETO APROVADO"],
-  "PROJETO APROVADO": ["PROJETO FINAL ENVIADO"],
-  "PROJETO FINAL ENVIADO": ["REVISAO DE PROJETO FINAL"],
+  // Fluxo final invertido: Projeto Final Enviado vem ANTES; Projeto Aprovado é o
+  // último status oficial (terminal).
+  "ANTE-PROJETO APROVADO": ["PROJETO FINAL ENVIADO"],
+  "PROJETO FINAL ENVIADO": ["PROJETO APROVADO", "REVISAO DE PROJETO FINAL"],
   "REVISAO DE PROJETO FINAL": ["PROJETO FINAL ENVIADO"],
+  "PROJETO APROVADO": [],
 };
 
 export type StatusTransitionValidation = {
@@ -254,8 +256,8 @@ export function statusOrder(status: ProjectStatus): number {
     "ELABORAR ANTE-PROJETO": 1,
     "ANTE-PROJETO ENVIADO": 2,
     "ANTE-PROJETO APROVADO": 3,
-    "PROJETO APROVADO": 4,
-    "PROJETO FINAL ENVIADO": 5,
+    "PROJETO FINAL ENVIADO": 4,
+    "PROJETO APROVADO": 5,
     "REVISAO DE ESTUDO": 6,
     "REVISAO DE PROJETO FINAL": 7,
   };
@@ -286,9 +288,9 @@ export function computeNextAction(project: Project): string {
   if (project.status_atual === "ELABORAR ANTE-PROJETO") return "Elaborar anteprojeto";
   if (project.status_atual === "ANTE-PROJETO ENVIADO") return "Aguardando aprovacao do cliente";
   if (project.status_atual === "REVISAO DE ESTUDO") return "Revisar estudo e reenviar anteprojeto";
-  if (project.status_atual === "ANTE-PROJETO APROVADO") return "Consolidar projeto aprovado";
-  if (project.status_atual === "PROJETO APROVADO") return "Preparar envio do projeto final";
-  if (project.status_atual === "PROJETO FINAL ENVIADO") return "Acompanhar validacao final";
+  if (project.status_atual === "ANTE-PROJETO APROVADO") return "Preparar e enviar o projeto final";
+  if (project.status_atual === "PROJETO FINAL ENVIADO") return "Validar e aprovar o projeto final";
+  if (project.status_atual === "PROJETO APROVADO") return "Projeto concluido";
   if (project.status_atual === "REVISAO DE PROJETO FINAL") return "Revisar projeto final e reenviar";
   return "Verificar pendencias";
 }

@@ -339,7 +339,7 @@ export async function changeStatus(
   // Código final: ao entrar em "Projeto Final Enviado" pode-se confirmar/atualizar
   // o código. Valida formato e duplicidade ANTES da transação.
   let finalCodeToApply: string | null = null;
-  if (to === "PROJETO_FINAL_ENVIADO" && opts.finalCode?.trim()) {
+  if (to === "PROJETO_APROVADO" && opts.finalCode?.trim()) {
     const code = opts.finalCode.trim();
     if (!hasValidFinalCode(code)) {
       throw new HttpError(400, "Código final inválido: deve terminar com 4 dígitos numéricos.");
@@ -430,9 +430,9 @@ export async function changeStatus(
 
   // E-mails de etapa ao vendedor (best-effort, awaitado): liberação para
   // anteprojeto e finalização — esta usa o CÓDIGO FINAL já atualizado (reloaded).
-  if (to === "ELABORAR_ANTE_PROJETO" || to === "PROJETO_FINAL_ENVIADO") {
+  if (to === "ELABORAR_ANTE_PROJETO" || to === "PROJETO_APROVADO") {
     const rel = relProject(reloaded);
-    const isFinal = to === "PROJETO_FINAL_ENVIADO";
+    const isFinal = to === "PROJETO_APROVADO";
     await dispatchProjectNotification({
       projectId: id,
       projectCode: reloaded.code,
@@ -598,7 +598,7 @@ export type NextCodeSuggestion = {
   maxSuffix: number;
   /** Próximo sufixo GLOBAL (compat). */
   nextSuffix: string;
-  /** Código do último/maior projeto que já chegou em PROJETO_FINAL_ENVIADO. */
+  /** Código do último/maior projeto que já chegou em PROJETO_APROVADO (terminal). */
   lastFinalCode: string | null;
   /** Código provisório do projeto sendo movimentado (informação secundária). */
   currentDraftCode: string | null;
@@ -607,7 +607,7 @@ export type NextCodeSuggestion = {
 };
 
 /** Sugestão do próximo código final. A referência principal é o ÚLTIMO projeto
- *  que já chegou em PROJETO_FINAL_ENVIADO (maior sufixo numérico entre os
+ *  que já chegou em PROJETO_APROVADO (maior sufixo numérico entre os
  *  finalizados): "De:" = esse código, "Para:" = prefixo + sufixo + 1. Se não
  *  existir finalizado anterior, usa o código provisório atual como fallback. */
 export async function nextCodeSuggestion(
@@ -620,16 +620,16 @@ export async function nextCodeSuggestion(
   const allRows = await prisma.project.findMany({ select: { code: true } });
   const globalMax = maxCodeSuffix(allRows.map((r) => r.code));
 
-  // Projetos que já chegaram em PROJETO_FINAL_ENVIADO (status atual OU histórico,
-  // pois um final pode voltar para revisão e retornar).
+  // Projetos que já chegaram em PROJETO_APROVADO (terminal) — status atual OU
+  // histórico (um aprovado pode voltar para revisão e retornar).
   const ids = new Set<string>();
   const [historyHits, currentFinal] = await Promise.all([
     prisma.projectStatusHistory.findMany({
-      where: { toStatus: "PROJETO_FINAL_ENVIADO" },
+      where: { toStatus: "PROJETO_APROVADO" },
       select: { projectId: true },
     }),
     prisma.project.findMany({
-      where: { status: "PROJETO_FINAL_ENVIADO" },
+      where: { status: "PROJETO_APROVADO" },
       select: { id: true },
     }),
   ]);

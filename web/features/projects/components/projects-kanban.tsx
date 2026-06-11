@@ -28,7 +28,7 @@ import { PrazoBadge, UrgenteBadge } from "./pill-badges";
 import { KanbanStatusChangeDialog } from "./kanban-status-change-dialog";
 import { FinalCodeDialog } from "./final-code-dialog";
 
-const FINAL_STATUS: ProjectStatus = "PROJETO FINAL ENVIADO";
+const FINAL_STATUS: ProjectStatus = "PROJETO APROVADO";
 
 /** Cadastro Inicial com documentação + local da cabine recebidos → pronto p/ alinhamento. */
 function isReadyForAlignment(project: Project): boolean {
@@ -44,8 +44,8 @@ const COLUMNS: ProjectStatus[] = [
   "ELABORAR ANTE-PROJETO",
   "ANTE-PROJETO ENVIADO",
   "ANTE-PROJETO APROVADO",
-  "PROJETO APROVADO",
   "PROJETO FINAL ENVIADO",
+  "PROJETO APROVADO",
   "REVISAO DE ESTUDO",
   "REVISAO DE PROJETO FINAL",
 ];
@@ -476,10 +476,14 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
 
   const byStatus = useMemo(
     () =>
-      COLUMNS.map((status) => ({
-        status,
-        projects: projects.filter((p) => p.status_atual === status),
-      })),
+      COLUMNS.map((status) => {
+        const list = projects.filter((p) => p.status_atual === status);
+        // Coluna terminal (Projeto Aprovado): do mais recente para o mais antigo.
+        if (status === FINAL_STATUS) {
+          list.sort((a, b) => (b.status_entered_at ?? "").localeCompare(a.status_entered_at ?? ""));
+        }
+        return { status, projects: list };
+      }),
     [projects],
   );
 
