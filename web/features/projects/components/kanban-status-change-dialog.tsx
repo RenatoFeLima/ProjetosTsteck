@@ -82,9 +82,6 @@ export function KanbanStatusChangeDialog({
   return createPortal(
     <div
       className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) handleCancel();
-      }}
     >
       <article
         role="dialog"

@@ -88,9 +88,7 @@ export function UrgencyJustificationDialog({
   if (!open || !project) return null;
 
   return (
-    <div className="fixed inset-0 z-[95] grid place-items-center bg-black/50 p-4" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) handleCancel();
-    }}>
+    <div className="fixed inset-0 z-[95] grid place-items-center bg-black/50 p-4">
       <article
         role="dialog"
         aria-modal="true"

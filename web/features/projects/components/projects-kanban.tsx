@@ -276,7 +276,6 @@ function BlockedMoveDialog({
   return createPortal(
     <div
       className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <article
         role="alertdialog"

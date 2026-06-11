@@ -59,10 +59,6 @@ export function UnsavedChangesDialog({
     <div
       className="fixed inset-0 z-[70] grid place-items-center p-4"
       style={{ background: "rgba(0,0,0,0.52)" }}
-      // clicking the overlay keeps the user in the form (no discard on outside click)
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onContinueEditing();
-      }}
     >
       <div
         role="dialog"

@@ -1530,7 +1530,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       </section>
 
       {selectedStatus && drilldownStats && (
-        <div className="fixed inset-0 z-[96] bg-black/45" onMouseDown={(event) => event.target === event.currentTarget && setSelectedStatus(null)}>
+        <div className="fixed inset-0 z-[96] bg-black/45">
           <aside className="ml-auto h-full w-full max-w-[680px] overflow-y-auto border-l border-line bg-white dark:bg-panel p-4 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
             <header className="mb-3 flex items-center gap-2 border-b border-zinc-200 dark:border-white/8 pb-2">
               <ListChecks size={16} className="text-zinc-600 dark:text-zinc-400" />

@@ -48,7 +48,6 @@ export function IdentificationModal({ open, onClose, onSave, current }: Props) {
   return (
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-zinc-900/60 p-4 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl">
         {/* Header */}

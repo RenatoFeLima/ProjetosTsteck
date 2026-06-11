@@ -134,7 +134,7 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="user-form-title">
       {/* Overlay */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
 
       {/* Dialog */}
       <div className="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel shadow-2xl">

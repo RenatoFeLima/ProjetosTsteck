@@ -42,9 +42,6 @@ export function ProjectStatusChangeDialog({
   return (
     <div
       className="fixed inset-0 z-[98] grid place-items-center bg-black/50 p-4"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onCancel();
-      }}
     >
       <article
         role="dialog"

@@ -88,9 +88,6 @@ export function FinalCodeDialog({ open, currentCode, ignoreId, isCodigoDuplicado
   return createPortal(
     <div
       className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onCancel();
-      }}
     >
       <article
         role="dialog"

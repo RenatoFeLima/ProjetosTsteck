@@ -63,7 +63,7 @@ export function ResetPasswordDialog({ open, onClose, user, onSaved }: ResetPassw
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="reset-pwd-title">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" />
       <div className="relative z-10 w-full max-w-sm rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-100 dark:border-white/8 px-6 py-4">

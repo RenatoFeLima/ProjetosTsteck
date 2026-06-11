@@ -417,9 +417,6 @@ export function ProjectDetailsDrawer({
   return (
     <div
       className="fixed inset-0 z-[92] bg-black/45"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) handleClose();
-      }}
     >
       <aside
         role="dialog"
