@@ -40,7 +40,9 @@ type Snapshot = {
 
 async function loadSnapshot(): Promise<Snapshot> {
   const [constructors, works, sellers, equipment, cabinTypes, engineers, projects] = await Promise.all([
-    prisma.constructor.findMany({ where: { active: true }, select: { id: true, name: true } }),
+    // Sem `select`: o model "Constructor" colide com a propriedade JS `constructor`
+    // e o overload tipado de `select` quebra. Buscamos a linha cheia e mapeamos.
+    prisma.constructor.findMany({ where: { active: true } }),
     prisma.work.findMany({ where: { active: true }, select: { id: true, name: true, constructorId: true } }),
     prisma.seller.findMany({ where: { active: true }, select: { id: true, name: true } }),
     prisma.equipment.findMany({ where: { active: true }, select: { id: true, code: true } }),
@@ -59,7 +61,7 @@ async function loadSnapshot(): Promise<Snapshot> {
     codes: new Set(),
     maxTempSuffix: 0,
   };
-  constructors.forEach((c) => snap.constructors.set(normalizeName(c.name), c));
+  constructors.forEach((c) => snap.constructors.set(normalizeName(c.name), { id: c.id, name: c.name }));
   works.forEach((w) => snap.works.set(`${w.constructorId}::${normalizeName(w.name)}`, w.id));
   sellers.forEach((s) => snap.sellers.set(normalizeName(s.name), s.id));
   equipment.forEach((e) => snap.equipment.set(normalizeCode(e.code), e.id));
