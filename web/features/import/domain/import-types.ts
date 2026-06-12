@@ -24,7 +24,7 @@ export type SkippedProject = {
   reason: string;
 };
 
-export type RefNotFound = { construtora: string; obra: string; valor: string; source: ImportSource };
+export type RefNotFound = { construtora: string; obra: string; valor: string; source: ImportSource; suggestion?: string };
 
 export type DateErrorItem = {
   source: ImportSource;

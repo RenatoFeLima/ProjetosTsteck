@@ -16,6 +16,7 @@ import { parseCsvToObjects } from "@/features/import/domain/csv";
 import {
   normalizeName,
   normalizeCode,
+  normalizeNameLoose,
   parseBoolPt,
   cleanEngineerName,
   parseDateBr,
@@ -74,6 +75,77 @@ async function loadSnapshot(): Promise<Snapshot> {
     if (m) snap.maxTempSuffix = Math.max(snap.maxTempSuffix, Number(m[1]));
   });
   return snap;
+}
+
+// ─── Matching fuzzy (match-only; não cria registros) ─────────────────────────
+
+/** Encontra construtora pelo nome exato (normalizado); se não, tenta:
+ *  1. loose (sem pontuação); 2. prefixo (CSV começa com nome cadastrado);
+ *  3. substring (nome cadastrado contido no CSV).
+ *  Retorna { id, name } ou null + sugestão textual quando possível. */
+function fuzzyConstructor(
+  raw: string,
+  snap: Snapshot,
+): { id: string; name: string } | null {
+  const norm = normalizeName(raw);
+  const exact = snap.constructors.get(norm);
+  if (exact) return exact;
+
+  const loose = normalizeNameLoose(raw);
+
+  // Busca em todos os registros (snap.constructors é normName -> entry)
+  let best: { id: string; name: string } | null = null;
+
+  for (const [key, entry] of snap.constructors) {
+    const keyLoose = normalizeNameLoose(entry.name);
+    // loose completo
+    if (loose === keyLoose) return entry;
+    // prefixo: "BENX - IZP CONEGO" começa com "benx"
+    if (!best && (loose.startsWith(keyLoose + " ") || loose.startsWith(keyLoose))) best = entry;
+    // substring: nome cadastrado contido na string do CSV
+    if (!best && loose.includes(keyLoose)) best = entry;
+  }
+  return best;
+}
+
+/** Encontra equipamento pelo código exato normalizado; se não, tenta strip total
+ *  de separadores (EK-15/30 -> EK1530 == EK1530). */
+function fuzzyEquipment(raw: string, snap: Snapshot): string | null {
+  const norm = normalizeCode(raw); // já remove - / espaço ponto
+  return snap.equipment.get(norm) ?? null;
+}
+
+/** Encontra vendedor por nome exato; se não, tenta prefixo sem pontuação
+ *  (ex.: "CARLOS R." -> testa cada cadastrado que começa com "CARLOS"). */
+function fuzzySeller(raw: string, snap: Snapshot): string | null {
+  const norm = normalizeName(raw);
+  const exact = snap.sellers.get(norm);
+  if (exact) return exact;
+
+  const loose = normalizeNameLoose(raw);
+  for (const [key, id] of snap.sellers) {
+    const keyLoose = normalizeNameLoose(
+      // key já é normalizeName; precisamos do nome original — reconstruímos a partir da chave
+      key,
+    );
+    if (loose === keyLoose) return id;
+    // prefixo: "carlos r." começa com "carlos"
+    if (loose.startsWith(keyLoose + " ") || loose.startsWith(keyLoose)) return id;
+    if (keyLoose.startsWith(loose)) return id;
+  }
+  return null;
+}
+
+/** Retorna sugestão de match textual para construtoras não encontradas. */
+function suggestConstructor(raw: string, snap: Snapshot): string | undefined {
+  const loose = normalizeNameLoose(raw);
+  for (const [, entry] of snap.constructors) {
+    const keyLoose = normalizeNameLoose(entry.name);
+    if (loose.startsWith(keyLoose) || keyLoose.startsWith(loose) || loose.includes(keyLoose) || keyLoose.includes(loose)) {
+      return entry.name;
+    }
+  }
+  return undefined;
 }
 
 // ─── Plano (o que será gravado) ──────────────────────────────────────────────
@@ -152,10 +224,10 @@ function analyze(files: ImportFiles, snap: Snapshot): { plan: Plan; report: Impo
     obraRaw: string,
     source: ImportSource,
   ): { constructorId: string; workId: string | null } | null => {
-    const cNorm = normalizeName(construtoraRaw);
-    const constructor = snap.constructors.get(cNorm);
+    const constructor = fuzzyConstructor(construtoraRaw, snap);
     if (!constructor) {
-      report.constructorsNotFound.push({ construtora: construtoraRaw.trim(), obra: obraRaw.trim(), valor: construtoraRaw.trim(), source });
+      const suggestion = suggestConstructor(construtoraRaw, snap);
+      report.constructorsNotFound.push({ construtora: construtoraRaw.trim(), obra: obraRaw.trim(), valor: construtoraRaw.trim(), source, ...(suggestion ? { suggestion } : {}) });
       return null;
     }
     const obra = obraRaw.trim();
@@ -178,8 +250,8 @@ function analyze(files: ImportFiles, snap: Snapshot): { plan: Plan; report: Impo
     return { constructorId: constructor.id, workId: id };
   };
 
-  const addRef = (arr: RefNotFound[], construtora: string, obra: string, valor: string, source: ImportSource) => {
-    arr.push({ construtora: construtora.trim(), obra: obra.trim(), valor: valor.trim(), source });
+  const addRef = (arr: RefNotFound[], construtora: string, obra: string, valor: string, source: ImportSource, suggestion?: string) => {
+    arr.push({ construtora: construtora.trim(), obra: obra.trim(), valor: valor.trim(), source, ...(suggestion ? { suggestion } : {}) });
   };
 
   // ── CADASTRO INICIAL ──
@@ -216,9 +288,9 @@ function analyze(files: ImportFiles, snap: Snapshot): { plan: Plan; report: Impo
       const vendedor = (r["VENDEDOR"] ?? "").trim();
       const equip = (r["EQUIP."] ?? "").trim();
       const cabine = (r["CABINE"] ?? "").trim();
-      const sellerId = vendedor ? snap.sellers.get(normalizeName(vendedor)) ?? null : null;
+      const sellerId = vendedor ? fuzzySeller(vendedor, snap) : null;
       if (vendedor && !sellerId) addRef(report.sellersNotFound, construtora, obra, vendedor, source);
-      const equipmentId = equip ? snap.equipment.get(normalizeCode(equip)) ?? null : null;
+      const equipmentId = equip ? fuzzyEquipment(equip, snap) : null;
       if (equip && !equipmentId) addRef(report.equipmentNotFound, construtora, obra, equip, source);
       const cabinTypeId = cabine ? snap.cabinTypes.get(normalizeName(cabine)) ?? null : null;
       if (cabine && !cabinTypeId) addRef(report.cabinTypesNotFound, construtora, obra, cabine, source);

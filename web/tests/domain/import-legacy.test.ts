@@ -39,7 +39,10 @@ describe("normalização", () => {
   });
 
   it("normaliza código de equipamento", () => {
-    expect(normalizeCode(" ek-15/26 ")).toBe("EK-15/26");
+    // separadores removidos para matching (EK-15/30 == EK1530 no banco)
+    expect(normalizeCode(" ek-15/26 ")).toBe("EK1526");
+    expect(normalizeCode("EK-15/30")).toBe("EK1530");
+    expect(normalizeCode("EK 15/30")).toBe("EK1530");
   });
 
   it("interpreta VERDADEIRO/FALSO", () => {
@@ -69,9 +72,17 @@ describe("datas dd/MM (assumir BR)", () => {
     expect(r).toEqual({ ok: true, date: null });
   });
 
-  it("formato US (mês > 12) vira erro", () => {
+  it("formato US (segundo campo > 12) é interpretado como MM/dd/yyyy", () => {
+    // 10/29/2025 -> mês=10, dia=29 (segundo campo 29 > 12 => americano)
     const r = parseDateBr("10/29/2025");
-    expect(r.ok).toBe(false);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.date?.toISOString().slice(0, 10)).toBe("2025-10-29");
+  });
+
+  it("5/29/2026 é interpretado como americano (maio/29)", () => {
+    const r = parseDateBr("5/29/2026");
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.date?.toISOString().slice(0, 10)).toBe("2026-05-29");
   });
 
   it("data impossível (31/02) vira erro", () => {
