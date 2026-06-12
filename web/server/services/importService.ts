@@ -250,15 +250,16 @@ function analyze(files: ImportFiles, snap: Snapshot): { plan: Plan; report: Impo
     });
 
     for (const r of cleanRows) {
-      const construtora = (r["CONSTRUTORA"] ?? "").trim();
-      if (!construtora) continue;
+      const construtoraRaw = (r["CONSTRUTORA"] ?? "").trim();
+      if (!construtoraRaw) continue;
       report.rowsRead.cadastroInicial += 1;
+      const construtora = canonicalConstructorName(construtoraRaw);
 
       // Suporta tanto "NOME DA OBRA" (novo) quanto "OBRA" (legado).
       const obraRaw = cleanWorkName((r["NOME DA OBRA"] ?? r["OBRA"] ?? "").trim(), construtora);
       const source: ImportSource = "CADASTRO_INICIAL";
 
-      const constructor = resolveConstructor(construtora);
+      const constructor = resolveConstructor(construtoraRaw);
       const workId = resolveWork(constructor, obraRaw);
 
       // Código: usa o do CSV; se vazio -> temp; se duplicado -> pula.
@@ -342,13 +343,15 @@ function analyze(files: ImportFiles, snap: Snapshot): { plan: Plan; report: Impo
     });
 
     for (const r of cleanRows) {
-      const construtora = (r["CONSTRUTORA"] ?? "").trim();
-      if (!construtora) continue;
+      const construtoraRaw = (r["CONSTRUTORA"] ?? "").trim();
+      if (!construtoraRaw) continue;
       report.rowsRead.anteProjeto += 1;
+      const construtora = canonicalConstructorName(construtoraRaw);
+
       const obraRaw = cleanWorkName((r["NOME DA OBRA"] ?? r["OBRA"] ?? "").trim(), construtora);
       const source: ImportSource = "ANTE_PROJETO";
 
-      const constructor = resolveConstructor(construtora);
+      const constructor = resolveConstructor(construtoraRaw);
       const workId = resolveWork(constructor, obraRaw);
 
       const st = mapAnteStatus(r["STATUS"] ?? "");
