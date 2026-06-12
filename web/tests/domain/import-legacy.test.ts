@@ -6,7 +6,9 @@ import {
   parseBoolPt,
   cleanEngineerName,
   parseDateBr,
+  cleanWorkName,
 } from "@/features/import/domain/import-normalize";
+import { canonicalConstructorName } from "@/features/import/domain/import-aliases";
 import { mapAnteStatus, cadastroInitialStatus } from "@/features/import/domain/legacy-mapping";
 
 describe("CSV parser", () => {
@@ -87,6 +89,53 @@ describe("datas dd/MM (assumir BR)", () => {
 
   it("data impossível (31/02) vira erro", () => {
     expect(parseDateBr("31/02/2025").ok).toBe(false);
+  });
+});
+
+describe("canonicalConstructorName (aliases)", () => {
+  it("BILD = DRC → BILD", () => {
+    expect(canonicalConstructorName("BILD = DRC")).toBe("BILD");
+    expect(canonicalConstructorName("BILD = SRC")).toBe("BILD");
+    expect(canonicalConstructorName("bild = drc")).toBe("BILD");
+  });
+
+  it("BILD sem variação → BILD", () => {
+    expect(canonicalConstructorName("BILD")).toBe("BILD");
+  });
+
+  it("BAHIA RENT e variações → BAHIA RENT AII EIRELI", () => {
+    expect(canonicalConstructorName("BAHIA RENT")).toBe("BAHIA RENT AII EIRELI");
+    expect(canonicalConstructorName("BAHIA RENT ALL")).toBe("BAHIA RENT AII EIRELI");
+    expect(canonicalConstructorName("BAHIA RENTAL")).toBe("BAHIA RENT AII EIRELI");
+    expect(canonicalConstructorName("BAHIA RENT AII EIRELI")).toBe("BAHIA RENT AII EIRELI");
+  });
+
+  it("construtora desconhecida → retorna original (trim)", () => {
+    expect(canonicalConstructorName("  OUTRA CONSTRUTORA  ")).toBe("OUTRA CONSTRUTORA");
+  });
+});
+
+describe("cleanWorkName (remove prefixo da construtora da obra)", () => {
+  it("BILD RESERVA ALVORADA - T2 → RESERVA ALVORADA T2", () => {
+    expect(cleanWorkName("BILD RESERVA ALVORADA - T2", "BILD")).toBe("RESERVA ALVORADA T2");
+    expect(cleanWorkName("BILD RESERVA ALVORADA - T1", "BILD")).toBe("RESERVA ALVORADA T1");
+    expect(cleanWorkName("BILD RESERVA ALVORADA - T3", "BILD")).toBe("RESERVA ALVORADA T3");
+  });
+
+  it("obra sem prefixo da construtora → retorna sem alteração", () => {
+    expect(cleanWorkName("RESERVA ALVORADA T2", "BILD")).toBe("RESERVA ALVORADA T2");
+  });
+
+  it("obra vazia → retorna vazio", () => {
+    expect(cleanWorkName("", "BILD")).toBe("");
+  });
+
+  it("obra igual à construtora → preserva original", () => {
+    expect(cleanWorkName("BILD", "BILD")).toBe("BILD");
+  });
+
+  it("normaliza espaços múltiplos", () => {
+    expect(cleanWorkName("BILD  RESERVA  ALVORADA", "BILD")).toBe("RESERVA ALVORADA");
   });
 });
 

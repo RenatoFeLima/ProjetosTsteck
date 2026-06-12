@@ -20,8 +20,10 @@ import {
   parseBoolPt,
   cleanEngineerName,
   parseDateBr,
+  cleanWorkName,
 } from "@/features/import/domain/import-normalize";
 import { mapAnteStatus, cadastroInitialStatus } from "@/features/import/domain/legacy-mapping";
+import { canonicalConstructorName } from "@/features/import/domain/import-aliases";
 import type { ImportReport, ImportSource, RefNotFound } from "@/features/import/domain/import-types";
 
 export type ImportFiles = { cadastroCsv?: string; anteCsv?: string };
@@ -180,7 +182,7 @@ function analyze(files: ImportFiles, snap: Snapshot): { plan: Plan; report: Impo
 
   /** Resolve (ou planeja criar) a construtora. Sempre retorna { id, name }. */
   const resolveConstructor = (construtoraRaw: string): { id: string; name: string } => {
-    const name = construtoraRaw.trim();
+    const name = canonicalConstructorName(construtoraRaw.trim());
     const norm = normalizeName(name);
 
     // Já existe no banco.
@@ -253,7 +255,7 @@ function analyze(files: ImportFiles, snap: Snapshot): { plan: Plan; report: Impo
       report.rowsRead.cadastroInicial += 1;
 
       // Suporta tanto "NOME DA OBRA" (novo) quanto "OBRA" (legado).
-      const obraRaw = (r["NOME DA OBRA"] ?? r["OBRA"] ?? "").trim();
+      const obraRaw = cleanWorkName((r["NOME DA OBRA"] ?? r["OBRA"] ?? "").trim(), construtora);
       const source: ImportSource = "CADASTRO_INICIAL";
 
       const constructor = resolveConstructor(construtora);
@@ -343,7 +345,7 @@ function analyze(files: ImportFiles, snap: Snapshot): { plan: Plan; report: Impo
       const construtora = (r["CONSTRUTORA"] ?? "").trim();
       if (!construtora) continue;
       report.rowsRead.anteProjeto += 1;
-      const obraRaw = (r["NOME DA OBRA"] ?? r["OBRA"] ?? "").trim();
+      const obraRaw = cleanWorkName((r["NOME DA OBRA"] ?? r["OBRA"] ?? "").trim(), construtora);
       const source: ImportSource = "ANTE_PROJETO";
 
       const constructor = resolveConstructor(construtora);

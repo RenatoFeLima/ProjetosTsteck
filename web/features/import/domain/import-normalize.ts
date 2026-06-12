@@ -85,4 +85,55 @@ export function parseDateBr(value: string | null | undefined): DateParse {
 /** @deprecated use parseDateBr — mantido para compatibilidade de testes. */
 export const parseDateStrict = parseDateBr;
 
+/**
+ * Remove o prefixo da construtora do início do nome da obra quando ele se repete.
+ * Ex.: construtora="BILD", obra="BILD RESERVA ALVORADA - T2" → "RESERVA ALVORADA T2"
+ * Regras:
+ *   1. Remove o prefixo (normalizado) da construtora do início da obra.
+ *   2. Remove separadores residuais (hífen, igual, espaços) logo após o prefixo.
+ *   3. Colapsa espaços múltiplos e faz trim.
+ * Se o nome da obra não começar com o nome da construtora, retorna sem alteração.
+ */
+export function cleanWorkName(obraRaw: string, construtoraName: string): string {
+  const obra = obraRaw.trim().replace(/\s+/g, " ");
+  if (!obra) return obra;
+
+  // Prefixo normalizado da construtora (sem acento, minúsculo).
+  const prefix = normalizeName(construtoraName);
+  const obraNorm = normalizeName(obra);
+
+  if (!obraNorm.startsWith(prefix)) return obra;
+
+  // Remove o prefixo (com mesmo comprimento em caracteres do original, pois
+  // normalizeName pode alterar comprimento via NFD/remoção de diacríticos).
+  // Estratégia: avançar caractere a caractere no original comparando com normalized.
+  // Mais simples e seguro: reconstruir a obra removendo o segmento inicial.
+  const prefixLen = prefix.length;
+  const obraNormRemainder = obraNorm.slice(prefixLen);
+
+  // Descobrir quantos chars do original cobrem o prefixo normalizado.
+  // Como normalizeName não altera comprimento de ASCII puro (caso mais comum),
+  // e o CSV é maiúsculo sem acento, usar mapeamento direto é seguro.
+  // Para robustez, contamos palavras do prefixo e removemos do original.
+  const prefixWords = prefix.split(" ").filter(Boolean).length;
+  const obraWords = obra.split(" ");
+  const remainder = obraWords.slice(prefixWords).join(" ");
+
+  // Valida que o que sobrou (normalizado) bate com o sufixo esperado.
+  if (normalizeName(remainder) !== obraNormRemainder.trim()) {
+    // fallback: retornar sem alteração para não corromper nomes inesperados
+    return obra;
+  }
+
+  // Remove separadores residuais no início do sufixo: "- T2" → "T2", "= T2" → "T2"
+  // e normaliza " - " interno (ex.: "RESERVA ALVORADA - T2" → "RESERVA ALVORADA T2").
+  const cleaned = remainder
+    .replace(/^[\s\-=]+/, "")
+    .replace(/\s+-\s+/g, " ")
+    .replace(/\s+=\s+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || obra; // se sobrou vazio (construtora == obra inteira), preserva original
+}
+
 export { onlyDigits };
