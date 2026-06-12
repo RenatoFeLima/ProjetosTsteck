@@ -148,6 +148,7 @@ function ReportView({ report }: { report: ImportReport }) {
         <Stat label="Construtoras a criar" value={report.constructorsToCreate.length} />
         <Stat label="Obras a criar" value={report.worksToCreate.length} />
         <Stat label="Obras já existentes" value={report.worksExistingMatched} />
+        <Stat label="Obras ignoradas (sem nome)" value={report.worksSkippedEmpty.length} danger={report.worksSkippedEmpty.length > 0} />
         <Stat label="Projetos a criar" value={report.projectsToCreate.length} />
         <Stat label="Códigos provisórios" value={report.tempCodesAssigned} />
         <Stat label="Projetos ignorados (duplicados)" value={report.projectsSkippedDuplicate.length} danger={report.projectsSkippedDuplicate.length > 0} />
@@ -160,6 +161,7 @@ function ReportView({ report }: { report: ImportReport }) {
       </div>
 
       <Detail title={`Construtoras a criar (${report.constructorsToCreate.length})`} rows={report.constructorsToCreate.map((c) => c.name).sort((a, b) => a.localeCompare(b, "pt-BR"))} />
+      <Detail title={`Obras ignoradas por nome vazio (${report.worksSkippedEmpty.length})`} rows={report.worksSkippedEmpty.map((w) => `${w.construtora}  [${w.source}]`)} />
       <Detail title={`Projetos ignorados por duplicidade (${report.projectsSkippedDuplicate.length})`} rows={report.projectsSkippedDuplicate.map((p) => `${p.code}  —  ${p.construtora} / ${p.obra}  (${p.reason})`)} />
       <Detail title={`Erros de data (${report.dateErrors.length})`} rows={report.dateErrors.map((d) => `${d.field}="${d.raw}"  —  ${d.construtora} / ${d.obra} [${d.source}]`)} />
       <Detail title={`Obras a criar (${report.worksToCreate.length})`} rows={report.worksToCreate.map((w) => `${w.construtora}  —  ${w.obra}`)} />

@@ -147,6 +147,12 @@ describe("mapeamento de status", () => {
 
   it("URGENTE! assume ELABORAR + urgente", () => {
     expect(mapAnteStatus("URGENTE!")).toMatchObject({ ok: true, status: "ELABORAR_ANTE_PROJETO", urgente: true, assumed: true });
+    expect(mapAnteStatus("URGENTE")).toMatchObject({ ok: true, status: "ELABORAR_ANTE_PROJETO", urgente: true, assumed: true });
+  });
+
+  it("URGENTE! + status real extrai o status e marca urgente sem assumed", () => {
+    expect(mapAnteStatus("URGENTE! PROJETO FINAL ENVIADO")).toMatchObject({ ok: true, status: "PROJETO_FINAL_ENVIADO", urgente: true, assumed: false });
+    expect(mapAnteStatus("URGENTE ANTE-PROJETO ENVIADO")).toMatchObject({ ok: true, status: "ANTE_PROJETO_ENVIADO", urgente: true, assumed: false });
   });
 
   it("status desconhecido falha", () => {

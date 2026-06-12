@@ -133,6 +133,7 @@ function emptyReport(): ImportReport {
     worksToCreate: [],
     worksExistingMatched: 0,
     worksDuplicateInFile: 0,
+    worksSkippedEmpty: [],
     projectsToCreate: [],
     projectsSkippedDuplicate: [],
     sellersNotFound: [],
@@ -347,12 +348,13 @@ function analyze(files: ImportFiles, snap: Snapshot): { plan: Plan; report: Impo
       if (!construtoraRaw) continue;
       report.rowsRead.anteProjeto += 1;
       const construtora = canonicalConstructorName(construtoraRaw);
-
-      const obraRaw = cleanWorkName((r["NOME DA OBRA"] ?? r["OBRA"] ?? "").trim(), construtora);
       const source: ImportSource = "ANTE_PROJETO";
 
-      const constructor = resolveConstructor(construtoraRaw);
-      const workId = resolveWork(constructor, obraRaw);
+      const obraRaw = cleanWorkName((r["NOME DA OBRA"] ?? r["OBRA"] ?? "").trim(), construtora);
+      if (!obraRaw) {
+        report.worksSkippedEmpty.push({ construtora, source });
+        continue;
+      }
 
       const st = mapAnteStatus(r["STATUS"] ?? "");
       if (!st.ok) {
@@ -361,16 +363,31 @@ function analyze(files: ImportFiles, snap: Snapshot): { plan: Plan; report: Impo
       }
       if (st.assumed) report.statusUrgentAssumed.push({ construtora, obra: obraRaw });
 
+      const constructor = resolveConstructor(construtoraRaw);
+      const workId = resolveWork(constructor, obraRaw);
+
       const engName = cleanEngineerName(r["ENGENHEIRO"] ?? "");
       const engineerId = engName ? snap.engineers.get(normalizeName(engName)) ?? null : null;
       if (engName && !engineerId) engineersInline.add(engName);
 
-      const dp = parseDateBr(r["DATA PREV"]);
+      // DATA PREV é a data de referência principal. Se ausente/inválida, tenta
+      // DATA APROV (para projetos aprovados) ou DATA ENVIO (para enviados).
+      // DATA PRAZO 30/45 DIAS não tem campo no banco: ignorada sem gerar erro.
       let createdAt = new Date();
-      if (!dp.ok) {
-        report.dateErrors.push({ source, field: "DATA PREV", raw: dp.raw, construtora, obra: obraRaw });
-      } else if (dp.date) {
+      const dp = parseDateBr(r["DATA PREV"]);
+      if (dp.ok && dp.date) {
         createdAt = dp.date;
+      } else {
+        if (!dp.ok) report.dateErrors.push({ source, field: "DATA PREV", raw: dp.raw, construtora, obra: obraRaw });
+        // Tenta DATA APROV ou DATA ENVIO como fallback.
+        const fallbackField =
+          st.status === "PROJETO_APROVADO" ? "DATA APROV" :
+          st.status === "ANTE_PROJETO_ENVIADO" || st.status === "PROJETO_FINAL_ENVIADO" ? "DATA ENVIO" :
+          null;
+        if (fallbackField) {
+          const df = parseDateBr(r[fallbackField]);
+          if (df.ok && df.date) createdAt = df.date;
+        }
       }
 
       const code = nextTempCode();

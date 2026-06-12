@@ -17,14 +17,26 @@ const ANTE_STATUS_MAP: Record<string, DbStatus> = {
   "projeto final enviado": "PROJETO_FINAL_ENVIADO",
 };
 
-/** Mapeia o STATUS do arquivo ANTE-PROJETO. "URGENTE!" não tem status original:
- *  assume ELABORAR_ANTE_PROJETO + urgente=true e marca `assumed` p/ revisão. */
+/** Mapeia o STATUS do arquivo ANTE-PROJETO.
+ *  "URGENTE!" sozinho → ELABORAR_ANTE_PROJETO + urgente=true (assumed=true).
+ *  "URGENTE! PROJETO FINAL ENVIADO" → status real extraído + urgente=true.
+ *  Status desconhecido → ok:false para listagem no dry-run. */
 export function mapAnteStatus(raw: string): AnteStatusResult {
   const key = normalizeName(raw);
+
+  // Match direto.
   if (key in ANTE_STATUS_MAP) return { ok: true, status: ANTE_STATUS_MAP[key], urgente: false, assumed: false };
-  if (key === "urgente!" || key === "urgente") {
+
+  // Contém "urgente" — verifica se há status real após remover o prefixo urgente.
+  if (key.startsWith("urgente!") || key.startsWith("urgente ") || key === "urgente!" || key === "urgente") {
+    const remainder = key.replace(/^urgente!?\s*/, "").trim();
+    if (remainder && remainder in ANTE_STATUS_MAP) {
+      return { ok: true, status: ANTE_STATUS_MAP[remainder], urgente: true, assumed: false };
+    }
+    // URGENTE! sozinho ou com texto desconhecido → assume ELABORAR_ANTE_PROJETO.
     return { ok: true, status: "ELABORAR_ANTE_PROJETO", urgente: true, assumed: true };
   }
+
   return { ok: false, raw };
 }
 

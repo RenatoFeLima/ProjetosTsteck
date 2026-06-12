@@ -43,6 +43,7 @@ export type ImportReport = {
   worksToCreate: WorkToCreate[];
   worksExistingMatched: number;
   worksDuplicateInFile: number;
+  worksSkippedEmpty: { construtora: string; source: ImportSource }[];
   projectsToCreate: ProjectToCreate[];
   projectsSkippedDuplicate: SkippedProject[];
   sellersNotFound: RefNotFound[];
