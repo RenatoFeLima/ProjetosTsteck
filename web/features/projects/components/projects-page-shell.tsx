@@ -20,6 +20,7 @@ import { computePrazoBadge, computePrazoEntrega, todayIsoDate } from "@/features
 import { countAlerts } from "@/features/projects/domain/project-alerts";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
 import { sendProjectNotification } from "@/features/projects/services/project-notification-service";
+import { useAuth } from "@/features/auth/hooks/use-auth";
 
 export function ProjectsPageShell() {
   const {
@@ -43,6 +44,11 @@ export function ProjectsPageShell() {
   } = useProjectsStore();
 
   const { vendedores } = useMasterDataStore();
+
+  // Autor das observações/ações = usuário autenticado da sessão (não placeholder).
+  const { session } = useAuth();
+  const currentUserName =
+    session?.user?.name?.trim() || session?.user?.username?.trim() || "Usuário do sistema";
 
   /** Retorna e-mail do vendedor pelo nome cadastrado. */
   function getVendorEmail(vendedorName: string): string | undefined {
@@ -204,7 +210,7 @@ export function ProjectsPageShell() {
       addObservation(
         project.id,
         `Mudanca de status via menu de acoes: ${oldStatus} -> ${nextStatus}. Observacao: ${observation.trim()}`,
-        "usuario.local",
+        currentUserName,
       );
     }
 
@@ -225,7 +231,7 @@ export function ProjectsPageShell() {
         oldStatus,
         newStatus: nextStatus,
         eventType: "STATUS_CHANGED",
-        changedBy: "usuario.local",
+        changedBy: currentUserName,
         changedAt: new Date().toISOString(),
         notes: observation?.trim() || undefined,
       });
@@ -246,8 +252,8 @@ export function ProjectsPageShell() {
     const when = new Date(payload.updatedAt).toLocaleString();
     addObservation(
       payload.projectId,
-      `Projeto marcado como urgente por ${payload.updatedBy} em ${when}. Justificativa: ${payload.urgencyReason}`,
-      payload.updatedBy,
+      `Projeto marcado como urgente por ${currentUserName} em ${when}. Justificativa: ${payload.urgencyReason}`,
+      currentUserName,
     );
 
     touchLastUpdated();
@@ -262,7 +268,7 @@ export function ProjectsPageShell() {
       sellerEmail: getVendorEmail(target.vendedor) ?? "",
       newStatus: target.status_atual,
       eventType: "MARKED_URGENT",
-      changedBy: payload.updatedBy,
+      changedBy: currentUserName,
       changedAt: payload.updatedAt,
       urgencyReason: payload.urgencyReason,
     });
@@ -272,7 +278,7 @@ export function ProjectsPageShell() {
     if (!project.urgente) return;
 
     toggleUrgente(project.id);
-    const by = "usuario.local";
+    const by = currentUserName;
     const when = new Date().toLocaleString();
     addObservation(project.id, `Urgencia removida por ${by} em ${when}.`, by);
 
@@ -443,7 +449,7 @@ export function ProjectsPageShell() {
                 const message = observation?.trim()
                   ? `Mudanca de status via Kanban: ${oldStatus} -> ${status}. Observacao: ${observation.trim()}`
                   : `Mudanca de status via Kanban: ${oldStatus} -> ${status}.`;
-                addObservation(projectId, message, "usuario.local");
+                addObservation(projectId, message, currentUserName);
                 touchLastUpdated();
 
                 // ELABORAR e PROJETO APROVADO (terminal) têm e-mail próprio no
@@ -459,7 +465,7 @@ export function ProjectsPageShell() {
                     oldStatus,
                     newStatus: status,
                     eventType: "STATUS_CHANGED",
-                    changedBy: "usuario.local",
+                    changedBy: currentUserName,
                     changedAt: new Date().toISOString(),
                     notes: observation?.trim() || undefined,
                   });
@@ -513,7 +519,7 @@ export function ProjectsPageShell() {
           onDelete={deleteProject}
           onMoveStatus={(id, status) => moveStatus(id, status, "formulario")}
           isCodigoDuplicado={isCodigoProjetoDuplicado}
-          onAddObservation={(id, text) => addObservation(id, text, "usuario.local")}
+          onAddObservation={(id, text) => addObservation(id, text, currentUserName)}
           notify={notify}
         />
 
@@ -528,7 +534,7 @@ export function ProjectsPageShell() {
             observations={observations}
             onClose={() => setDrawerContext(null)}
             onUpdate={updateProject}
-            onAddObservation={(id, text) => addObservation(id, text, "usuario.local")}
+            onAddObservation={(id, text) => addObservation(id, text, currentUserName)}
             isCodigoDuplicado={isCodigoProjetoDuplicado}
             notify={notify}
           />
