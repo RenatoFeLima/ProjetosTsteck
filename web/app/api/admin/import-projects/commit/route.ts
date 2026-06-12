@@ -7,20 +7,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// POST /api/admin/import-projects/commit  (multipart/form-data)
-// Campos: cadastroInicial (File), anteProjeto (File) — ao menos um.
+// POST /api/admin/import-projects/commit  (application/json)
+// Body: { cadastroCsv?: string; anteCsv?: string } — ao menos um.
 // Apenas ADMIN. Grava Obras e Projetos em lote. NÃO dispara e-mail/notificação.
 export async function POST(req: NextRequest) {
   try {
     const actor = await requireUser();
-    const form = await req.formData();
-    const cadastro = form.get("cadastroInicial");
-    const ante = form.get("anteProjeto");
-    const files = {
-      cadastroCsv: cadastro instanceof File ? await cadastro.text() : undefined,
-      anteCsv: ante instanceof File ? await ante.text() : undefined,
-    };
-    const report = await commitImport(actor, files);
+    const { cadastroCsv, anteCsv } = await req.json();
+    const report = await commitImport(actor, { cadastroCsv, anteCsv });
     return ok(report);
   } catch (e) {
     return fail(e);

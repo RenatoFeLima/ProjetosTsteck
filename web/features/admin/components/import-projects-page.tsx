@@ -18,18 +18,35 @@ export function ImportProjectsPage() {
   const busy = phase === "dry-running" || phase === "committing";
   const canSubmit = Boolean(cadastro || ante) && !busy;
 
-  function buildForm() {
-    const fd = new FormData();
-    if (cadastro) fd.append("cadastroInicial", cadastro);
-    if (ante) fd.append("anteProjeto", ante);
-    return fd;
+  // Limite de 4 MB por arquivo (margem segura abaixo do limite de 4,5 MB do Vercel).
+  const MAX_BYTES = 4 * 1024 * 1024;
+
+  async function buildBody(): Promise<{ cadastroCsv?: string; anteCsv?: string }> {
+    const readFile = (f: File): Promise<string> => {
+      if (f.size > MAX_BYTES) {
+        throw new Error(
+          `Arquivo "${f.name}" é grande demais (${(f.size / 1024 / 1024).toFixed(1)} MB). ` +
+          `Limite: 4 MB. Divida o CSV em partes menores e importe em etapas.`,
+        );
+      }
+      return f.text();
+    };
+    return {
+      ...(cadastro ? { cadastroCsv: await readFile(cadastro) } : {}),
+      ...(ante ? { anteCsv: await readFile(ante) } : {}),
+    };
   }
 
   async function run(url: string, next: Phase, running: Phase) {
     setError("");
     setPhase(running);
     try {
-      const res = await fetch(url, { method: "POST", body: buildForm() });
+      const body = await buildBody();
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message ?? data.error ?? "Falha na importação.");
       setReport(data as ImportReport);
