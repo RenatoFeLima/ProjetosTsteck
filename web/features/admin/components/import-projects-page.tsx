@@ -150,7 +150,7 @@ function ReportView({ report }: { report: ImportReport }) {
         <Stat label="Projetos a criar" value={report.projectsToCreate.length} />
         <Stat label="Códigos provisórios" value={report.tempCodesAssigned} />
         <Stat label="Projetos ignorados (duplicados)" value={report.projectsSkippedDuplicate.length} danger={report.projectsSkippedDuplicate.length > 0} />
-        <Stat label="Construtoras não encontradas" value={report.constructorsNotFound.length} danger={report.constructorsNotFound.length > 0} />
+        <Stat label="Construtoras não encontradas" value={new Set(report.constructorsNotFound.map((c) => c.valor.trim().toUpperCase())).size} danger={report.constructorsNotFound.length > 0} />
         <Stat label="Erros de data" value={report.dateErrors.length} danger={report.dateErrors.length > 0} />
         <Stat label="Vendedores não encontrados" value={report.sellersNotFound.length} />
         <Stat label="Equipamentos não encontrados" value={report.equipmentNotFound.length} />
@@ -159,7 +159,7 @@ function ReportView({ report }: { report: ImportReport }) {
         <Stat label="Status URGENTE! assumido" value={report.statusUrgentAssumed.length} />
       </div>
 
-      <Detail title={`Construtoras não encontradas (${report.constructorsNotFound.length})`} rows={report.constructorsNotFound.map((c) => `${c.valor}  —  obra: ${c.obra}`)} />
+      <ConstructorsNotFound items={report.constructorsNotFound} />
       <Detail title={`Projetos ignorados por duplicidade (${report.projectsSkippedDuplicate.length})`} rows={report.projectsSkippedDuplicate.map((p) => `${p.code}  —  ${p.construtora} / ${p.obra}  (${p.reason})`)} />
       <Detail title={`Erros de data (${report.dateErrors.length})`} rows={report.dateErrors.map((d) => `${d.field}="${d.raw}"  —  ${d.construtora} / ${d.obra} [${d.source}]`)} />
       <Detail title={`Obras a criar (${report.worksToCreate.length})`} rows={report.worksToCreate.map((w) => `${w.construtora}  —  ${w.obra}`)} />
@@ -168,6 +168,28 @@ function ReportView({ report }: { report: ImportReport }) {
       <Detail title={`Equipamentos não encontrados (${report.equipmentNotFound.length})`} rows={report.equipmentNotFound.map((e) => `${e.valor}  —  ${e.construtora} / ${e.obra}`)} />
       <Detail title={`Tipos de cabine não encontrados (${report.cabinTypesNotFound.length})`} rows={report.cabinTypesNotFound.map((c) => `${c.valor}  —  ${c.construtora} / ${c.obra}`)} />
       <Detail title={`Engenheiros gravados inline (${report.engineersInline.length})`} rows={report.engineersInline} />
+    </div>
+  );
+}
+
+function ConstructorsNotFound({ items }: { items: ImportReport["constructorsNotFound"] }) {
+  if (items.length === 0) return null;
+  const unique = [...new Map(items.map((c) => [c.valor.trim().toUpperCase(), c.valor.trim()])).values()]
+    .sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const detailRows = items.map((c) => `${c.valor}${c.suggestion ? `  →  possível match: ${c.suggestion}` : ""}  [${c.source}]`);
+  return (
+    <div className="space-y-2">
+      <details className="rounded-xl border border-[#9e0b0f]/30 bg-white dark:bg-panel-soft p-3" open>
+        <summary className="cursor-pointer text-sm font-semibold text-[#9e0b0f]">
+          Construtoras não encontradas ({unique.length} únicas, {items.length} linha{items.length !== 1 ? "s" : ""} ignorada{items.length !== 1 ? "s" : ""})
+        </summary>
+        <ul className="mt-2 max-h-72 space-y-0.5 overflow-auto font-mono text-xs text-zinc-600 dark:text-zinc-300">
+          {unique.map((name) => (
+            <li key={name}>{name}</li>
+          ))}
+        </ul>
+      </details>
+      <Detail title={`Linhas ignoradas por construtora não encontrada (${items.length})`} rows={detailRows} />
     </div>
   );
 }
