@@ -401,6 +401,7 @@ export async function changeStatus(
         ...(finalCodeToApply ? { code: finalCodeToApply } : {}),
         ...(to === REVIEW_STUDY ? { reviewStudyCount: { increment: 1 } } : {}),
         ...(to === REVIEW_FINAL ? { finalReviewCount: { increment: 1 } } : {}),
+        ...(to === "PROJETO_APROVADO" ? { priority: "NORMAL" } : {}),
       },
     });
   });

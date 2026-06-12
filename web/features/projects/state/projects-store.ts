@@ -524,6 +524,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
               finalReviewCount,
               finalReviewHistory: updatedFinalReviewHistory,
               updated_at: now,
+              ...(nextStatus === "PROJETO APROVADO" ? { urgente: false } : {}),
             }
           : project,
       ),
