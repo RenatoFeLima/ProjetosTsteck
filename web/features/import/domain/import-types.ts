@@ -3,6 +3,8 @@
 
 export type ImportSource = "CADASTRO_INICIAL" | "ANTE_PROJETO";
 
+export type ConstructorToCreate = { name: string };
+
 export type WorkToCreate = { construtora: string; obra: string };
 
 export type ProjectToCreate = {
@@ -37,12 +39,12 @@ export type DateErrorItem = {
 export type ImportReport = {
   dryRun: boolean;
   rowsRead: { cadastroInicial: number; anteProjeto: number };
+  constructorsToCreate: ConstructorToCreate[];
   worksToCreate: WorkToCreate[];
   worksExistingMatched: number;
   worksDuplicateInFile: number;
   projectsToCreate: ProjectToCreate[];
   projectsSkippedDuplicate: SkippedProject[];
-  constructorsNotFound: RefNotFound[];
   sellersNotFound: RefNotFound[];
   equipmentNotFound: RefNotFound[];
   cabinTypesNotFound: RefNotFound[];
@@ -50,5 +52,5 @@ export type ImportReport = {
   tempCodesAssigned: number;
   statusUrgentAssumed: { construtora: string; obra: string }[];
   dateErrors: DateErrorItem[];
-  committed?: { works: number; projects: number };
+  committed?: { constructors: number; works: number; projects: number };
 };
