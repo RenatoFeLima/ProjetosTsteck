@@ -13,8 +13,10 @@ const ANTE_STATUS_MAP: Record<string, DbStatus> = {
   "ante-projeto enviado": "ANTE_PROJETO_ENVIADO",
   "ante-projeto aprovado": "ANTE_PROJETO_APROVADO",
   "revisao de estudo": "REVISAO_DE_ESTUDO",
-  "projeto aprovado": "PROJETO_APROVADO",
-  "projeto final enviado": "PROJETO_FINAL_ENVIADO",
+  // No sistema novo PROJETO_APROVADO é o status terminal; PROJETO_FINAL_ENVIADO vem antes.
+  // O CSV legado usava a nomenclatura invertida — trocamos aqui na importação.
+  "projeto aprovado": "PROJETO_FINAL_ENVIADO",
+  "projeto final enviado": "PROJETO_APROVADO",
 };
 
 /** Mapeia o STATUS do arquivo ANTE-PROJETO.

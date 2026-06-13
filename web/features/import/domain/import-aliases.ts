@@ -35,6 +35,17 @@ const ALIAS_MAP = new Map<string, string>(
  * A comparação é feita com normalizeName para ignorar acento/caixa.
  */
 export function canonicalConstructorName(raw: string): string {
-  const norm = normalizeName(raw.trim());
-  return ALIAS_MAP.get(norm) ?? raw.trim();
+  const trimmed = raw.trim();
+  const norm = normalizeName(trimmed);
+
+  // Alias explícito tem prioridade.
+  const aliased = ALIAS_MAP.get(norm);
+  if (aliased) return aliased;
+
+  // Se o campo contém " - ", usar somente a parte antes do separador.
+  // Ex.: "BENX - BNC MADRI" → "BENX", "LOC STEEL - BRUSCA LOC" → "LOC STEEL".
+  const dashIdx = trimmed.indexOf(" - ");
+  if (dashIdx > 0) return trimmed.slice(0, dashIdx).trim();
+
+  return trimmed;
 }

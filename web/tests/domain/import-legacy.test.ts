@@ -113,6 +113,14 @@ describe("canonicalConstructorName (aliases)", () => {
   it("construtora desconhecida → retorna original (trim)", () => {
     expect(canonicalConstructorName("  OUTRA CONSTRUTORA  ")).toBe("OUTRA CONSTRUTORA");
   });
+
+  it("campo com ' - ' usa apenas a parte antes do separador", () => {
+    expect(canonicalConstructorName("BENX - BNC MADRI")).toBe("BENX");
+    expect(canonicalConstructorName("DANPRIS - TOP EMP. TD")).toBe("DANPRIS");
+    expect(canonicalConstructorName("EBM - HELBOR")).toBe("EBM");
+    expect(canonicalConstructorName("LOC STEEL - BRUSCA LOC")).toBe("LOC STEEL");
+    expect(canonicalConstructorName("MSB VALÊNCIA - SANCHES")).toBe("MSB VALÊNCIA");
+  });
 });
 
 describe("cleanWorkName (remove prefixo da construtora da obra)", () => {
@@ -140,8 +148,11 @@ describe("cleanWorkName (remove prefixo da construtora da obra)", () => {
 });
 
 describe("mapeamento de status", () => {
-  it("mapeia status do ante-projeto", () => {
-    expect(mapAnteStatus("PROJETO FINAL ENVIADO")).toMatchObject({ ok: true, status: "PROJETO_FINAL_ENVIADO" });
+  it("mapeia status do ante-projeto (regra nova: PROJETO FINAL ENVIADO → PROJETO_APROVADO)", () => {
+    // No CSV legado "PROJETO FINAL ENVIADO" equivale ao status terminal do sistema novo.
+    expect(mapAnteStatus("PROJETO FINAL ENVIADO")).toMatchObject({ ok: true, status: "PROJETO_APROVADO" });
+    // "PROJETO APROVADO" do CSV legado vira PROJETO_FINAL_ENVIADO no sistema novo.
+    expect(mapAnteStatus("PROJETO APROVADO")).toMatchObject({ ok: true, status: "PROJETO_FINAL_ENVIADO" });
     expect(mapAnteStatus("Revisão de Estudo")).toMatchObject({ ok: true, status: "REVISAO_DE_ESTUDO" });
   });
 
@@ -151,7 +162,7 @@ describe("mapeamento de status", () => {
   });
 
   it("URGENTE! + status real extrai o status e marca urgente sem assumed", () => {
-    expect(mapAnteStatus("URGENTE! PROJETO FINAL ENVIADO")).toMatchObject({ ok: true, status: "PROJETO_FINAL_ENVIADO", urgente: true, assumed: false });
+    expect(mapAnteStatus("URGENTE! PROJETO FINAL ENVIADO")).toMatchObject({ ok: true, status: "PROJETO_APROVADO", urgente: true, assumed: false });
     expect(mapAnteStatus("URGENTE ANTE-PROJETO ENVIADO")).toMatchObject({ ok: true, status: "ANTE_PROJETO_ENVIADO", urgente: true, assumed: false });
   });
 

@@ -350,7 +350,11 @@ function analyze(files: ImportFiles, snap: Snapshot): { plan: Plan; report: Impo
       const construtora = canonicalConstructorName(construtoraRaw);
       const source: ImportSource = "ANTE_PROJETO";
 
-      const obraRaw = cleanWorkName((r["NOME DA OBRA"] ?? r["OBRA"] ?? "").trim(), construtora);
+      // Se OBRA vazia mas construtora veio como "BENX - NOME DA OBRA", usa o sufixo como obra.
+      const obraFromCsv = (r["NOME DA OBRA"] ?? r["OBRA"] ?? "").trim();
+      const dashIdx = construtoraRaw.indexOf(" - ");
+      const obraFallback = (!obraFromCsv && dashIdx > 0) ? construtoraRaw.slice(dashIdx + 3).trim() : "";
+      const obraRaw = cleanWorkName(obraFromCsv || obraFallback, construtora);
       if (!obraRaw) {
         report.worksSkippedEmpty.push({ construtora, source });
         continue;
