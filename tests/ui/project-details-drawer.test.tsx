@@ -76,7 +76,7 @@ describe("project details drawer", () => {
         statusHistory={statusHistory}
         observations={observations}
         onClose={vi.fn()}
-        onUpdate={vi.fn(() => ({ ok: true }))}
+        onUpdate={vi.fn(() => Promise.resolve({ ok: true }))}
         isCodigoDuplicado={vi.fn(() => false)}
         onAddObservation={onAddObservation}
         notify={notify}

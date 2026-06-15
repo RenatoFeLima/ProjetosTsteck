@@ -15,6 +15,58 @@ import type {
   FinalReviewHistoryItem,
   StatusHistoryItem,
 } from "@/features/projects/domain/project-types";
+import {
+  apiAddObservation,
+  apiChangeStatus,
+  apiCreateProject,
+  apiGetAnalytics,
+  apiGetHistory,
+  apiListProjects,
+  apiSetUrgency,
+  apiUpdateProject,
+  type ReviewAggItem,
+} from "@/features/projects/lib/projects-api";
+
+// ─── Persistência em background + reconciliação de IDs otimistas ──────────────
+// Cada mutação otimista local dispara a chamada à API (MySQL é a fonte da verdade).
+// Projetos recém-criados recebem um id temporário (client-side). Enquanto não são
+// persistidos, ficam registrados aqui para que ações secundárias NÃO disparem
+// requests com id inexistente — o que geraria 404 "Projeto não encontrado".
+const pendingCreateIds = new Set<string>();
+const isPending = (id: string) => pendingCreateIds.has(id);
+
+// Canal para reportar erros de AÇÃO REAL do usuário à UI sem acoplar o store ao
+// React (a shell registra um handler que exibe um toast). Tentativas secundárias
+// não-críticas não passam por aqui — ficam apenas em debug, sem poluir o DevTools.
+let errorSink: ((message: string) => void) | null = null;
+export function setProjectsErrorSink(fn: ((message: string) => void) | null) {
+  errorSink = fn;
+}
+function reportUserError(message: string) {
+  errorSink?.(message);
+}
+
+// Logger controlado: ruído conhecido (tentativas secundárias) fica em debug e
+// some em produção; logs úteis ficam no backend/Vercel.
+function debugLog(...args: unknown[]) {
+  if (process.env.NODE_ENV !== "production") console.debug("[projects]", ...args);
+}
+
+function messageFrom(e: unknown, fallback: string): string {
+  const msg = e instanceof Error ? e.message.trim() : "";
+  return msg && msg !== "Erro na requisição." ? msg : fallback;
+}
+
+// Falha de uma AÇÃO REAL: reidrata do MySQL para reverter a alteração otimista
+// (ex.: rollback do card no Kanban quando /status falha) e informa o usuário.
+// Falha de NOTIFICAÇÃO não passa por aqui — é independente e nunca desfaz o status.
+function onPersistFailure(action: string, friendly: string) {
+  return (e: unknown) => {
+    debugLog(`falha ao persistir ${action}`, e);
+    reportUserError(messageFrom(e, friendly));
+    void useProjectsStore.getState().hydrate();
+  };
+}
 
 export type ProjectsView = "table" | "kanban" | "kpis" | "alerts";
 
@@ -39,6 +91,9 @@ type StoreState = {
   projects: Project[];
   observations: ProjectObservation[];
   statusHistory: StatusHistoryItem[];
+  /** Revisões agregadas (todos os projetos) — base dos SLAs de revisão nos KPIs. */
+  reviewStudyAgg: ReviewAggItem[];
+  finalReviewAgg: ReviewAggItem[];
   filters: Filters;
   activeView: ProjectsView;
   setActiveView: (view: ProjectsView) => void;
@@ -46,14 +101,20 @@ type StoreState = {
   filteredProjects: () => Project[];
   alertProjects: () => Project[];
   createProject: (input: ProjectInput) => { ok: boolean; error?: string; missing?: string[]; project?: Project };
-  updateProject: (id: string, patch: Partial<Project>) => { ok: boolean; error?: string };
+  updateProject: (id: string, patch: Partial<Project>) => Promise<{ ok: boolean; error?: string }>;
   deleteProject: (id: string) => void;
   toggleUrgente: (id: string) => void;
-  moveStatus: (id: string, nextStatus: ProjectStatus, origem: StatusHistoryItem["origem"], nota?: string) => { ok: boolean; error?: string };
+  moveStatus: (id: string, nextStatus: ProjectStatus, origem: StatusHistoryItem["origem"], nota?: string, finalCode?: string) => { ok: boolean; error?: string };
   addObservation: (projetoId: string, texto: string, usuario: string) => void;
   getProjectStatusHistory: (projectId: string) => StatusHistoryItem[];
   getProjectObservations: (projectId: string) => ProjectObservation[];
   isCodigoProjetoDuplicado: (codigo: string, ignoreId?: string) => boolean;
+  /** Recarrega os projetos a partir do MySQL (fonte da verdade). */
+  hydrate: () => Promise<void>;
+  /** Carrega histórico + observações reais de um projeto do MySQL (ao abrir o drawer). */
+  loadProjectDetail: (id: string) => Promise<void>;
+  /** Carrega dados agregados de TODOS os projetos (histórico + revisões) p/ KPIs. */
+  loadAnalytics: () => Promise<void>;
 };
 
 const nowDate = () => formatISO(new Date(), { representation: "date" });
@@ -85,6 +146,8 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
   projects: initialProjects,
   observations: [],
   statusHistory: buildInitialHistory(initialProjects),
+  reviewStudyAgg: [],
+  finalReviewAgg: [],
   activeView: "table",
   filters: {
     search: "",
@@ -241,10 +304,41 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       statusHistory: [...historyEntries, ...state.statusHistory],
     }));
 
+    // Persiste no MySQL e reconcilia o id temporário pelo id REAL devolvido pelo
+    // backend — em projetos, histórico e observações — para que nenhuma ação
+    // posterior use o id antigo. Sem refetch da lista inteira.
+    const tempId = next.id;
+    pendingCreateIds.add(tempId);
+    void apiCreateProject(input)
+      .then((real) => {
+        pendingCreateIds.delete(tempId);
+        set((state) => ({
+          projects: state.projects.map((p) => (p.id === tempId ? real : p)),
+          statusHistory: state.statusHistory.map((h) =>
+            h.projeto_id === tempId ? { ...h, projeto_id: real.id } : h,
+          ),
+          observations: state.observations.map((o) =>
+            o.projeto_id === tempId ? { ...o, projeto_id: real.id } : o,
+          ),
+        }));
+      })
+      .catch((e) => {
+        pendingCreateIds.delete(tempId);
+        // Criação real falhou (ex.: validação 400/409). Remove o registro otimista
+        // e informa o usuário — sem console.error genérico poluindo o DevTools.
+        set((state) => ({
+          projects: state.projects.filter((p) => p.id !== tempId),
+          statusHistory: state.statusHistory.filter((h) => h.projeto_id !== tempId),
+          observations: state.observations.filter((o) => o.projeto_id !== tempId),
+        }));
+        debugLog("falha ao criar projeto", e);
+        reportUserError(messageFrom(e, "Não foi possível salvar o projeto."));
+      });
+
     return { ok: true, project: next };
   },
 
-  updateProject: (id, patch) => {
+  updateProject: async (id, patch) => {
     const current = get().projects.find((project) => project.id === id);
     if (!current) return { ok: false, error: "Projeto nao encontrado." };
 
@@ -268,11 +362,11 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     const now = nowDate();
     const statusChanged = current.status_atual !== merged.status_atual;
 
-    // Atualiza status_entered_at quando o status muda
     if (statusChanged) {
       merged.status_entered_at = now;
     }
 
+    // Atualiza otimisticamente para feedback imediato na UI
     set((state) => ({
       projects: state.projects.map((project) =>
         project.id === id ? { ...merged, updated_at: now } : project,
@@ -292,7 +386,36 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
         : state.statusHistory,
     }));
 
-    return { ok: true };
+    // Projeto ainda não persistido: não há id real no banco para editar.
+    if (isPending(id)) {
+      debugLog("edição adiada: projeto ainda não persistido", id);
+      return { ok: true };
+    }
+
+    // Persiste no MySQL e aguarda a resposta real (o caller deve await isso).
+    try {
+      const applyUpdated = (real: Project) =>
+        set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) }));
+      const real = await apiUpdateProject(id, merged);
+      if (statusChanged) {
+        const statusReal = await apiChangeStatus(id, merged.status_atual, { source: "formulario" });
+        applyUpdated(statusReal);
+      } else {
+        applyUpdated(real);
+      }
+      return { ok: true };
+    } catch (e) {
+      // Reverte o optimistic update e informa o erro
+      set((state) => ({
+        projects: state.projects.map((p) => (p.id === id ? { ...current, updated_at: now } : p)),
+        statusHistory: statusChanged
+          ? state.statusHistory.filter((h) => !(h.projeto_id === id && h.alterado_em === now))
+          : state.statusHistory,
+      }));
+      const msg = messageFrom(e, "Não foi possível salvar as alterações do projeto.");
+      reportUserError(msg);
+      return { ok: false, error: msg };
+    }
   },
 
   deleteProject: (id) => {
@@ -304,14 +427,22 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
   },
 
   toggleUrgente: (id) => {
+    const willBeUrgent = !get().projects.find((p) => p.id === id)?.urgente;
     set((state) => ({
       projects: state.projects.map((project) =>
         project.id === id ? { ...project, urgente: !project.urgente, updated_at: nowDate() } : project,
       ),
     }));
+    if (isPending(id)) {
+      debugLog("urgência adiada: projeto ainda não persistido", id);
+      return;
+    }
+    void apiSetUrgency(id, willBeUrgent)
+      .then((real) => set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) })))
+      .catch(onPersistFailure("urgência", "Não foi possível atualizar a urgência do projeto."));
   },
 
-  moveStatus: (id, nextStatus, origem, nota) => {
+  moveStatus: (id, nextStatus, origem, nota, finalCode) => {
     const current = get().projects.find((project) => project.id === id);
     if (!current) return { ok: false, error: "Projeto nao encontrado." };
 
@@ -319,6 +450,9 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     if (!validation.allowed) {
       return { ok: false, error: validation.reason ?? "Transicao de status nao permitida." };
     }
+
+    // Código final (ao entrar em Projeto Final Enviado): atualiza otimisticamente.
+    const codeToApply = finalCode?.trim() ? finalCode.trim() : current.codigo_projeto;
 
     const now = nowDate();
 
@@ -391,6 +525,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
         project.id === id
           ? {
               ...project,
+              codigo_projeto: codeToApply,
               status_atual: nextStatus,
               status_entered_at: now,
               data_envio,
@@ -400,6 +535,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
               finalReviewCount,
               finalReviewHistory: updatedFinalReviewHistory,
               updated_at: now,
+              ...(nextStatus === "PROJETO APROVADO" ? { urgente: false } : {}),
             }
           : project,
       ),
@@ -416,6 +552,15 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
         ...state.statusHistory,
       ],
     }));
+
+    if (isPending(id)) {
+      // Projeto ainda não persistido — não dispara mudança de status com id antigo.
+      debugLog("mudança de status adiada: projeto ainda não persistido", id);
+      return { ok: true };
+    }
+    void apiChangeStatus(id, nextStatus, { source: origem, reason: nota, note: nota, finalCode: finalCode?.trim() || undefined })
+      .then((real) => set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) })))
+      .catch(onPersistFailure("mudança de status", "Não foi possível alterar o status do projeto."));
 
     return { ok: true };
   },
@@ -435,6 +580,13 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
         ...state.observations,
       ],
     }));
+    // Observação é secundária/não-crítica. Se o projeto ainda não foi persistido
+    // (id temporário), a chamada cairia em 404 — então fica só local/debug.
+    if (isPending(projetoId)) {
+      debugLog("observação não persistida: projeto ainda não criado no banco", projetoId);
+      return;
+    }
+    void apiAddObservation(projetoId, message).catch((e) => debugLog("falha ao persistir observação", e));
   },
 
   getProjectStatusHistory: (projectId) =>
@@ -446,4 +598,45 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     get()
       .observations.filter((item) => item.projeto_id === projectId)
       .sort((a, b) => (a.criado_em < b.criado_em ? 1 : -1)),
+
+  hydrate: async () => {
+    try {
+      const projects = await apiListProjects();
+      set({ projects });
+    } catch (e) {
+      debugLog("falha ao listar projetos", e);
+    }
+  },
+
+  // Busca o histórico/observações persistidos no MySQL e SUBSTITUI as entradas
+  // deste projeto no store (mantém as dos demais). Resolve o caso de projetos
+  // antigos cujo histórico/observações nunca foram carregados na sessão.
+  loadProjectDetail: async (id) => {
+    try {
+      const detail = await apiGetHistory(id);
+      set((state) => ({
+        statusHistory: [
+          ...detail.statusHistory,
+          ...state.statusHistory.filter((h) => h.projeto_id !== id),
+        ],
+        observations: [
+          ...detail.observations,
+          ...state.observations.filter((o) => o.projeto_id !== id),
+        ],
+      }));
+    } catch (e) {
+      debugLog("falha ao carregar detalhe do projeto", e);
+    }
+  },
+
+  // Carrega os dados agregados do MySQL (histórico de status completo + revisões)
+  // usados pela aba KPIs: tempo médio por status, SLA, gargalos e SLAs de revisão.
+  loadAnalytics: async () => {
+    try {
+      const { statusHistory, reviewStudy, finalReview } = await apiGetAnalytics();
+      set({ statusHistory, reviewStudyAgg: reviewStudy, finalReviewAgg: finalReview });
+    } catch (e) {
+      debugLog("falha ao carregar dados agregados dos KPIs", e);
+    }
+  },
 }));

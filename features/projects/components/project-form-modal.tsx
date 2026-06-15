@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
-import { todayIsoDate, validateRequiredFields } from "@/features/projects/domain/project-rules";
+import { todayIsoDate, toDateInputValue, validateRequiredFields } from "@/features/projects/domain/project-rules";
 import type { Project, ProjectStatus, StatusHistoryItem } from "@/features/projects/domain/project-types";
 import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { SearchableCombobox } from "./searchable-combobox";
@@ -17,8 +17,8 @@ const STATUS_OPTIONS: ProjectStatus[] = [
   "ELABORAR ANTE-PROJETO",
   "ANTE-PROJETO ENVIADO",
   "ANTE-PROJETO APROVADO",
-  "PROJETO APROVADO",
   "PROJETO FINAL ENVIADO",
+  "PROJETO APROVADO",
   "REVISAO DE ESTUDO",
 ];
 
@@ -40,7 +40,7 @@ type ProjectFormModalProps = {
   observations: Array<{ id: string; usuario: string; texto: string; criado_em: string }>;
   onClose: () => void;
   onCreate: (input: Partial<Project>) => { ok: boolean; error?: string; missing?: string[] };
-  onUpdate: (id: string, patch: Partial<Project>) => { ok: boolean; error?: string };
+  onUpdate: (id: string, patch: Partial<Project>) => Promise<{ ok: boolean; error?: string }>;
   onDelete: (id: string) => void;
   onMoveStatus: (id: string, nextStatus: ProjectStatus) => { ok: boolean; error?: string };
   isCodigoDuplicado: (codigo: string, ignoreId?: string) => boolean;
@@ -129,6 +129,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
   const [confirmAlignmentOpen, setConfirmAlignmentOpen] = useState(false);
   const [confirmCreateOpen, setConfirmCreateOpen] = useState(false);
   const [isSavingCreate, setIsSavingCreate] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [missingRequiredOpen, setMissingRequiredOpen] = useState(false);
   const [missingRequiredLabels, setMissingRequiredLabels] = useState<string[]>([]);
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
@@ -165,13 +166,15 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
     return props.isCodigoDuplicado(code, props.project?.id);
   }, [form.codigo_projeto, props]);
 
-  const obraOptions = useMemo(() => {
-    if (form.construtora) {
-      const obrasByConstrutora = masterData.getActiveObraNames(form.construtora);
-      if (obrasByConstrutora.length > 0) return obrasByConstrutora;
-    }
-    return masterData.getActiveObraNames();
-  }, [masterData, form.construtora]);
+  // SOMENTE obras vinculadas à construtora selecionada. O backend exige obra
+  // existente e vinculada — listar obras de outras construtoras geraria 400.
+  const obraOptions = useMemo(
+    () => (form.construtora ? masterData.getActiveObraNames(form.construtora) : []),
+    [masterData, form.construtora],
+  );
+
+  // Construtora selecionada não tem nenhuma obra ativa cadastrada.
+  const construtoraSemObras = Boolean(form.construtora) && obraOptions.length === 0;
 
   const construtoraOptions = useMemo(() => {
     const all = masterData.getActiveContrutoraNames();
@@ -181,10 +184,12 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
     return Array.from(new Set(all)).map((value) => ({ value }));
   }, [masterData, form.construtora]);
 
-  const obraComboboxOptions = useMemo(
-    () => Array.from(new Set(obraOptions)).map((value) => ({ value })),
-    [obraOptions],
-  );
+  const obraComboboxOptions = useMemo(() => {
+    const list = [...obraOptions];
+    // Em edição, mantém a obra já salva visível mesmo se ficou inativa.
+    if (props.mode === "edit" && form.obra && !list.includes(form.obra)) list.unshift(form.obra);
+    return Array.from(new Set(list)).map((value) => ({ value }));
+  }, [obraOptions, form.obra, props.mode]);
 
   const vendedorComboboxOptions = useMemo(() => {
     const list = masterData.getActiveVendedorNames();
@@ -245,6 +250,9 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
       codigo_projeto: formatProjectCode(form.codigo_projeto ?? ""),
       engenheiro_nome: normalizeEngineerName(form.engenheiro_nome ?? ""),
       engenheiro_celular: stripPhone(form.engenheiro_celular ?? ""),
+      // Datas sempre em yyyy-MM-dd (o backend converte para Date); nunca ISO.
+      data_lancamento: toDateInputValue(form.data_lancamento),
+      data_alinhamento: toDateInputValue(form.data_alinhamento) || null,
     };
 
     if (props.mode === "create") {
@@ -258,6 +266,14 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
   }
 
   function validateBeforeSave(normalized: Partial<Project>): boolean {
+    // Construtora sem nenhuma obra cadastrada: bloqueia com mensagem acionável
+    // (o backend exige obra existente e vinculada → evita o 400 no servidor).
+    if (normalized.construtora && masterData.getActiveObraNames(normalized.construtora).length === 0) {
+      setObraError("Nenhuma obra cadastrada para esta construtora.");
+      props.notify("Cadastre uma obra para esta construtora antes de criar o projeto.");
+      return false;
+    }
+
     const missing = validateRequiredFields(normalized as Project);
     if (missing.length > 0) {
       const labels = missing.map((key) => REQUIRED_FIELD_LABELS[key] ?? key);
@@ -275,8 +291,19 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
       return false;
     }
 
+    // Obra precisa pertencer à construtora selecionada (vínculo Work→Constructor).
+    if (
+      normalized.obra &&
+      normalized.construtora &&
+      !masterData.getActiveObraNames(normalized.construtora).includes(normalized.obra)
+    ) {
+      setObraError("A obra selecionada não pertence a esta construtora.");
+      props.notify("A obra selecionada não pertence à construtora escolhida. Escolha uma obra válida.");
+      return false;
+    }
+
     if (duplicated) {
-      props.notify("Codigo de projeto duplicado.");
+      props.notify("Já existe um projeto com este código.");
       return false;
     }
 
@@ -309,8 +336,9 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
     props.onClose();
   }
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
+    if (isSavingEdit) return;
 
     const normalized = buildNormalizedFormPayload();
     if (!validateBeforeSave(normalized)) return;
@@ -321,13 +349,18 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
     }
 
     if (!props.project) return;
-    const result = props.onUpdate(props.project.id, normalized);
-    if (!result.ok) {
-      props.notify(result.error ?? "Falha ao atualizar projeto");
-      return;
+    setIsSavingEdit(true);
+    try {
+      const result = await props.onUpdate(props.project.id, normalized);
+      if (!result.ok) {
+        props.notify(result.error ?? "Falha ao atualizar projeto");
+        return;
+      }
+      props.notify("Projeto atualizado com sucesso");
+      props.onClose();
+    } finally {
+      setIsSavingEdit(false);
     }
-    props.notify("Projeto atualizado com sucesso");
-    props.onClose();
   }
 
   function requestDelete() {
@@ -338,7 +371,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
     props.onClose();
   }
 
-  function confirmAlignment() {
+  async function confirmAlignment() {
     if (!prerequisitesReady) return;
     setConfirmAlignmentOpen(false);
     const nextPatch: Partial<Project> = {
@@ -348,22 +381,27 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
     };
 
     if (props.mode === "edit" && props.project) {
-      const result = props.onUpdate(props.project.id, {
-        ...form,
-        ...nextPatch,
-        codigo_projeto: formatProjectCode(form.codigo_projeto ?? ""),
-        engenheiro_nome: normalizeEngineerName(form.engenheiro_nome ?? ""),
-        engenheiro_celular: stripPhone(form.engenheiro_celular ?? ""),
-      });
+      setIsSavingEdit(true);
+      try {
+        const result = await props.onUpdate(props.project.id, {
+          ...form,
+          ...nextPatch,
+          codigo_projeto: formatProjectCode(form.codigo_projeto ?? ""),
+          engenheiro_nome: normalizeEngineerName(form.engenheiro_nome ?? ""),
+          engenheiro_celular: stripPhone(form.engenheiro_celular ?? ""),
+        });
 
-      if (!result.ok) {
-        props.notify(result.error ?? "Falha ao liberar projeto");
-        return;
+        if (!result.ok) {
+          props.notify(result.error ?? "Falha ao liberar projeto");
+          return;
+        }
+
+        setForm((prev) => ({ ...prev, ...nextPatch }));
+        setDirty(false);
+        props.notify("Projeto liberado para elaboracao de ante-projeto.");
+      } finally {
+        setIsSavingEdit(false);
       }
-
-      setForm((prev) => ({ ...prev, ...nextPatch }));
-      setDirty(false);
-      props.notify("Projeto liberado para elaboracao de ante-projeto.");
       return;
     }
 
@@ -438,12 +476,19 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                     value={form.obra ?? ""}
                     options={obraComboboxOptions}
                     onChange={(value) => patch({ obra: value })}
-                    placeholder="Selecione a obra"
+                    placeholder={form.construtora ? "Selecione a obra" : "Selecione a construtora primeiro"}
                     searchPlaceholder="Buscar obra..."
-                    emptyMessage="Nenhuma obra encontrada."
+                    emptyMessage="Nenhuma obra vinculada a esta construtora."
                     ariaLabel="Selecionar obra"
                     error={obraError}
+                    disabled={!form.construtora}
                   />
+                  {construtoraSemObras && (
+                    <p className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                      <AlertCircle size={11} />
+                      Cadastre uma obra para esta construtora antes de criar o projeto.
+                    </p>
+                  )}
                 </FormField>
 
                 <FormField label="Código do Projeto" required error={duplicated ? "Código de projeto já existe." : ""}>
@@ -483,7 +528,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                   <input
                     type="date"
                     className={modalInputCls()}
-                    value={form.data_lancamento ?? ""}
+                    value={toDateInputValue(form.data_lancamento)}
                     onChange={(e) => patch({ data_lancamento: e.target.value })}
                   />
                 </FormField>
@@ -573,7 +618,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                     </p>
                   )}
                   <FormField label="Data do Alinhamento">
-                    <input type="date" className={modalInputCls()} value={form.data_alinhamento ?? ""} onChange={(e) => patch({ data_alinhamento: e.target.value || null })} />
+                    <input type="date" className={modalInputCls()} value={toDateInputValue(form.data_alinhamento)} onChange={(e) => patch({ data_alinhamento: e.target.value || null })} />
                   </FormField>
                 </div>
               </SectionCard>
@@ -663,8 +708,13 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
             {props.mode === "edit" && (
               <button type="button" className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700" onClick={requestDelete}>Excluir projeto</button>
             )}
-            <button form="project-form" type="submit" className="rounded-xl bg-[#9e0b0f] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#7f090c]">
-              {props.mode === "create" ? "Salvar projeto" : "Salvar alterações"}
+            <button
+              form="project-form"
+              type="submit"
+              disabled={isSavingEdit || isSavingCreate}
+              className="rounded-xl bg-[#9e0b0f] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#7f090c] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSavingEdit ? "Salvando..." : props.mode === "create" ? "Salvar projeto" : "Salvar alterações"}
             </button>
           </div>
         </footer>
