@@ -336,8 +336,8 @@ export async function changeStatus(
     throw new HttpError(400, "Informe o motivo da revisão.");
   }
 
-  // Código final: ao entrar em "Projeto Final Enviado" pode-se confirmar/atualizar
-  // o código. Valida formato e duplicidade ANTES da transação.
+  // Código final: ao entrar em "Projeto Aprovado" (status terminal) pode-se
+  // confirmar/atualizar o código. Valida formato e duplicidade ANTES da transação.
   let finalCodeToApply: string | null = null;
   if (to === "PROJETO_APROVADO" && opts.finalCode?.trim()) {
     const code = opts.finalCode.trim();

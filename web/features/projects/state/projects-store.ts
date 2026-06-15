@@ -451,7 +451,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       return { ok: false, error: validation.reason ?? "Transicao de status nao permitida." };
     }
 
-    // Código final (ao entrar em Projeto Final Enviado): atualiza otimisticamente.
+    // Código final (ao entrar em Projeto Aprovado, status terminal): atualiza otimisticamente.
     const codeToApply = finalCode?.trim() ? finalCode.trim() : current.codigo_projeto;
 
     const now = nowDate();
