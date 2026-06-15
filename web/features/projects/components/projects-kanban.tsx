@@ -59,6 +59,8 @@ const OVERSCAN = 5;
 type PendingMove = {
   projectId: string;
   projectCode: string;
+  construtora?: string;
+  obra?: string;
   fromStatus: ProjectStatus;
   nextStatus: ProjectStatus;
 };
@@ -540,6 +542,8 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
     setPendingMove({
       projectId,
       projectCode: current.codigo_projeto,
+      construtora: current.construtora,
+      obra: current.obra,
       fromStatus: current.status_atual,
       nextStatus: targetStatus,
     });
@@ -653,6 +657,8 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
       <KanbanStatusChangeDialog
         open={Boolean(pendingMove)}
         projectCode={pendingMove?.projectCode}
+        construtora={pendingMove?.construtora}
+        obra={pendingMove?.obra}
         fromStatus={pendingMove?.fromStatus}
         toStatus={pendingMove?.nextStatus}
         onCancel={handleCancel}

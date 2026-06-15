@@ -101,7 +101,7 @@ type StoreState = {
   filteredProjects: () => Project[];
   alertProjects: () => Project[];
   createProject: (input: ProjectInput) => { ok: boolean; error?: string; missing?: string[]; project?: Project };
-  updateProject: (id: string, patch: Partial<Project>) => { ok: boolean; error?: string };
+  updateProject: (id: string, patch: Partial<Project>) => Promise<{ ok: boolean; error?: string }>;
   deleteProject: (id: string) => void;
   toggleUrgente: (id: string) => void;
   moveStatus: (id: string, nextStatus: ProjectStatus, origem: StatusHistoryItem["origem"], nota?: string, finalCode?: string) => { ok: boolean; error?: string };
@@ -338,7 +338,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     return { ok: true, project: next };
   },
 
-  updateProject: (id, patch) => {
+  updateProject: async (id, patch) => {
     const current = get().projects.find((project) => project.id === id);
     if (!current) return { ok: false, error: "Projeto nao encontrado." };
 
@@ -362,11 +362,11 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     const now = nowDate();
     const statusChanged = current.status_atual !== merged.status_atual;
 
-    // Atualiza status_entered_at quando o status muda
     if (statusChanged) {
       merged.status_entered_at = now;
     }
 
+    // Atualiza otimisticamente para feedback imediato na UI
     set((state) => ({
       projects: state.projects.map((project) =>
         project.id === id ? { ...merged, updated_at: now } : project,
@@ -386,25 +386,36 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
         : state.statusHistory,
     }));
 
-    // Projeto ainda não persistido: não há id real no banco para editar. A criação
-    // em andamento já gravará o estado; evita PATCH 404 com id temporário.
+    // Projeto ainda não persistido: não há id real no banco para editar.
     if (isPending(id)) {
       debugLog("edição adiada: projeto ainda não persistido", id);
       return { ok: true };
     }
 
-    // Persiste no MySQL e funde só este projeto (sem refetch da lista).
-    const applyUpdated = (real: Project) =>
-      set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) }));
-    void apiUpdateProject(id, merged)
-      .then((real) =>
-        statusChanged
-          ? apiChangeStatus(id, merged.status_atual, { source: "formulario" }).then(applyUpdated)
-          : applyUpdated(real),
-      )
-      .catch(onPersistFailure("edição de projeto", "Não foi possível salvar as alterações do projeto."));
-
-    return { ok: true };
+    // Persiste no MySQL e aguarda a resposta real (o caller deve await isso).
+    try {
+      const applyUpdated = (real: Project) =>
+        set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) }));
+      const real = await apiUpdateProject(id, merged);
+      if (statusChanged) {
+        const statusReal = await apiChangeStatus(id, merged.status_atual, { source: "formulario" });
+        applyUpdated(statusReal);
+      } else {
+        applyUpdated(real);
+      }
+      return { ok: true };
+    } catch (e) {
+      // Reverte o optimistic update e informa o erro
+      set((state) => ({
+        projects: state.projects.map((p) => (p.id === id ? { ...current, updated_at: now } : p)),
+        statusHistory: statusChanged
+          ? state.statusHistory.filter((h) => !(h.projeto_id === id && h.alterado_em === now))
+          : state.statusHistory,
+      }));
+      const msg = messageFrom(e, "Não foi possível salvar as alterações do projeto.");
+      reportUserError(msg);
+      return { ok: false, error: msg };
+    }
   },
 
   deleteProject: (id) => {

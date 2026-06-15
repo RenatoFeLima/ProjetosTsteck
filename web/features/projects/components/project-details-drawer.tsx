@@ -2,13 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, Check, Clock3, FileText, MessageSquare, PencilLine, X } from "lucide-react";
-import {
-  PRESET_CONSTRUTORAS,
-  PRESET_EQUIPAMENTOS,
-  PRESET_OBRAS,
-  PRESET_OBRAS_BY_CONSTRUTORA,
-  PRESET_VENDEDORES,
-} from "@/features/projects/domain/project-directory";
+import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import {
   computeNextAction,
   computeOperationalKpis,
@@ -33,7 +27,7 @@ type ProjectDetailsDrawerProps = {
   statusHistory: StatusHistoryItem[];
   observations: ProjectObservation[];
   onClose: () => void;
-  onUpdate: (id: string, patch: Partial<Project>) => { ok: boolean; error?: string };
+  onUpdate: (id: string, patch: Partial<Project>) => Promise<{ ok: boolean; error?: string }>;
   onAddObservation: (projectId: string, text: string) => void;
   isCodigoDuplicado: (codigo: string, ignoreId?: string) => boolean;
   notify: (message: string) => void;
@@ -233,35 +227,42 @@ export function ProjectDetailsDrawer({
     [project, statusHistory],
   );
 
+  const masterData = useMasterDataStore();
+
   const construtoraOptions = useMemo(() => {
-    const all = [...PRESET_CONSTRUTORAS];
+    const all = masterData.getActiveContrutoraNames();
     if (editForm.construtora && !all.includes(editForm.construtora)) all.unshift(editForm.construtora);
     return Array.from(new Set(all)).map((value) => ({ value }));
-  }, [editForm.construtora]);
+  }, [masterData, editForm.construtora]);
 
-  const obraOptions = useMemo(() => {
-    if (editForm.construtora && PRESET_OBRAS_BY_CONSTRUTORA[editForm.construtora]) {
-      return PRESET_OBRAS_BY_CONSTRUTORA[editForm.construtora];
-    }
-    return PRESET_OBRAS;
-  }, [editForm.construtora]);
-
-  const obraComboboxOptions = useMemo(
-    () => Array.from(new Set(obraOptions)).map((value) => ({ value })),
-    [obraOptions],
+  const rawObraOptions = useMemo(
+    () => (editForm.construtora ? masterData.getActiveObraNames(editForm.construtora) : []),
+    [masterData, editForm.construtora],
   );
 
+  const obraComboboxOptions = useMemo(() => {
+    const list = [...rawObraOptions];
+    if (editForm.obra && !list.includes(editForm.obra)) list.unshift(editForm.obra);
+    return Array.from(new Set(list)).map((value) => ({ value }));
+  }, [rawObraOptions, editForm.obra]);
+
   const vendedorOptions = useMemo(() => {
-    const list = [...PRESET_VENDEDORES];
+    const list = masterData.getActiveVendedorNames();
     if (editForm.vendedor && !list.includes(editForm.vendedor)) list.unshift(editForm.vendedor);
     return Array.from(new Set(list)).map((value) => ({ value }));
-  }, [editForm.vendedor]);
+  }, [masterData, editForm.vendedor]);
 
   const equipamentoOptions = useMemo(() => {
-    const list = [...PRESET_EQUIPAMENTOS];
+    const list = masterData.getActiveEquipamentoCodes();
     if (editForm.equipamento && !list.includes(editForm.equipamento)) list.unshift(editForm.equipamento);
     return Array.from(new Set(list)).map((value) => ({ value }));
-  }, [editForm.equipamento]);
+  }, [masterData, editForm.equipamento]);
+
+  const tipoCabineOptions = useMemo(() => {
+    const list = masterData.getActiveTipoCabineNames();
+    if (editForm.tipo_cabine && !list.includes(editForm.tipo_cabine)) list.unshift(editForm.tipo_cabine);
+    return Array.from(new Set(list)).map((value) => ({ value }));
+  }, [masterData, editForm.tipo_cabine]);
 
   const duplicatedCode = useMemo(() => {
     const code = formatProjectCode(editForm.codigo_projeto ?? "");
@@ -382,23 +383,23 @@ export function ProjectDetailsDrawer({
     setConfirmSaveOpen(true);
   }
 
-  const confirmSave = () => {
+  const confirmSave = async () => {
     if (isSaving) return;
     const payload = buildNormalizedPayload();
     setIsSaving(true);
-    const result = onUpdate(project.id, payload);
-    setIsSaving(false);
-
-    if (!result.ok) {
-      notify(result.error ?? "Falha ao atualizar projeto.");
+    try {
+      const result = await onUpdate(project.id, payload);
+      if (!result.ok) {
+        notify(result.error ?? "Falha ao atualizar projeto.");
+        return;
+      }
       setConfirmSaveOpen(false);
-      return;
+      setEditDirty(false);
+      setMode("view");
+      notify("Projeto atualizado com sucesso.");
+    } finally {
+      setIsSaving(false);
     }
-
-    setConfirmSaveOpen(false);
-    setEditDirty(false);
-    setMode("view");
-    notify("Projeto atualizado com sucesso.");
   }
 
   function confirmAlignment() {
@@ -637,11 +638,14 @@ export function ProjectDetailsDrawer({
                   </FormField>
 
                   <FormField label="Tipo de Cabine">
-                    <input
-                      className={inputCls()}
-                      placeholder="Ex.: Cabine Compacta"
+                    <SearchableCombobox
                       value={editForm.tipo_cabine ?? ""}
-                      onChange={(e) => patchEdit({ tipo_cabine: e.target.value })}
+                      options={tipoCabineOptions}
+                      onChange={(v) => patchEdit({ tipo_cabine: v })}
+                      placeholder="Selecione o tipo de cabine"
+                      searchPlaceholder="Buscar tipo de cabine..."
+                      emptyMessage="Nenhum tipo de cabine encontrado."
+                      ariaLabel="Selecionar tipo de cabine"
                     />
                   </FormField>
                 </div>

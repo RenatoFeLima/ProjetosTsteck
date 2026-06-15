@@ -40,7 +40,7 @@ type ProjectFormModalProps = {
   observations: Array<{ id: string; usuario: string; texto: string; criado_em: string }>;
   onClose: () => void;
   onCreate: (input: Partial<Project>) => { ok: boolean; error?: string; missing?: string[] };
-  onUpdate: (id: string, patch: Partial<Project>) => { ok: boolean; error?: string };
+  onUpdate: (id: string, patch: Partial<Project>) => Promise<{ ok: boolean; error?: string }>;
   onDelete: (id: string) => void;
   onMoveStatus: (id: string, nextStatus: ProjectStatus) => { ok: boolean; error?: string };
   isCodigoDuplicado: (codigo: string, ignoreId?: string) => boolean;
@@ -129,6 +129,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
   const [confirmAlignmentOpen, setConfirmAlignmentOpen] = useState(false);
   const [confirmCreateOpen, setConfirmCreateOpen] = useState(false);
   const [isSavingCreate, setIsSavingCreate] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [missingRequiredOpen, setMissingRequiredOpen] = useState(false);
   const [missingRequiredLabels, setMissingRequiredLabels] = useState<string[]>([]);
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
@@ -335,8 +336,9 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
     props.onClose();
   }
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
+    if (isSavingEdit) return;
 
     const normalized = buildNormalizedFormPayload();
     if (!validateBeforeSave(normalized)) return;
@@ -347,13 +349,18 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
     }
 
     if (!props.project) return;
-    const result = props.onUpdate(props.project.id, normalized);
-    if (!result.ok) {
-      props.notify(result.error ?? "Falha ao atualizar projeto");
-      return;
+    setIsSavingEdit(true);
+    try {
+      const result = await props.onUpdate(props.project.id, normalized);
+      if (!result.ok) {
+        props.notify(result.error ?? "Falha ao atualizar projeto");
+        return;
+      }
+      props.notify("Projeto atualizado com sucesso");
+      props.onClose();
+    } finally {
+      setIsSavingEdit(false);
     }
-    props.notify("Projeto atualizado com sucesso");
-    props.onClose();
   }
 
   function requestDelete() {
@@ -364,7 +371,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
     props.onClose();
   }
 
-  function confirmAlignment() {
+  async function confirmAlignment() {
     if (!prerequisitesReady) return;
     setConfirmAlignmentOpen(false);
     const nextPatch: Partial<Project> = {
@@ -374,22 +381,27 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
     };
 
     if (props.mode === "edit" && props.project) {
-      const result = props.onUpdate(props.project.id, {
-        ...form,
-        ...nextPatch,
-        codigo_projeto: formatProjectCode(form.codigo_projeto ?? ""),
-        engenheiro_nome: normalizeEngineerName(form.engenheiro_nome ?? ""),
-        engenheiro_celular: stripPhone(form.engenheiro_celular ?? ""),
-      });
+      setIsSavingEdit(true);
+      try {
+        const result = await props.onUpdate(props.project.id, {
+          ...form,
+          ...nextPatch,
+          codigo_projeto: formatProjectCode(form.codigo_projeto ?? ""),
+          engenheiro_nome: normalizeEngineerName(form.engenheiro_nome ?? ""),
+          engenheiro_celular: stripPhone(form.engenheiro_celular ?? ""),
+        });
 
-      if (!result.ok) {
-        props.notify(result.error ?? "Falha ao liberar projeto");
-        return;
+        if (!result.ok) {
+          props.notify(result.error ?? "Falha ao liberar projeto");
+          return;
+        }
+
+        setForm((prev) => ({ ...prev, ...nextPatch }));
+        setDirty(false);
+        props.notify("Projeto liberado para elaboracao de ante-projeto.");
+      } finally {
+        setIsSavingEdit(false);
       }
-
-      setForm((prev) => ({ ...prev, ...nextPatch }));
-      setDirty(false);
-      props.notify("Projeto liberado para elaboracao de ante-projeto.");
       return;
     }
 
@@ -696,8 +708,13 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
             {props.mode === "edit" && (
               <button type="button" className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700" onClick={requestDelete}>Excluir projeto</button>
             )}
-            <button form="project-form" type="submit" className="rounded-xl bg-[#9e0b0f] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#7f090c]">
-              {props.mode === "create" ? "Salvar projeto" : "Salvar alterações"}
+            <button
+              form="project-form"
+              type="submit"
+              disabled={isSavingEdit || isSavingCreate}
+              className="rounded-xl bg-[#9e0b0f] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#7f090c] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isSavingEdit ? "Salvando..." : props.mode === "create" ? "Salvar projeto" : "Salvar alterações"}
             </button>
           </div>
         </footer>

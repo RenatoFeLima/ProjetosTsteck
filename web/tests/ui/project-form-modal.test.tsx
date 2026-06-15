@@ -35,7 +35,7 @@ function buildCreateProps() {
     observations: [],
     onClose: vi.fn(),
     onCreate: vi.fn<(input: Partial<Project>) => { ok: boolean; error?: string; missing?: string[] }>(() => ({ ok: true })),
-    onUpdate: vi.fn(() => ({ ok: true })),
+    onUpdate: vi.fn(() => Promise.resolve({ ok: true })),
     onDelete: vi.fn(),
     onMoveStatus: vi.fn(() => ({ ok: true })),
     isCodigoDuplicado: vi.fn(() => false),

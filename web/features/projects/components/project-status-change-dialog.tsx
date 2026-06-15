@@ -64,6 +64,16 @@ export function ProjectStatusChangeDialog({
           <p>
             Projeto: <span className="font-mono font-semibold text-zinc-900 dark:text-foreground">{project.codigo_projeto}</span>
           </p>
+          {project.construtora && (
+            <p>
+              Construtora: <span className="font-semibold text-zinc-900 dark:text-foreground">{project.construtora}</span>
+            </p>
+          )}
+          {project.obra && (
+            <p>
+              Obra: <span className="font-semibold text-zinc-900 dark:text-foreground">{project.obra}</span>
+            </p>
+          )}
           <p>
             Status atual: <span className="font-semibold text-zinc-900 dark:text-foreground">{project.status_atual}</span>
           </p>

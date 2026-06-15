@@ -8,6 +8,8 @@ import type { ProjectStatus } from "@/features/projects/domain/project-types";
 type KanbanStatusChangeDialogProps = {
   open: boolean;
   projectCode?: string;
+  construtora?: string;
+  obra?: string;
   fromStatus?: ProjectStatus;
   toStatus?: ProjectStatus;
   onCancel: () => void;
@@ -17,6 +19,8 @@ type KanbanStatusChangeDialogProps = {
 export function KanbanStatusChangeDialog({
   open,
   projectCode,
+  construtora,
+  obra,
   fromStatus,
   toStatus,
   onCancel,
@@ -112,6 +116,16 @@ export function KanbanStatusChangeDialog({
             Projeto:{" "}
             <span className="font-mono font-semibold text-zinc-900 dark:text-foreground">{projectCode}</span>
           </p>
+          {construtora && (
+            <p className="mt-1">
+              <span className="font-semibold">Construtora:</span> {construtora}
+            </p>
+          )}
+          {obra && (
+            <p>
+              <span className="font-semibold">Obra:</span> {obra}
+            </p>
+          )}
           <p className="mt-1">
             <span className="font-semibold">De:</span> {fromStatus}
           </p>
