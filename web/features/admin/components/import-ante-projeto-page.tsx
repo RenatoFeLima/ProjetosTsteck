@@ -53,6 +53,10 @@ export function ImportAnteProjetoPage() {
       return "Haveria projetos removidos mas nenhum criado. Operação bloqueada.";
     if (r.projectsSkipped.some((s) => s.reason.includes("STATUS desconhecido")))
       return "Há linhas com STATUS desconhecido no CSV. Corrija antes de confirmar.";
+    if (r.equipmentNotFound.length > 0)
+      return `${r.equipmentNotFound.length} equipamento(s) não encontrado(s) no banco. Cadastre antes de confirmar.`;
+    if (r.cabinTypesNotFound.length > 0)
+      return `${r.cabinTypesNotFound.length} tipo(s) de cabine não encontrado(s) no banco. Cadastre antes de confirmar.`;
     return null;
   }
 
@@ -307,22 +311,68 @@ function ReportView({ report }: { report: AnteProjetoReport }) {
               <thead className="border-b">
                 <tr className="text-left text-muted-foreground">
                   <th className="pb-1 pr-3">Código</th>
-                  <th className="pb-1 pr-3">Construtora</th>
-                  <th className="pb-1 pr-3">Obra</th>
+                  <th className="pb-1 pr-3">Construtora / Obra</th>
                   <th className="pb-1 pr-3">Status</th>
                   <th className="pb-1 pr-3">Prazo</th>
-                  <th className="pb-1">Urgente</th>
+                  <th className="pb-1 pr-3">Equipamento</th>
+                  <th className="pb-1 pr-3">Cabine</th>
+                  <th className="pb-1">Vendedor</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {report.projectsToCreate.map((p, i) => (
                   <tr key={i}>
-                    <td className="py-1 pr-3 font-mono">{p.code}{p.tempCode && <span className="ml-1 text-amber-600">(tmp)</span>}</td>
-                    <td className="py-1 pr-3">{p.construtora}</td>
-                    <td className="py-1 pr-3">{p.obra}</td>
-                    <td className="py-1 pr-3 text-muted-foreground">{p.statusLabel}</td>
-                    <td className="py-1 pr-3">{p.deadline ?? <span className="text-muted-foreground">—</span>}</td>
-                    <td className="py-1">{p.urgente ? <span className="text-red-600 font-medium">SIM</span> : "—"}</td>
+                    <td className="py-1 pr-3 font-mono whitespace-nowrap">
+                      {p.code}
+                      {p.tempCode && <span className="ml-1 text-amber-600">(tmp)</span>}
+                      {p.urgente && <span className="ml-1 text-red-600 font-medium">!</span>}
+                    </td>
+                    <td className="py-1 pr-3">
+                      <span className="text-muted-foreground">{p.construtora}</span>
+                      <br />{p.obra}
+                    </td>
+                    <td className="py-1 pr-3 text-muted-foreground whitespace-nowrap">{p.statusLabel}</td>
+                    <td className="py-1 pr-3 whitespace-nowrap">{p.deadline ?? <span className="text-muted-foreground">—</span>}</td>
+                    <td className="py-1 pr-3">
+                      <RefCell csv={p.equipamentoCsv} resolved={p.equipamentoVinculado} />
+                    </td>
+                    <td className="py-1 pr-3">
+                      <RefCell csv={p.tipoCabineCsv} resolved={p.tipoCabineVinculado} />
+                    </td>
+                    <td className="py-1">
+                      <RefCell csv={p.vendedorCsv} resolved={p.vendedorVinculado} warn />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Section>
+      )}
+
+      {/* Códigos provisórios gerados por duplicidade com obra diferente */}
+      {report.codeRemapped.length > 0 && (
+        <Section title={`Códigos provisórios gerados por duplicidade (${report.codeRemapped.length})`} variant="warn">
+          <p className="text-xs text-muted-foreground mb-1">
+            Código original já usado para obra diferente — gerado código provisório para não perder o projeto.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead className="border-b">
+                <tr className="text-left text-muted-foreground">
+                  <th className="pb-1 pr-3">Código original</th>
+                  <th className="pb-1 pr-3">Código provisório</th>
+                  <th className="pb-1 pr-3">Construtora</th>
+                  <th className="pb-1">Obra</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {report.codeRemapped.map((r, i) => (
+                  <tr key={i}>
+                    <td className="py-1 pr-3 font-mono text-amber-700">{r.originalCode}</td>
+                    <td className="py-1 pr-3 font-mono">{r.newCode}</td>
+                    <td className="py-1 pr-3">{r.construtora}</td>
+                    <td className="py-1">{r.obra}</td>
                   </tr>
                 ))}
               </tbody>
@@ -336,10 +386,10 @@ function ReportView({ report }: { report: AnteProjetoReport }) {
         <RefSection title="Vendedores não encontrados" items={report.sellersNotFound} />
       )}
       {report.equipmentNotFound.length > 0 && (
-        <RefSection title="Equipamentos não encontrados" items={report.equipmentNotFound} />
+        <RefSection title="Equipamentos não encontrados (bloqueia commit)" items={report.equipmentNotFound} variant="danger" />
       )}
       {report.cabinTypesNotFound.length > 0 && (
-        <RefSection title="Tipos de cabine não encontrados" items={report.cabinTypesNotFound} />
+        <RefSection title="Tipos de cabine não encontrados (bloqueia commit)" items={report.cabinTypesNotFound} variant="danger" />
       )}
 
       {/* Referências resolvidas por alias */}
@@ -466,20 +516,48 @@ function Section({
 function RefSection({
   title,
   items,
+  variant = "warn",
 }: {
   title: string;
   items: { construtora: string; obra: string; valor: string }[];
+  variant?: Variant;
 }) {
+  const textColor = variant === "danger" ? "text-red-700" : "text-amber-700";
   return (
-    <Section title={`${title} (${items.length})`} variant="warn">
+    <Section title={`${title} (${items.length})`} variant={variant}>
       <ul className="text-xs space-y-0.5">
         {items.map((r, i) => (
           <li key={i}>
-            <span className="font-medium text-amber-700">{r.valor}</span>
+            <span className={`font-medium ${textColor}`}>{r.valor}</span>
             {" — "}{r.construtora} / {r.obra}
           </li>
         ))}
       </ul>
     </Section>
+  );
+}
+
+/** Célula de referência: mostra valor do CSV → vinculado (ou não encontrado). */
+function RefCell({ csv, resolved, warn }: { csv: string; resolved: string | null; warn?: boolean }) {
+  if (!csv) return <span className="text-muted-foreground">—</span>;
+  if (!resolved) {
+    return (
+      <span className={warn ? "text-amber-600" : "text-red-600 font-medium"}>
+        {csv} <span className="opacity-60">(não vinc.)</span>
+      </span>
+    );
+  }
+  const same = csv.trim().toLowerCase() === resolved.trim().toLowerCase();
+  return (
+    <span>
+      {same ? (
+        <span className="text-green-700">{resolved}</span>
+      ) : (
+        <>
+          <span className="text-muted-foreground line-through mr-1">{csv}</span>
+          <span className="text-green-700">{resolved}</span>
+        </>
+      )}
+    </span>
   );
 }

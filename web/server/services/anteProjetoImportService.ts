@@ -30,6 +30,7 @@ import type {
   AnteProjetoReport,
   AnteProjetoRefNotFound,
   AnteProjetoAliasResolved,
+  AnteProjetoCodeRemapped,
 } from "@/features/import/domain/ante-projeto-import-types";
 
 // ─── Status que serão limpos antes da importação ──────────────────────────────
@@ -109,9 +110,10 @@ async function loadSnapshot(): Promise<Snapshot> {
   cabinTypes.forEach((c) => {
     const key = normalizeCabin(c.name);
     snap.cabinTypes.set(key, { id: c.id, displayName: c.name });
-    // Também indexa alias canônico para DUPLA etc.
-    const aliasOf = Object.entries(CABIN_TYPE_ALIASES).find(([, v]) => v === key);
-    if (aliasOf) snap.cabinTypes.set(aliasOf[0], { id: c.id, displayName: c.name });
+    // Indexa todos os aliases cujo valor resolvido bate com este tipo de cabine.
+    for (const [alias, target] of Object.entries(CABIN_TYPE_ALIASES)) {
+      if (target === key) snap.cabinTypes.set(alias, { id: c.id, displayName: c.name });
+    }
   });
 
   anteProjects.forEach((p) => {
@@ -155,12 +157,22 @@ function normalizeCabin(raw: string): string {
 
 /** Aliases explícitos de tipo de cabine (CSV normalizado → nome normalizado no banco). */
 const CABIN_TYPE_ALIASES: Record<string, string> = {
+  // Variações de DUPLA
   "duplo": "dupla",
-  "dupla + c.o": "dupla + c.o",
+  "duplo + c.o": "dupla + c.o",
+  "duplo+c.o": "dupla + c.o",
+  "duplo + c.o.": "dupla + c.o",
+  "duplo - r. yasbek": "dupla",
+  "duplo r yasbek": "dupla",
+  // Variações de SIMPLES + C.O
   "simples + c.o": "simples + c.o",
   "simples + c.o.": "simples + c.o",
   "simples+c.o.": "simples + c.o",
   "simples+c.o": "simples + c.o",
+  // Variações de DUPLA + C.O (já normalizadas)
+  "dupla + c.o": "dupla + c.o",
+  "dupla+c.o": "dupla + c.o",
+  "dupla + c.o.": "dupla + c.o",
 };
 
 type MatchResult = { id: string; resolvedName: string } | null;
@@ -258,6 +270,7 @@ function analyze(csvText: string, snap: Snapshot): { plan: Plan; report: AntePro
     projectsToCreate: [],
     projectsSkipped: [],
     projectsUrgente: 0,
+    codeRemapped: [],
     projectsWithDeadline: 0,
     projectsWithoutDeadline: 0,
     projectsOverdue: 0,
@@ -281,6 +294,8 @@ function analyze(csvText: string, snap: Snapshot): { plan: Plan; report: AntePro
   const reportedConstructorNorms = new Set<string>();
   const usedCodes = new Set(snap.codesInOtherStatuses);
   // Codes being deleted are available for reuse — do NOT pre-populate usedCodes from them.
+  // Rastreia: código uppercase → "normedConstrutora::normedObra" (para Option C)
+  const codeToWork = new Map<string, string>();
 
   let tempSuffix = snap.maxTempSuffix;
   const nextTempCode = (): string => {
@@ -342,6 +357,10 @@ function analyze(csvText: string, snap: Snapshot): { plan: Plan; report: AntePro
     }
   };
 
+  const addRemap = (arr: AnteProjetoCodeRemapped[], originalCode: string, newCode: string, construtora: string, obra: string, reason: string) => {
+    arr.push({ originalCode, newCode, construtora, obra, reason });
+  };
+
   const addAlias = (
     arr: AnteProjetoAliasResolved[],
     construtora: string,
@@ -385,7 +404,7 @@ function analyze(csvText: string, snap: Snapshot): { plan: Plan; report: AntePro
       continue;
     }
 
-    // Código do projeto
+    // Código do projeto — Opção C para duplicidades
     const rawCode = (r["PROJETO"] ?? "").trim();
     let code: string;
     let tempCode = false;
@@ -397,13 +416,26 @@ function analyze(csvText: string, snap: Snapshot): { plan: Plan; report: AntePro
         continue;
       }
       if (usedCodes.has(up)) {
-        // Duplicate code within this CSV
-        report.rowsInvalid += 1;
-        report.projectsSkipped.push({ code: rawCode, construtora: construtoraRaw, obra: obraRaw, reason: `código "${rawCode}" duplicado no arquivo CSV` });
-        continue;
+        // Verifica se é o mesmo par construtora+obra (duplicado real) ou obra diferente (Option C)
+        const workKey = `${normalizeName(canonicalConstructorName(construtoraRaw))}::${normalizeName(obraRaw)}`;
+        const prevWorkKey = codeToWork.get(up);
+        if (prevWorkKey === workKey) {
+          // Duplicado real: mesma construtora + mesma obra → ignorar
+          report.rowsInvalid += 1;
+          report.projectsSkipped.push({ code: rawCode, construtora: construtoraRaw, obra: obraRaw, reason: `código "${rawCode}" duplicado com mesma obra — ignorado` });
+          continue;
+        }
+        // Obra diferente → gera código provisório e importa normalmente
+        const tmpCode = nextTempCode();
+        addRemap(report.codeRemapped, rawCode, tmpCode, construtoraRaw, obraRaw, `código "${rawCode}" duplicado com obra diferente`);
+        code = tmpCode;
+        tempCode = true;
+      } else {
+        usedCodes.add(up);
+        const workKey = `${normalizeName(canonicalConstructorName(construtoraRaw))}::${normalizeName(obraRaw)}`;
+        codeToWork.set(up, workKey);
+        code = rawCode;
       }
-      usedCodes.add(up);
-      code = rawCode;
     } else {
       code = nextTempCode();
       tempCode = true;
@@ -497,6 +529,12 @@ function analyze(csvText: string, snap: Snapshot): { plan: Plan; report: AntePro
       statusLabel: DB_TO_UI_STATUS[statusResult.status as DbStatus] ?? statusResult.status,
       urgente: statusResult.urgente,
       deadline: deadline ? formatISO(deadline, { representation: "date" }) : null,
+      equipamentoCsv: equipRaw,
+      equipamentoVinculado: equipMatch?.resolvedName ?? null,
+      tipoCabineCsv: cabineRaw,
+      tipoCabineVinculado: cabinMatch?.resolvedName ?? null,
+      vendedorCsv: vendedorRaw,
+      vendedorVinculado: sellerMatch?.resolvedName ?? null,
     });
   }
 
@@ -511,6 +549,20 @@ function validateBeforeCommit(report: AnteProjetoReport): void {
   }
   if (report.projectsSkipped.some((s) => s.reason.includes("STATUS desconhecido"))) {
     throw new HttpError(400, "Há linhas com STATUS desconhecido no CSV. Corrija antes de confirmar.");
+  }
+  if (report.equipmentNotFound.length > 0) {
+    throw new HttpError(
+      400,
+      `${report.equipmentNotFound.length} equipamento(s) do CSV não encontrado(s) no banco. ` +
+      `Cadastre-os antes de confirmar: ${report.equipmentNotFound.map((e) => e.valor).join(", ")}`,
+    );
+  }
+  if (report.cabinTypesNotFound.length > 0) {
+    throw new HttpError(
+      400,
+      `${report.cabinTypesNotFound.length} tipo(s) de cabine do CSV não encontrado(s) no banco. ` +
+      `Cadastre-os antes de confirmar: ${report.cabinTypesNotFound.map((e) => e.valor).join(", ")}`,
+    );
   }
 }
 

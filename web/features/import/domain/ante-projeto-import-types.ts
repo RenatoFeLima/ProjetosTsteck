@@ -23,6 +23,13 @@ export type AnteProjetoProjectToCreate = {
   statusLabel: string;
   urgente: boolean;
   deadline: string | null;
+  // Referências resolvidas para exibição no dry-run
+  equipamentoCsv: string;
+  equipamentoVinculado: string | null;
+  tipoCabineCsv: string;
+  tipoCabineVinculado: string | null;
+  vendedorCsv: string;
+  vendedorVinculado: string | null;
 };
 
 export type AnteProjetoProjectToDelete = {
@@ -36,6 +43,15 @@ export type AnteProjetoProjectToDelete = {
 
 export type AnteProjetoSkipped = {
   code: string;
+  construtora: string;
+  obra: string;
+  reason: string;
+};
+
+/** Código duplicado no CSV mas com obra diferente — importado com código provisório. */
+export type AnteProjetoCodeRemapped = {
+  originalCode: string;
+  newCode: string;
   construtora: string;
   obra: string;
   reason: string;
@@ -87,6 +103,9 @@ export type AnteProjetoReport = {
   projectsToCreate: AnteProjetoProjectToCreate[];
   projectsSkipped: AnteProjetoSkipped[];
   projectsUrgente: number;
+
+  // Códigos provisórios gerados por duplicidade com obra diferente
+  codeRemapped: AnteProjetoCodeRemapped[];
 
   // Prazo
   projectsWithDeadline: number;
