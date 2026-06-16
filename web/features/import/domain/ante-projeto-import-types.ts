@@ -48,6 +48,14 @@ export type AnteProjetoRefNotFound = {
   field: "vendedor" | "equipamento" | "tipo_cabine";
 };
 
+export type AnteProjetoAliasResolved = {
+  construtora: string;
+  obra: string;
+  field: "vendedor" | "equipamento" | "tipo_cabine";
+  csvValue: string;
+  resolvedTo: string;
+};
+
 export type AnteProjetoDiagnostic = {
   delimiter: string;
   delimiterLabel: string;
@@ -92,6 +100,9 @@ export type AnteProjetoReport = {
   sellersNotFound: AnteProjetoRefNotFound[];
   equipmentNotFound: AnteProjetoRefNotFound[];
   cabinTypesNotFound: AnteProjetoRefNotFound[];
+
+  // Referências resolvidas por alias/normalização (informativo)
+  resolvedAliases: AnteProjetoAliasResolved[];
 
   // Status breakdown
   byStatus: { ELABORAR_ANTE_PROJETO: number; ANTE_PROJETO_ENVIADO: number; ANTE_PROJETO_APROVADO: number };

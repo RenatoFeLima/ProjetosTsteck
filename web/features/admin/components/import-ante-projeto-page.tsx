@@ -342,6 +342,26 @@ function ReportView({ report }: { report: AnteProjetoReport }) {
         <RefSection title="Tipos de cabine não encontrados" items={report.cabinTypesNotFound} />
       )}
 
+      {/* Referências resolvidas por alias */}
+      {report.resolvedAliases.length > 0 && (
+        <Section title={`Referências resolvidas por alias (${report.resolvedAliases.length})`}>
+          <p className="text-xs text-muted-foreground mb-1">
+            Valores do CSV que foram mapeados automaticamente para um registro existente.
+          </p>
+          <ul className="text-xs space-y-0.5">
+            {report.resolvedAliases.map((a, i) => (
+              <li key={i}>
+                <span className="font-mono text-muted-foreground">[{a.field}]</span>{" "}
+                <span className="font-medium text-amber-700">{a.csvValue}</span>
+                {" → "}
+                <span className="font-medium">{a.resolvedTo}</span>
+                <span className="text-muted-foreground ml-2">— {a.construtora} / {a.obra}</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
       {/* Obras e construtoras novas */}
       {report.constructorsToCreate.length > 0 && (
         <Section title={`Construtoras a criar (${report.constructorsToCreate.length})`}>

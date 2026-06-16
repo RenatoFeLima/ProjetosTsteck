@@ -26,7 +26,11 @@ import {
 } from "@/features/import/domain/import-normalize";
 import { canonicalConstructorName } from "@/features/import/domain/import-aliases";
 import { DB_TO_UI_STATUS, type DbStatus } from "@/features/projects/domain/project-status-map";
-import type { AnteProjetoReport, AnteProjetoRefNotFound } from "@/features/import/domain/ante-projeto-import-types";
+import type {
+  AnteProjetoReport,
+  AnteProjetoRefNotFound,
+  AnteProjetoAliasResolved,
+} from "@/features/import/domain/ante-projeto-import-types";
 
 // ─── Status que serão limpos antes da importação ──────────────────────────────
 
@@ -53,12 +57,14 @@ function mapCsvStatus(raw: string): { ok: true; status: AnteDbStatus; urgente: b
 
 // ─── Snapshot ────────────────────────────────────────────────────────────────
 
+type NamedEntry = { id: string; displayName: string };
+
 type Snapshot = {
   constructors: Map<string, { id: string; name: string }>;
   works: Map<string, string>; // `${constructorId}::${normName}` -> workId
-  sellers: Map<string, string>; // normName -> id
-  equipment: Map<string, string>; // normalizeCode -> id
-  cabinTypes: Map<string, string>; // normName -> id
+  sellers: Map<string, NamedEntry>; // stripDots(normName) -> { id, displayName }
+  equipment: Map<string, NamedEntry>; // normalizeCode -> { id, displayName }
+  cabinTypes: Map<string, NamedEntry>; // normalizeCabin -> { id, displayName }
   projectsToDelete: { id: string; code: string; status: string; constructorName: string; workName: string }[];
   codesInOtherStatuses: Set<string>; // UPPER — não podem ser duplicados
   maxTempSuffix: number;
@@ -98,9 +104,15 @@ async function loadSnapshot(): Promise<Snapshot> {
 
   constructors.forEach((c) => snap.constructors.set(normalizeName(c.name), { id: c.id, name: c.name }));
   works.forEach((w) => snap.works.set(`${w.constructorId}::${normalizeName(w.name)}`, w.id));
-  sellers.forEach((s) => snap.sellers.set(normalizeName(s.name), s.id));
-  equipment.forEach((e) => snap.equipment.set(normalizeCode(e.code), e.id));
-  cabinTypes.forEach((c) => snap.cabinTypes.set(normalizeName(c.name), c.id));
+  sellers.forEach((s) => snap.sellers.set(stripDots(normalizeName(s.name)), { id: s.id, displayName: s.name }));
+  equipment.forEach((e) => snap.equipment.set(normalizeCode(e.code), { id: e.id, displayName: e.code }));
+  cabinTypes.forEach((c) => {
+    const key = normalizeCabin(c.name);
+    snap.cabinTypes.set(key, { id: c.id, displayName: c.name });
+    // Também indexa alias canônico para DUPLA etc.
+    const aliasOf = Object.entries(CABIN_TYPE_ALIASES).find(([, v]) => v === key);
+    if (aliasOf) snap.cabinTypes.set(aliasOf[0], { id: c.id, displayName: c.name });
+  });
 
   anteProjects.forEach((p) => {
     snap.projectsToDelete.push({
@@ -126,24 +138,67 @@ async function loadSnapshot(): Promise<Snapshot> {
 
 // ─── Matching auxiliares ──────────────────────────────────────────────────────
 
-function fuzzySeller(raw: string, snap: Snapshot): string | null {
-  const norm = normalizeName(raw);
-  const exact = snap.sellers.get(norm);
-  if (exact) return exact;
-  for (const [key, id] of snap.sellers) {
-    if (norm.startsWith(key) || key.startsWith(norm)) return id;
+/** Remove pontos de uma string normalizada para permitir matching de abreviações.
+ *  "carlos r." → "carlos r"  */
+function stripDots(s: string): string {
+  return s.replace(/\./g, "").replace(/\s+/g, " ").trim();
+}
+
+/** Normaliza cabine: remove pontos finais de "C.O." → "c.o", strip trailing ".". */
+function normalizeCabin(raw: string): string {
+  return normalizeName(raw)
+    .replace(/\.\s*$/, "")          // remove ponto final da string
+    .replace(/c\.o\./g, "c.o")     // "c.o." → "c.o"
+    .replace(/\s*\+\s*/g, " + ")   // espaços uniformes ao redor do +
+    .trim();
+}
+
+/** Aliases explícitos de tipo de cabine (CSV normalizado → nome normalizado no banco). */
+const CABIN_TYPE_ALIASES: Record<string, string> = {
+  "duplo": "dupla",
+  "dupla + c.o": "dupla + c.o",
+  "simples + c.o": "simples + c.o",
+  "simples + c.o.": "simples + c.o",
+  "simples+c.o.": "simples + c.o",
+  "simples+c.o": "simples + c.o",
+};
+
+type MatchResult = { id: string; resolvedName: string } | null;
+
+/** Vendedor: normalização com remoção de pontos + prefix matching bidirecional.
+ *  "CARLOS R." → "carlos r" → casa com "carlos romano" (DB startsWith "carlos r"). */
+function fuzzySeller(raw: string, snap: Snapshot): MatchResult {
+  if (!raw) return null;
+  const normNoDots = stripDots(normalizeName(raw));
+
+  // 1. Exact match (após strip de pontos)
+  const exact = snap.sellers.get(normNoDots);
+  if (exact) return { id: exact.id, resolvedName: exact.displayName };
+
+  // 2. Prefix / abbreviation
+  for (const [key, entry] of snap.sellers) {
+    if (key.startsWith(normNoDots) || normNoDots.startsWith(key)) {
+      return { id: entry.id, resolvedName: entry.displayName };
+    }
   }
   return null;
 }
 
-function fuzzyEquipment(raw: string, snap: Snapshot): string | null {
+/** Equipamento: normalizeCode remove -, /, espaços — EK-20/30 e EK 20/30 viram EK2030. */
+function fuzzyEquipment(raw: string, snap: Snapshot): MatchResult {
   if (!raw || normalizeName(raw) === "nao encontrado") return null;
-  return snap.equipment.get(normalizeCode(raw)) ?? null;
+  const entry = snap.equipment.get(normalizeCode(raw));
+  return entry ? { id: entry.id, resolvedName: entry.displayName } : null;
 }
 
-function fuzzyCabinType(raw: string, snap: Snapshot): string | null {
+/** Tipo de cabine: normalização + aliases explícitos (DUPLO → DUPLA). */
+function fuzzyCabinType(raw: string, snap: Snapshot): MatchResult {
   if (!raw || normalizeName(raw) === "nao encontrado") return null;
-  return snap.cabinTypes.get(normalizeName(raw)) ?? null;
+  const norm = normalizeCabin(raw);
+
+  // O snapshot já indexa aliases via loadSnapshot; busca direta é suficiente.
+  const entry = snap.cabinTypes.get(norm);
+  return entry ? { id: entry.id, resolvedName: entry.displayName } : null;
 }
 
 // ─── Análise (puro — sem gravar) ─────────────────────────────────────────────
@@ -212,6 +267,7 @@ function analyze(csvText: string, snap: Snapshot): { plan: Plan; report: AntePro
     sellersNotFound: [],
     equipmentNotFound: [],
     cabinTypesNotFound: [],
+    resolvedAliases: [],
     byStatus: { ELABORAR_ANTE_PROJETO: 0, ANTE_PROJETO_ENVIADO: 0, ANTE_PROJETO_APROVADO: 0 },
   };
 
@@ -281,9 +337,21 @@ function analyze(csvText: string, snap: Snapshot): { plan: Plan; report: AntePro
   };
 
   const addRef = (arr: AnteProjetoRefNotFound[], construtora: string, obra: string, valor: string, field: AnteProjetoRefNotFound["field"]) => {
-    // Deduplicate by construtora+obra+valor.
     if (!arr.some((r) => r.construtora === construtora && r.obra === obra && r.valor === valor)) {
       arr.push({ construtora, obra, valor, field });
+    }
+  };
+
+  const addAlias = (
+    arr: AnteProjetoAliasResolved[],
+    construtora: string,
+    obra: string,
+    field: AnteProjetoAliasResolved["field"],
+    csvValue: string,
+    resolvedTo: string,
+  ) => {
+    if (!arr.some((a) => a.construtora === construtora && a.obra === obra && a.field === field && a.csvValue === csvValue)) {
+      arr.push({ construtora, obra, field, csvValue, resolvedTo });
     }
   };
 
@@ -361,15 +429,29 @@ function analyze(csvText: string, snap: Snapshot): { plan: Plan; report: AntePro
     const vendedorRaw = (r["VENDEDOR"] ?? "").trim();
     const equipRaw = (r["EQUIPAMENTO"] ?? "").trim();
     const cabineRaw = (r["TIPO DA CABINE"] ?? "").trim();
-    const sellerId = vendedorRaw ? fuzzySeller(vendedorRaw, snap) : null;
-    if (vendedorRaw && !sellerId) addRef(report.sellersNotFound, construtoraRaw, obraRaw, vendedorRaw, "vendedor");
-    const equipmentId = equipRaw ? fuzzyEquipment(equipRaw, snap) : null;
-    if (equipRaw && normalizeName(equipRaw) !== "nao encontrado" && !equipmentId) {
-      addRef(report.equipmentNotFound, construtoraRaw, obraRaw, equipRaw, "equipamento");
+
+    const sellerMatch = vendedorRaw ? fuzzySeller(vendedorRaw, snap) : null;
+    const sellerId = sellerMatch?.id ?? null;
+    if (vendedorRaw && !sellerMatch) {
+      addRef(report.sellersNotFound, construtoraRaw, obraRaw, vendedorRaw, "vendedor");
+    } else if (sellerMatch && normalizeName(sellerMatch.resolvedName) !== normalizeName(vendedorRaw)) {
+      addAlias(report.resolvedAliases, construtoraRaw, obraRaw, "vendedor", vendedorRaw, sellerMatch.resolvedName);
     }
-    const cabinTypeId = cabineRaw ? fuzzyCabinType(cabineRaw, snap) : null;
-    if (cabineRaw && normalizeName(cabineRaw) !== "nao encontrado" && !cabinTypeId) {
+
+    const equipMatch = equipRaw ? fuzzyEquipment(equipRaw, snap) : null;
+    const equipmentId = equipMatch?.id ?? null;
+    if (equipRaw && normalizeName(equipRaw) !== "nao encontrado" && !equipMatch) {
+      addRef(report.equipmentNotFound, construtoraRaw, obraRaw, equipRaw, "equipamento");
+    } else if (equipMatch && normalizeCode(equipMatch.resolvedName) !== normalizeCode(equipRaw)) {
+      addAlias(report.resolvedAliases, construtoraRaw, obraRaw, "equipamento", equipRaw, equipMatch.resolvedName);
+    }
+
+    const cabinMatch = cabineRaw ? fuzzyCabinType(cabineRaw, snap) : null;
+    const cabinTypeId = cabinMatch?.id ?? null;
+    if (cabineRaw && normalizeName(cabineRaw) !== "nao encontrado" && !cabinMatch) {
       addRef(report.cabinTypesNotFound, construtoraRaw, obraRaw, cabineRaw, "tipo_cabine");
+    } else if (cabinMatch && normalizeName(cabinMatch.resolvedName) !== normalizeName(cabineRaw)) {
+      addAlias(report.resolvedAliases, construtoraRaw, obraRaw, "tipo_cabine", cabineRaw, cabinMatch.resolvedName);
     }
 
     const engName = cleanEngineerName(r["ENGENHEIRO"] ?? "");
