@@ -17,7 +17,7 @@ import { prisma } from "@/lib/db/prisma";
 import { assertPermission, HttpError } from "@/server/auth/guards";
 import type { SessionUser } from "@/server/auth/session";
 import { writeAudit } from "./auditService";
-import { parseCsvToObjects } from "@/features/import/domain/csv";
+import { parseCsvToObjectsWithDiag } from "@/features/import/domain/csv";
 import {
   normalizeName,
   normalizeCode,
@@ -175,8 +175,15 @@ function todayIso(): string {
 function analyze(csvText: string, snap: Snapshot): { plan: Plan; report: AnteProjetoReport } {
   const today = todayIso();
 
+  const { rows, diag } = parseCsvToObjectsWithDiag(csvText, "STATUS");
+
+  if (!diag.delimiter) {
+    throw new HttpError(400, "Não foi possível identificar o separador do CSV. Use vírgula (,), ponto-e-vírgula (;) ou tab.");
+  }
+
   const report: AnteProjetoReport = {
     dryRun: true,
+    diagnostic: diag,
     rowsRead: 0,
     rowsValid: 0,
     rowsInvalid: 0,
@@ -280,7 +287,6 @@ function analyze(csvText: string, snap: Snapshot): { plan: Plan; report: AntePro
     }
   };
 
-  const rows = parseCsvToObjects(csvText);
   report.rowsRead = rows.length;
 
   for (const r of rows) {

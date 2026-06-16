@@ -48,8 +48,17 @@ export type AnteProjetoRefNotFound = {
   field: "vendedor" | "equipamento" | "tipo_cabine";
 };
 
+export type AnteProjetoDiagnostic = {
+  delimiter: string;
+  delimiterLabel: string;
+  columns: string[];
+  firstRow: Record<string, string> | null;
+  uniqueStatusValues: string[];
+};
+
 export type AnteProjetoReport = {
   dryRun: boolean;
+  diagnostic: AnteProjetoDiagnostic;
   rowsRead: number;
   rowsValid: number;
   rowsInvalid: number;

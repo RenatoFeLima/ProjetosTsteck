@@ -1,11 +1,27 @@
-// Parser CSV mínimo e robusto, sem dependências externas. Usado pela importação
-// do legado (planilhas exportadas do Google Sheets: vírgula como separador,
-// aspas duplas para escape, BOM no início, muitas colunas vazias à direita).
+// Parser CSV robusto, sem dependências externas.
+// Suporta separadores: vírgula (,), ponto-e-vírgula (;), tab (\t).
+// Remove BOM UTF-8, normaliza CRLF, trim em cabeçalhos e valores.
 
-/** Faz o parse de um texto CSV em uma matriz de linhas/células.
- *  Trata: aspas, vírgulas e quebras de linha dentro de aspas, CRLF e BOM. */
-export function parseCsv(text: string): string[][] {
+/** Detecta o separador predominante da primeira linha não-vazia do CSV. */
+export function detectDelimiter(text: string): "," | ";" | "\t" | null {
+  const clean = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  const firstLine = clean.split(/\r?\n/).find((l) => l.trim() !== "") ?? "";
+  const counts = {
+    ",": (firstLine.match(/,/g) ?? []).length,
+    ";": (firstLine.match(/;/g) ?? []).length,
+    "\t": (firstLine.match(/\t/g) ?? []).length,
+  } as const;
+  const winner = (Object.entries(counts) as [string, number][])
+    .sort((a, b) => b[1] - a[1])[0];
+  return winner[1] > 0 ? (winner[0] as "," | ";" | "\t") : null;
+}
+
+/** Faz o parse de um texto CSV em matriz de linhas/células.
+ *  Trata: aspas, delimitadores e quebras de linha dentro de aspas, CRLF, BOM. */
+export function parseCsv(text: string, delimiter?: "," | ";" | "\t"): string[][] {
   const s = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text; // remove BOM
+  const sep = delimiter ?? detectDelimiter(s) ?? ",";
+
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
@@ -28,7 +44,7 @@ export function parseCsv(text: string): string[][] {
     }
     if (c === '"') {
       inQuotes = true;
-    } else if (c === ",") {
+    } else if (c === sep) {
       row.push(field);
       field = "";
     } else if (c === "\n") {
@@ -37,7 +53,7 @@ export function parseCsv(text: string): string[][] {
       row = [];
       field = "";
     } else if (c === "\r") {
-      // ignora; a quebra real é tratada no \n
+      // ignora; a quebra real é o \n
     } else {
       field += c;
     }
@@ -50,16 +66,39 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
-/** Faz o parse em objetos { header -> valor }. A primeira linha são os cabeçalhos
- *  (trim aplicado). Cabeçalhos vazios são ignorados (colunas-fantasma do export).
- *  Linhas totalmente vazias são descartadas. Valores recebem trim. */
-export function parseCsvToObjects(text: string): Record<string, string>[] {
-  const rows = parseCsv(text);
-  if (rows.length === 0) return [];
-  const headers = rows[0].map((h) => h.trim());
+export type CsvDiagnostic = {
+  delimiter: string;
+  delimiterLabel: string;
+  columns: string[];
+  firstRow: Record<string, string> | null;
+  uniqueStatusValues: string[];
+};
+
+/** Faz o parse em objetos { header -> valor } e retorna diagnóstico junto.
+ *  A primeira linha são os cabeçalhos (trim). Colunas vazias são ignoradas.
+ *  Linhas totalmente vazias são descartadas. */
+export function parseCsvToObjectsWithDiag(
+  text: string,
+  statusColumn?: string,
+): { rows: Record<string, string>[]; diag: CsvDiagnostic } {
+  const delimiter = detectDelimiter(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text) ?? ",";
+  const delimiterLabel =
+    delimiter === ";" ? "ponto-e-vírgula (;)" :
+    delimiter === "\t" ? "tab (\\t)" :
+    "vírgula (,)";
+
+  const rawRows = parseCsv(text, delimiter);
+  if (rawRows.length === 0) {
+    return {
+      rows: [],
+      diag: { delimiter, delimiterLabel, columns: [], firstRow: null, uniqueStatusValues: [] },
+    };
+  }
+
+  const headers = rawRows[0].map((h) => h.trim());
   const out: Record<string, string>[] = [];
-  for (let i = 1; i < rows.length; i += 1) {
-    const r = rows[i];
+  for (let i = 1; i < rawRows.length; i += 1) {
+    const r = rawRows[i];
     if (r.every((c) => c.trim() === "")) continue;
     const obj: Record<string, string> = {};
     headers.forEach((h, idx) => {
@@ -67,5 +106,23 @@ export function parseCsvToObjects(text: string): Record<string, string>[] {
     });
     out.push(obj);
   }
-  return out;
+
+  const statusCol = statusColumn ?? "STATUS";
+  const uniqueStatusValues = [...new Set(out.map((r) => r[statusCol] ?? "").filter(Boolean))].sort();
+
+  return {
+    rows: out,
+    diag: {
+      delimiter,
+      delimiterLabel,
+      columns: headers.filter(Boolean),
+      firstRow: out[0] ?? null,
+      uniqueStatusValues,
+    },
+  };
+}
+
+/** Retrocompatibilidade — usa auto-detecção de delimitador. */
+export function parseCsvToObjects(text: string): Record<string, string>[] {
+  return parseCsvToObjectsWithDiag(text).rows;
 }

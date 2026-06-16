@@ -45,12 +45,22 @@ export function ImportAnteProjetoPage() {
     }
   }
 
+  /** Retorna motivo de bloqueio ou null se pode prosseguir. */
+  function commitBlockReason(r: AnteProjetoReport): string | null {
+    if (r.rowsValid === 0) return "Nenhuma linha válida no CSV. Corrija o arquivo e faça novo dry-run.";
+    if (r.projectsToCreate.length === 0) return "Nenhum projeto seria criado. Verifique o CSV.";
+    if (r.projectsToDelete.length > 0 && r.projectsToCreate.length === 0)
+      return "Haveria projetos removidos mas nenhum criado. Operação bloqueada.";
+    if (r.projectsSkipped.some((s) => s.reason.includes("STATUS desconhecido")))
+      return "Há linhas com STATUS desconhecido no CSV. Corrija antes de confirmar.";
+    return null;
+  }
+
   async function runCommit() {
     if (!report) return;
-    const hasProblemsBlocking =
-      report.projectsSkipped.some((s) => s.reason.includes("STATUS desconhecido"));
-    if (hasProblemsBlocking) {
-      setError("Há linhas com STATUS desconhecido no CSV. Corrija o arquivo e faça novo dry-run antes de confirmar.");
+    const block = commitBlockReason(report);
+    if (block) {
+      setError(block);
       return;
     }
     const confirmed = window.confirm(
@@ -147,8 +157,9 @@ export function ImportAnteProjetoPage() {
           {phase === "dry-done" && report && (
             <button
               onClick={runCommit}
-              disabled={busy}
-              className="inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground shadow-sm hover:bg-destructive/90 disabled:opacity-50"
+              disabled={busy || !!commitBlockReason(report)}
+              title={commitBlockReason(report) ?? undefined}
+              className="inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground shadow-sm hover:bg-destructive/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <UploadCloud className="h-4 w-4" />
               Confirmar importação
@@ -207,6 +218,23 @@ function ReportView({ report }: { report: AnteProjetoReport }) {
               {report.committed.works} obra(s) · {report.committed.constructors} construtora(s)
             </p>
           )}
+        </div>
+      </div>
+
+      {/* Diagnóstico do CSV */}
+      <div className="rounded-lg border bg-muted/40 px-4 py-3 text-xs space-y-1.5">
+        <p className="font-medium text-sm">Diagnóstico do CSV</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1">
+          <p><span className="text-muted-foreground">Separador detectado:</span> <span className="font-mono font-medium">{report.diagnostic.delimiterLabel}</span></p>
+          <p><span className="text-muted-foreground">Colunas ({report.diagnostic.columns.length}):</span> {report.diagnostic.columns.join(", ")}</p>
+          <p className="sm:col-span-2">
+            <span className="text-muted-foreground">Status únicos encontrados:</span>{" "}
+            {report.diagnostic.uniqueStatusValues.length > 0
+              ? report.diagnostic.uniqueStatusValues.map((s) => (
+                  <span key={s} className="inline-block mr-2 rounded bg-muted px-1.5 py-0.5 font-mono">{s}</span>
+                ))
+              : <span className="text-amber-600 font-medium">nenhum — coluna STATUS não encontrada ou vazia</span>}
+          </p>
         </div>
       </div>
 
