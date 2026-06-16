@@ -115,6 +115,24 @@ export type CurrentStatusDeadline = {
  */
 export function getCurrentStatusDeadline(project: Project, todayOverride?: string): CurrentStatusDeadline {
   const today = todayOverride ?? todayIsoDate();
+  const todayDate = parseISO(today);
+
+  // Prazo absoluto (vindo de importação CSV) tem prioridade sobre o cálculo por status.
+  if (project.deadline) {
+    const dueDateStr = project.deadline.slice(0, 10);
+    const dueDate = parseISO(dueDateStr);
+    const diff = differenceInCalendarDays(dueDate, todayDate);
+    const isOverdue = diff < 0;
+    return {
+      hasDeadline: true,
+      dueDate: dueDateStr,
+      daysRemaining: isOverdue ? 0 : diff,
+      isOverdue,
+      overdueDays: isOverdue ? Math.abs(diff) : 0,
+      label: isOverdue ? `${Math.abs(diff)}d atraso` : diff === 0 ? "Vence hoje" : `${diff}d restantes`,
+    };
+  }
+
   const { status_atual, status_entered_at } = project;
   const deadlineDays = STATUS_DEADLINE_DAYS[status_atual];
 
@@ -124,7 +142,6 @@ export function getCurrentStatusDeadline(project: Project, todayOverride?: strin
 
   const enteredAt = parseISO(status_entered_at);
   const dueDate = addDays(enteredAt, deadlineDays);
-  const todayDate = parseISO(today);
   const daysRemaining = differenceInCalendarDays(dueDate, todayDate);
   const isOverdue = daysRemaining < 0;
   const daysElapsed = Math.max(differenceInCalendarDays(todayDate, enteredAt), 0);
@@ -138,7 +155,7 @@ export function getCurrentStatusDeadline(project: Project, todayOverride?: strin
     daysRemaining: isOverdue ? 0 : daysRemaining,
     isOverdue,
     overdueDays: isOverdue ? Math.abs(daysRemaining) : 0,
-    label: isOverdue ? `${Math.abs(daysRemaining)}d atraso` : `${daysRemaining}d restantes`,
+    label: isOverdue ? `${Math.abs(daysRemaining)}d atraso` : daysRemaining === 0 ? "Vence hoje" : `${daysRemaining}d restantes`,
   };
 }
 

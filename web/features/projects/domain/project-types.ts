@@ -50,6 +50,8 @@ export type Project = {
   data_envio: string | null;
   data_aprovacao: string | null;
   data_prazo_ap?: string | null;
+  /** Prazo absoluto definido via importação (formato ISO yyyy-MM-dd). Sobrepõe cálculo por status. */
+  deadline?: string | null;
   variacao_cabine?: string;
   projeto_base?: string;
   aprovacao_final?: boolean;

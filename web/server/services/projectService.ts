@@ -78,6 +78,7 @@ function serializeProject(p: any) {
     data_envio: null,
     data_aprovacao: null,
     urgente: p.priority === "URGENTE",
+    deadline: iso(p.deadline),
     reviewCount: p.reviewStudyCount,
     finalReviewCount: p.finalReviewCount,
     created_at: iso(p.createdAt) ?? "",

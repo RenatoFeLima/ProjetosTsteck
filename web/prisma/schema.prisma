@@ -208,6 +208,10 @@ model Project {
   // Data/hora em que o projeto entrou no status atual (base do cálculo de prazo/SLA).
   currentStatusEnteredAt DateTime @default(now())
 
+  // Prazo absoluto definido externamente (e.g. importação de Ante-Projeto CSV).
+  // Quando presente, sobrepõe o cálculo baseado em STATUS_DEADLINE_DAYS.
+  deadline               DateTime?
+
   reviewStudyCount Int @default(0)
   finalReviewCount Int @default(0)
 
@@ -238,6 +242,7 @@ model Project {
   @@index([sellerId])
   @@index([equipmentId])
   @@index([currentStatusEnteredAt])
+  @@index([deadline])
 }
 
 // ─── Histórico de status ────────────────────────────────────────────────────
