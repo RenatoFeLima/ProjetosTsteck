@@ -178,6 +178,11 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
     throw new HttpError(409, `Já existe um projeto com o código "${code}".`);
   }
 
+  if (data.urgente) {
+    if (!data.urgentDeadline) throw new HttpError(400, "Prazo de urgência é obrigatório ao marcar o projeto como urgente.");
+    if (!data.urgentReason?.trim()) throw new HttpError(400, "Motivo da urgência é obrigatório ao marcar o projeto como urgente.");
+  }
+
   const tRefs = startTimer();
   const refs = await resolveRefs(data);
   const refsMs = tRefs();
@@ -203,6 +208,8 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
       engineerPhone: (data.engenheiro_celular ?? "").trim() || null,
       status: initialStatus,
       priority: data.urgente ? "URGENTE" : "NORMAL",
+      urgentDeadline: data.urgente && data.urgentDeadline ? new Date(data.urgentDeadline) : null,
+      urgentReason: data.urgente ? (data.urgentReason?.trim() || null) : null,
       projectReceived,
       cabinLocationDefined,
       alignmentCompleted,
@@ -254,6 +261,11 @@ export async function updateProject(actor: SessionUser, id: string, data: Projec
   assertPermission(actor, (p) => p.projects.edit);
   const existing = await prisma.project.findUnique({ where: { id } });
   if (!existing) throw new HttpError(404, "Projeto não encontrado.");
+
+  if (data.urgente === true) {
+    if (!data.urgentDeadline) throw new HttpError(400, "Prazo de urgência é obrigatório ao marcar o projeto como urgente.");
+    if (!data.urgentReason?.trim()) throw new HttpError(400, "Motivo da urgência é obrigatório ao marcar o projeto como urgente.");
+  }
 
   // Reaproveita resolução de cadastros (edição mantém os relacionamentos por nome).
   const refs = await resolveRefs(data);
@@ -338,10 +350,10 @@ export async function changeStatus(
     throw new HttpError(400, "Informe o motivo da revisão.");
   }
 
-  // Código final: ao entrar em "Projeto Aprovado" (status terminal) pode-se
+  // Código: ao entrar em "Ante-Projeto Enviado" ou "Projeto Aprovado" pode-se
   // confirmar/atualizar o código. Valida formato e duplicidade ANTES da transação.
   let finalCodeToApply: string | null = null;
-  if (to === "PROJETO_APROVADO" && opts.finalCode?.trim()) {
+  if ((to === "ANTE_PROJETO_ENVIADO" || to === "PROJETO_APROVADO") && opts.finalCode?.trim()) {
     const code = opts.finalCode.trim();
     if (!hasValidFinalCode(code)) {
       throw new HttpError(400, "Código final inválido: deve terminar com 4 dígitos numéricos.");
@@ -614,7 +626,7 @@ export type NextCodeSuggestion = {
   maxSuffix: number;
   /** Próximo sufixo GLOBAL (compat). */
   nextSuffix: string;
-  /** Código do último/maior projeto que já chegou em PROJETO_APROVADO (terminal). */
+  /** Código do último/maior projeto que já chegou em ANTE_PROJETO_ENVIADO ou PROJETO_APROVADO. */
   lastFinalCode: string | null;
   /** Código provisório do projeto sendo movimentado (informação secundária). */
   currentDraftCode: string | null;
@@ -622,10 +634,10 @@ export type NextCodeSuggestion = {
   suggestedFinalCode: string | null;
 };
 
-/** Sugestão do próximo código final. A referência principal é o ÚLTIMO projeto
- *  que já chegou em PROJETO_APROVADO (maior sufixo numérico entre os
- *  finalizados): "De:" = esse código, "Para:" = prefixo + sufixo + 1. Se não
- *  existir finalizado anterior, usa o código provisório atual como fallback. */
+/** Sugestão do próximo código. A referência principal é o ÚLTIMO projeto
+ *  que já chegou em ANTE_PROJETO_ENVIADO ou PROJETO_APROVADO (maior sufixo
+ *  numérico): "De:" = esse código, "Para:" = prefixo + sufixo + 1. Se não
+ *  existir nenhum anterior, usa o código provisório atual como fallback. */
 export async function nextCodeSuggestion(
   actor: SessionUser,
   currentCode?: string,
@@ -636,16 +648,16 @@ export async function nextCodeSuggestion(
   const allRows = await prisma.project.findMany({ select: { code: true } });
   const globalMax = maxCodeSuffix(allRows.map((r) => r.code));
 
-  // Projetos que já chegaram em PROJETO_APROVADO (terminal) — status atual OU
-  // histórico (um aprovado pode voltar para revisão e retornar).
+  // Projetos que já chegaram em ANTE_PROJETO_ENVIADO ou PROJETO_APROVADO — status
+  // atual OU histórico (um projeto pode sair e voltar para esses status).
   const ids = new Set<string>();
   const [historyHits, currentFinal] = await Promise.all([
     prisma.projectStatusHistory.findMany({
-      where: { toStatus: "PROJETO_APROVADO" },
+      where: { toStatus: { in: ["ANTE_PROJETO_ENVIADO", "PROJETO_APROVADO"] } },
       select: { projectId: true },
     }),
     prisma.project.findMany({
-      where: { status: "PROJETO_APROVADO" },
+      where: { status: { in: ["ANTE_PROJETO_ENVIADO", "PROJETO_APROVADO"] } },
       select: { id: true },
     }),
   ]);

@@ -534,8 +534,8 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
       fromStatus: current.status_atual,
       nextStatus: targetStatus,
     };
-    // Status final: confirma/atualiza o código final antes de concluir.
-    if (targetStatus === FINAL_STATUS) {
+    // Ante-Projeto Enviado: confirma/atualiza o código antes de mover.
+    if (targetStatus === "ANTE-PROJETO ENVIADO") {
       setFinalCodeMove(move);
       return;
     }

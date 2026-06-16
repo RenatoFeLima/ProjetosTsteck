@@ -12,6 +12,7 @@ import { ProjectDetailsDrawer } from "./project-details-drawer";
 import { ProjectsKpiDashboard } from "./projects-kpi-dashboard";
 import { ProjectStatusChangeDialog } from "./project-status-change-dialog";
 import { UrgencyJustificationDialog } from "./urgency-justification-dialog";
+import { FinalCodeDialog } from "./final-code-dialog";
 import { KpiDashboardErrorBoundary } from "./kpi-dashboard-error-boundary";
 import { PageContainer } from "./page-container";
 import { useProjectsStore, setProjectsErrorSink } from "@/features/projects/state/projects-store";
@@ -80,6 +81,7 @@ export function ProjectsPageShell() {
   } | null>(null);
   const [statusChangeProject, setStatusChangeProject] = useState<Project | undefined>(undefined);
   const [selectedUrgencyProject, setSelectedUrgencyProject] = useState<Project | undefined>(undefined);
+  const [anteProjFinalCodePending, setAnteProjFinalCodePending] = useState<{ project: Project; observation?: string } | null>(null);
   const [toast, setToast] = useState<string>("");
   const [tableState, setTableState] = useState<"loading" | "ready" | "error">("loading");
   const [kpiFilter, setKpiFilter] = useState<"all" | "total" | "andamento" | "atrasados" | "urgentes" | "finalizados">("all");
@@ -199,6 +201,13 @@ export function ProjectsPageShell() {
   function applyStatusChange(nextStatus: ProjectStatus, observation?: string) {
     const project = statusChangeProject;
     if (!project) return;
+
+    // Ante-Projeto Enviado: abre o modal de código antes de mover.
+    if (nextStatus === "ANTE-PROJETO ENVIADO") {
+      setStatusChangeProject(undefined);
+      setAnteProjFinalCodePending({ project, observation });
+      return;
+    }
 
     const oldStatus = project.status_atual;
     // Observação vira o MOTIVO da revisão (reason) exigido pelo backend.
@@ -554,6 +563,38 @@ export function ProjectsPageShell() {
             onConfirm={applyStatusChange}
           />
         )}
+
+        <FinalCodeDialog
+          open={Boolean(anteProjFinalCodePending)}
+          currentCode={anteProjFinalCodePending?.project.codigo_projeto}
+          ignoreId={anteProjFinalCodePending?.project.id}
+          isCodigoDuplicado={isCodigoProjetoDuplicado}
+          onCancel={() => {
+            setAnteProjFinalCodePending(null);
+            notify("Movimentacao cancelada.");
+          }}
+          onConfirm={(finalCode) => {
+            const pending = anteProjFinalCodePending;
+            if (!pending) return;
+            const { project, observation } = pending;
+            const oldStatus = project.status_atual;
+            const result = moveStatus(project.id, "ANTE-PROJETO ENVIADO", "acao-rapida", observation, finalCode);
+            if (!result.ok) {
+              notify(result.error ?? "Falha ao atualizar status.");
+            } else {
+              if (observation?.trim()) {
+                addObservation(
+                  project.id,
+                  `Mudanca de status via menu de acoes: ${oldStatus} -> ANTE-PROJETO ENVIADO. Observacao: ${observation.trim()}`,
+                  currentUserName,
+                );
+              }
+              touchLastUpdated();
+              notify(`Ante-projeto enviado com o codigo ${finalCode}.`);
+            }
+            setAnteProjFinalCodePending(null);
+          }}
+        />
 
         {toast && (
           <div className="fixed right-4 bottom-4 rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg">{toast}</div>

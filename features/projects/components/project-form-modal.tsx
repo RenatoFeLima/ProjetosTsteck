@@ -10,6 +10,7 @@ import { SearchableCombobox } from "./searchable-combobox";
 import { ConfirmProjectCreateDialog } from "./confirm-project-create-dialog";
 import { MissingRequiredFieldsDialog } from "./missing-required-fields-dialog";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
+import { UrgencyJustificationDialog } from "./urgency-justification-dialog";
 import { formatPhone, formatProjectCode, normalizeEngineerName, stripPhone } from "./project-form-utils";
 
 const STATUS_OPTIONS: ProjectStatus[] = [
@@ -135,6 +136,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
   const [construtoraError, setConstrutoraError] = useState("");
   const [obraError, setObraError] = useState("");
+  const [urgencyDialogOpen, setUrgencyDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!props.open) return;
@@ -642,44 +644,19 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                     type="checkbox"
                     className="mt-0.5 h-4 w-4 rounded accent-[#9e0b0f]"
                     checked={Boolean(form.urgente)}
-                    onChange={(e) => patch({
-                      urgente: e.target.checked,
-                      ...(!e.target.checked ? { urgentDeadline: null, urgentReason: null } : {}),
-                    })}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setUrgencyDialogOpen(true);
+                      } else {
+                        patch({ urgente: false, urgentDeadline: null, urgentReason: null });
+                      }
+                    }}
                   />
                   <div>
                     <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Marcar como urgente</span>
                     <p className="mt-0.5 text-xs text-zinc-500 dark:text-muted">Prioriza o projeto na fila de atendimento.</p>
                   </div>
                 </label>
-                {form.urgente && (
-                  <div className="space-y-3 rounded-xl border border-red-100 dark:border-red-900/40 bg-red-50/60 dark:bg-red-900/10 p-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        Prazo de urgência <span className="text-brand">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        value={(form.urgentDeadline as string | null | undefined)?.slice(0, 10) ?? ""}
-                        min={new Date().toISOString().slice(0, 10)}
-                        onChange={(e) => patch({ urgentDeadline: e.target.value || null })}
-                        className="w-full rounded-lg border border-zinc-300 dark:border-white/8 bg-white dark:bg-panel-soft px-3 py-2 text-sm outline-none focus:border-brand dark:text-foreground"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        Motivo da urgência <span className="text-brand">*</span>
-                      </label>
-                      <textarea
-                        value={(form.urgentReason as string | null | undefined) ?? ""}
-                        onChange={(e) => patch({ urgentReason: e.target.value || null })}
-                        placeholder="Descreva o motivo da urgência..."
-                        rows={2}
-                        className="w-full rounded-lg border border-zinc-300 dark:border-white/8 bg-white dark:bg-panel-soft px-3 py-2 text-sm outline-none focus:border-brand dark:text-foreground dark:placeholder:text-zinc-600"
-                      />
-                    </div>
-                  </div>
-                )}
                 {props.mode === "edit" && props.project && (
                   <button type="button" className="rounded-xl border border-zinc-300 dark:border-white/15 bg-white dark:bg-panel-soft px-3 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-50 dark:hover:bg-white/8" onClick={() => {
                     const result = props.onMoveStatus(props.project!.id, form.status_atual as ProjectStatus);
@@ -799,6 +776,21 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
       onConfirmDiscard={() => {
         setDiscardDialogOpen(false);
         props.onClose();
+      }}
+    />
+
+    <UrgencyJustificationDialog
+      open={urgencyDialogOpen}
+      project={{
+        id: props.project?.id ?? "",
+        codigo_projeto: form.codigo_projeto ?? "(novo projeto)",
+        construtora: form.construtora ?? "",
+        obra: form.obra ?? "",
+      }}
+      onCancel={() => setUrgencyDialogOpen(false)}
+      onConfirm={(payload) => {
+        patch({ urgente: true, urgentDeadline: payload.urgentDeadline, urgentReason: payload.urgencyReason });
+        setUrgencyDialogOpen(false);
       }}
     />
     </div>

@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import { AlertTriangle } from "lucide-react";
 import type { Project } from "@/features/projects/domain/project-types";
 
+type UrgencyProjectInfo = Pick<Project, "id" | "codigo_projeto" | "construtora" | "obra">;
+
 type UrgencyPayload = {
   projectId: string;
   urgencyReason: string;
@@ -15,7 +17,7 @@ type UrgencyPayload = {
 
 type UrgencyJustificationDialogProps = {
   open: boolean;
-  project?: Project;
+  project?: UrgencyProjectInfo;
   onCancel: () => void;
   onConfirm: (payload: UrgencyPayload) => void;
   isSaving?: boolean;

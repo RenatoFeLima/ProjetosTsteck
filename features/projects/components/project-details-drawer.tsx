@@ -14,6 +14,7 @@ import type { Project, ProjectObservation, StatusHistoryItem } from "@/features/
 import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { SearchableCombobox } from "./searchable-combobox";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
+import { UrgencyJustificationDialog } from "./urgency-justification-dialog";
 import { formatPhone, formatProjectCode, normalizeEngineerName, stripPhone } from "./project-form-utils";
 import { useProjectsStore } from "@/features/projects/state/projects-store";
 
@@ -167,6 +168,7 @@ export function ProjectDetailsDrawer({
   const [discardOpen, setDiscardOpen] = useState(false);
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
   const [confirmAlignOpen, setConfirmAlignOpen] = useState(false);
+  const [urgencyDialogOpen, setUrgencyDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // per-field validation errors
@@ -752,10 +754,13 @@ export function ProjectDetailsDrawer({
                     type="checkbox"
                     className="mt-0.5 h-4 w-4 rounded accent-[#9e0b0f]"
                     checked={Boolean(editForm.urgente)}
-                    onChange={(e) => patchEdit({
-                      urgente: e.target.checked,
-                      ...(!e.target.checked ? { urgentDeadline: null, urgentReason: null } : {}),
-                    })}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setUrgencyDialogOpen(true);
+                      } else {
+                        patchEdit({ urgente: false, urgentDeadline: null, urgentReason: null });
+                      }
+                    }}
                     disabled={project.status_atual === "PROJETO APROVADO"}
                   />
                   <div>
@@ -763,34 +768,6 @@ export function ProjectDetailsDrawer({
                     <p className="mt-0.5 text-xs text-zinc-500 dark:text-muted">Prioriza o projeto na fila de atendimento.</p>
                   </div>
                 </label>
-                {editForm.urgente && (
-                  <div className="mt-3 space-y-3 rounded-xl border border-red-100 dark:border-red-900/40 bg-red-50/60 dark:bg-red-900/10 p-3">
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        Prazo de urgência <span className="text-brand">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        value={editForm.urgentDeadline?.slice(0, 10) ?? ""}
-                        min={new Date().toISOString().slice(0, 10)}
-                        onChange={(e) => patchEdit({ urgentDeadline: e.target.value || null })}
-                        className="w-full rounded-lg border border-zinc-300 dark:border-white/8 bg-white dark:bg-panel-soft px-3 py-2 text-sm outline-none focus:border-brand dark:text-foreground"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                        Motivo da urgência <span className="text-brand">*</span>
-                      </label>
-                      <textarea
-                        value={editForm.urgentReason ?? ""}
-                        onChange={(e) => patchEdit({ urgentReason: e.target.value || null })}
-                        placeholder="Descreva o motivo da urgência..."
-                        rows={2}
-                        className="w-full rounded-lg border border-zinc-300 dark:border-white/8 bg-white dark:bg-panel-soft px-3 py-2 text-sm outline-none focus:border-brand dark:text-foreground dark:placeholder:text-zinc-600"
-                      />
-                    </div>
-                  </div>
-                )}
               </SectionCard>
             </div>
           ) : (
@@ -1038,6 +1015,16 @@ export function ProjectDetailsDrawer({
           </article>
         </div>
       )}
+
+      <UrgencyJustificationDialog
+        open={urgencyDialogOpen}
+        project={project}
+        onCancel={() => setUrgencyDialogOpen(false)}
+        onConfirm={(payload) => {
+          patchEdit({ urgente: true, urgentDeadline: payload.urgentDeadline, urgentReason: payload.urgencyReason });
+          setUrgencyDialogOpen(false);
+        }}
+      />
     </div>
   );
 }
