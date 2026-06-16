@@ -610,8 +610,24 @@ export function ProjectsPageShell() {
         )}
 
         {/* DEBUG: badge de versão — remover após confirmar em produção */}
-        <div className="fixed bottom-2 left-2 z-[999999] rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-300 opacity-70 pointer-events-none select-none">
-          BUILD: diagnostic-v4
+        <div
+          id="build-version-badge"
+          style={{
+            position: "fixed",
+            bottom: 8,
+            left: 8,
+            zIndex: 999999,
+            background: "red",
+            color: "white",
+            padding: "6px 10px",
+            borderRadius: 6,
+            fontSize: 12,
+            fontFamily: "monospace",
+            pointerEvents: "none",
+            userSelect: "none",
+          }}
+        >
+          BUILD diagnostic-v4 f9323fd
         </div>
       </PageContainer>
     </main>
