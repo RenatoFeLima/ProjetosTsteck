@@ -323,15 +323,6 @@ export async function changeStatus(
     );
   }
 
-  // Pré-requisitos para liberar a elaboração do ante-projeto.
-  if (from === "CADASTRO_INICIAL" && to === "ELABORAR_ANTE_PROJETO") {
-    const missing: string[] = [];
-    if (!project.projectReceived) missing.push("Projeto de obra recebido");
-    if (!project.cabinLocationDefined) missing.push("Local da cabine definido");
-    if (!project.alignmentCompleted) missing.push("Alinhamento concluído");
-    if (missing.length) throw new HttpError(400, `Alinhamento não concluído: ${missing.join(", ")}.`);
-  }
-
   const enteringReview = to === REVIEW_STUDY || to === REVIEW_FINAL;
   if (enteringReview && !opts.reason?.trim()) {
     throw new HttpError(400, "Informe o motivo da revisão.");
@@ -392,13 +383,15 @@ export async function changeStatus(
       await tx.projectFinalReviewHistory.updateMany({ where: { projectId: id, exitedAt: null }, data: { exitedAt: now } });
     }
 
+    // Ao sair de CADASTRO_INICIAL, as 3 flags de pré-requisito são marcadas true.
+    const leavingCadastroInicial = from === "CADASTRO_INICIAL";
     await tx.project.update({
       where: { id },
       data: {
         status: to,
         currentStatusEnteredAt: now,
         updatedById: actor.id,
-        // Código final atualizado JUNTO com o status (mesma transação).
+        ...(leavingCadastroInicial ? { projectReceived: true, cabinLocationDefined: true, alignmentCompleted: true } : {}),
         ...(finalCodeToApply ? { code: finalCodeToApply } : {}),
         ...(to === REVIEW_STUDY ? { reviewStudyCount: { increment: 1 } } : {}),
         ...(to === REVIEW_FINAL ? { finalReviewCount: { increment: 1 } } : {}),

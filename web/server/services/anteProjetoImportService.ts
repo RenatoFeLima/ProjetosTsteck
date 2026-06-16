@@ -633,6 +633,10 @@ export async function commitAnteProjetoImport(actor: SessionUser, csvText: strin
             status: p.status,
             priority: p.priority,
             deadline: p.deadline,
+            // Projetos importados já nascem fora de CADASTRO_INICIAL.
+            projectReceived: true,
+            cabinLocationDefined: true,
+            alignmentCompleted: true,
             currentStatusEnteredAt: now,
             createdAt: now,
             createdById: actor.id,
