@@ -22,6 +22,8 @@
 
 # backups de dados (podem conter dados reais — nunca commitar)
 /backups
+/prisma/backups
+prisma/backup-ante-projeto-*.json
 
 # misc
 .DS_Store

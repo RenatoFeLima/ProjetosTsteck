@@ -96,6 +96,7 @@ model Constructor {
   projects Project[]
 
   @@index([active])
+  @@index([name])
 }
 
 model Work {
@@ -116,6 +117,7 @@ model Work {
 
   @@index([constructorId])
   @@index([active])
+  @@index([constructorId, name])
 }
 
 model Equipment {
@@ -146,6 +148,7 @@ model CabinType {
   projects Project[]
 
   @@index([active])
+  @@index([name])
 }
 
 model Seller {
@@ -160,6 +163,8 @@ model Seller {
   projects Project[]
 
   @@index([active])
+  @@index([name])
+  @@index([email])
 }
 
 model Engineer {
@@ -174,6 +179,7 @@ model Engineer {
   projects Project[]
 
   @@index([active])
+  @@index([name])
 }
 
 // ─── Projetos ───────────────────────────────────────────────────────────────
@@ -201,6 +207,14 @@ model Project {
 
   // Data/hora em que o projeto entrou no status atual (base do cálculo de prazo/SLA).
   currentStatusEnteredAt DateTime @default(now())
+
+  // Prazo absoluto definido externamente (e.g. importação de Ante-Projeto CSV).
+  // Quando presente, sobrepõe o cálculo baseado em STATUS_DEADLINE_DAYS.
+  deadline               DateTime?
+
+  // Prazo e motivo de urgência (preenchidos ao marcar priority=URGENTE manualmente).
+  urgentDeadline         DateTime?
+  urgentReason           String?   @db.Text
 
   reviewStudyCount Int @default(0)
   finalReviewCount Int @default(0)
@@ -230,7 +244,9 @@ model Project {
   @@index([constructorId])
   @@index([workId])
   @@index([sellerId])
+  @@index([equipmentId])
   @@index([currentStatusEnteredAt])
+  @@index([deadline])
 }
 
 // ─── Histórico de status ────────────────────────────────────────────────────

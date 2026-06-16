@@ -3,6 +3,7 @@ import {
   Bell,
   Box,
   Building2,
+  DatabaseBackup,
   GraduationCap,
   HardHat,
   Kanban,
@@ -56,6 +57,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Configurações", href: "/configuracoes", icon: SlidersHorizontal, permission: (p) => p.settings.view },
       { label: "Auditoria", href: "/auditoria", icon: ScrollText, permission: (p) => p.audit.view },
+      { label: "Importar Legado", href: "/administracao/importar", icon: DatabaseBackup, permission: (p) => p.users.view },
+      { label: "Importar Ante-Projeto", href: "/administracao/importar-ante-projeto", icon: DatabaseBackup, permission: (p) => p.users.view },
     ],
   },
 ];

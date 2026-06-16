@@ -3,8 +3,8 @@ export const PROJECT_STATUSES = [
   "ELABORAR ANTE-PROJETO",
   "ANTE-PROJETO ENVIADO",
   "ANTE-PROJETO APROVADO",
-  "PROJETO APROVADO",
   "PROJETO FINAL ENVIADO",
+  "PROJETO APROVADO",
   "REVISAO DE ESTUDO",
   "REVISAO DE PROJETO FINAL",
 ] as const;
@@ -50,12 +50,18 @@ export type Project = {
   data_envio: string | null;
   data_aprovacao: string | null;
   data_prazo_ap?: string | null;
+  /** Prazo absoluto definido via importação (formato ISO yyyy-MM-dd). Sobrepõe cálculo por status. */
+  deadline?: string | null;
   variacao_cabine?: string;
   projeto_base?: string;
   aprovacao_final?: boolean;
   local_cabine_final?: boolean;
   data_final?: string | null;
   urgente: boolean;
+  /** Prazo de urgência definido ao marcar como urgente (ISO yyyy-MM-dd ou datetime). */
+  urgentDeadline?: string | null;
+  /** Motivo da urgência registrado ao marcar como urgente. */
+  urgentReason?: string | null;
   /** Quantidade total de vezes que o projeto entrou em Revisao de Estudo. */
   reviewCount: number;
   /** Historico detalhado de cada ciclo de Revisao de Estudo. */

@@ -5,9 +5,6 @@ import { buildProjectUrgencyTemplate } from "./templates/project-urgency-templat
 import { buildProjectCreatedTemplate } from "./templates/project-created-template";
 import { buildDeadlineWarningTemplate } from "./templates/deadline-warning-template";
 
-const PROJECTS_TEAM_EMAIL =
-  process.env.PROJECTS_TEAM_EMAIL ?? "projetos@tsteck.com.br";
-
 function createTransporter() {
   const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS } = process.env;
 
@@ -74,81 +71,120 @@ function buildHtml(payload: ProjectNotificationPayload): string {
 export async function sendProjectMovementEmail(
   payload: ProjectNotificationPayload,
   to: string[],
-  cc?: string[],
 ): Promise<{ success: boolean; message: string }> {
   try {
     const transporter = createTransporter();
-    const from = process.env.MAIL_FROM ?? process.env.SMTP_USER;
+    const from = process.env.MAIL_FROM ?? process.env.SMTP_FROM ?? process.env.SMTP_USER;
 
     console.info(
-      `[MAIL] Enviando ${payload.eventType} para projeto ${payload.projectCode} → to:[${to.join(", ")}]${
-        cc?.length ? ` cc:[${cc.join(", ")}]` : ""
-      }`,
+      `[MAIL] Enviando ${payload.eventType} para projeto ${payload.projectCode} → to:[${to.join(", ")}]`,
     );
 
     await transporter.sendMail({
       from,
       to: to.join(", "),
-      ...(cc && cc.length ? { cc: cc.join(", ") } : {}),
       subject: buildSubject(payload),
       html: buildHtml(payload),
     });
 
     return { success: true, message: "E-mail enviado com sucesso." };
   } catch (error) {
+    const detail = (error as Error)?.message ?? "erro desconhecido";
     console.error(
-      `[MAIL_ERROR] Falha ao enviar ${payload.eventType} para projeto ${payload.projectCode}: ${
-        (error as Error)?.message ?? "erro desconhecido"
-      }`,
+      `[MAIL_ERROR] Falha ao enviar ${payload.eventType} para projeto ${payload.projectCode}: ${detail}`,
     );
-    return { success: false, message: "Não foi possível enviar o e-mail." };
+    return { success: false, message: `Falha SMTP: ${detail}` };
   }
 }
 
 export async function sendProjectCreatedEmail(
   payload: ProjectNotificationPayload,
   to: string[],
-  cc?: string[],
 ): Promise<{ success: boolean; message: string }> {
   try {
     const transporter = createTransporter();
-    const from = process.env.MAIL_FROM ?? process.env.SMTP_USER;
+    const from = process.env.MAIL_FROM ?? process.env.SMTP_FROM ?? process.env.SMTP_USER;
 
     await transporter.sendMail({
       from,
       to: to.join(", "),
-      ...(cc && cc.length ? { cc: cc.join(", ") } : {}),
       subject: buildSubject(payload),
       html: buildProjectCreatedTemplate(payload),
     });
 
     return { success: true, message: "E-mail de cadastro enviado com sucesso." };
   } catch (error) {
-    console.error("[mail-service] Falha ao enviar e-mail de cadastro:", error);
-    return { success: false, message: "Não foi possível enviar o e-mail de cadastro." };
+    const detail = (error as Error)?.message ?? "erro desconhecido";
+    console.error("[mail-service] Falha ao enviar e-mail de cadastro:", detail);
+    return { success: false, message: `Falha SMTP: ${detail}` };
   }
 }
 
 export async function sendDeadlineWarningEmail(
   payload: ProjectNotificationPayload,
   to: string[],
-  cc?: string[],
 ): Promise<{ success: boolean; message: string }> {
   try {
     const transporter = createTransporter();
-    const from = process.env.MAIL_FROM ?? process.env.SMTP_USER;
+    const from = process.env.MAIL_FROM ?? process.env.SMTP_FROM ?? process.env.SMTP_USER;
 
     await transporter.sendMail({
       from,
       to: to.join(", "),
-      ...(cc && cc.length ? { cc: cc.join(", ") } : {}),
       subject: buildSubject(payload),
       html: buildDeadlineWarningTemplate(payload),
     });
 
     return { success: true, message: "E-mail de alerta de prazo enviado." };
   } catch (error) {
-    console.error("[mail-service] Falha ao enviar e-mail de prazo:", error);
-    return { success: false, message: "Não foi possível enviar o e-mail de prazo." };
+    const detail = (error as Error)?.message ?? "erro desconhecido";
+    console.error("[mail-service] Falha ao enviar e-mail de prazo:", detail);
+    return { success: false, message: `Falha SMTP: ${detail}` };
+  }
+}
+
+// ─── Diagnóstico SMTP (endpoint admin de teste) ──────────────────────────────
+
+/** Resumo da config SMTP, SEM expor a senha — apenas para diagnóstico. */
+export function smtpConfigSummary() {
+  const user = process.env.SMTP_USER ?? "";
+  const maskedUser = user ? user.replace(/^(.{2}).*(@.*)$/, "$1***$2") : "(vazio)";
+  return {
+    host: process.env.SMTP_HOST ?? "smtp.gmail.com",
+    port: Number(process.env.SMTP_PORT ?? 587),
+    secure: process.env.SMTP_SECURE === "true",
+    user: maskedUser,
+    hasPass: Boolean(process.env.SMTP_PASS),
+    from: process.env.MAIL_FROM ?? process.env.SMTP_FROM ?? process.env.SMTP_USER ?? "(vazio)",
+  };
+}
+
+/** Verifica conexão/autenticação SMTP sem enviar e-mail. */
+export async function verifySmtp(): Promise<{ ok: boolean; error?: string; code?: string }> {
+  try {
+    await createTransporter().verify();
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: (error as Error)?.message, code: (error as { code?: string })?.code };
+  }
+}
+
+/** Envia um e-mail de teste simples. Retorna o resultado real (sem expor senha). */
+export async function sendTestEmail(
+  to: string,
+): Promise<{ success: boolean; messageId?: string; error?: string; code?: string }> {
+  try {
+    const transporter = createTransporter();
+    const from = process.env.MAIL_FROM ?? process.env.SMTP_FROM ?? process.env.SMTP_USER;
+    const info = await transporter.sendMail({
+      from,
+      to,
+      subject: "Teste SMTP — Pipeline de Projetos TSTECK",
+      text: "E-mail de teste do Pipeline de Projetos TSTECK. Se você recebeu, o SMTP está funcionando.",
+      html: "<p>E-mail de teste do <strong>Pipeline de Projetos TSTECK</strong>.</p><p>Se você recebeu, o SMTP está funcionando.</p>",
+    });
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    return { success: false, error: (error as Error)?.message, code: (error as { code?: string })?.code };
   }
 }

@@ -1,18 +1,9 @@
 import type { ProjectNotificationPayload } from "@/features/projects/services/project-notification-service";
+import { formatDateTimeBR } from "@/lib/mail/format-datetime";
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
+const formatDate = formatDateTimeBR;
+const SYSTEM_URL =
+  process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://projetos-tsteck.vercel.app";
 
 export function buildProjectCreatedTemplate(data: ProjectNotificationPayload): string {
   const equipamentoRow = data.equipamento
@@ -102,12 +93,13 @@ export function buildProjectCreatedTemplate(data: ProjectNotificationPayload): s
             </td>
           </tr>
 
-          <!-- CTA note -->
+          <!-- CTA note + link do sistema -->
           <tr>
-            <td style="padding:4px 28px 20px;">
-              <p style="margin:0;font-size:13px;color:#525252;background:#fef2f2;border-left:3px solid #9e0b0f;padding:10px 14px;border-radius:0 6px 6px 0;">
+            <td style="padding:4px 28px 20px;" align="center">
+              <p style="margin:0 0 14px;font-size:13px;color:#525252;background:#fef2f2;border-left:3px solid #9e0b0f;padding:10px 14px;border-radius:0 6px 6px 0;text-align:left;">
                 Acesse o Pipeline de Projetos para acompanhar o andamento e registrar as próximas etapas.
               </p>
+              <a href="${SYSTEM_URL}" style="display:inline-block;background:#9e0b0f;color:#fff;text-decoration:none;font-size:13px;font-weight:700;padding:11px 24px;border-radius:8px;">Abrir o sistema</a>
             </td>
           </tr>
 

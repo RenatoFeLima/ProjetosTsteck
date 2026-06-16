@@ -434,7 +434,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
               </p>
             </div>
             {props.mode === "edit" && form.status_atual && <StatusBadge status={form.status_atual} />}
-            <UrgenteBadge urgente={Boolean(form.urgente)} />
+            <UrgenteBadge urgente={Boolean(form.urgente)} urgentDeadline={form.urgentDeadline as string | null | undefined} />
             {props.mode === "edit" && props.project && <PrazoBadge project={props.project} />}
             <button
               className="ml-1 shrink-0 rounded-lg border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel-soft p-2 text-zinc-500 dark:text-zinc-400 transition hover:border-zinc-300 dark:hover:border-white/15 hover:text-zinc-900 dark:hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9e0b0f]/40"
@@ -638,12 +638,48 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                   />
                 )}
                 <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3 transition hover:border-zinc-300 dark:hover:border-white/15">
-                  <input type="checkbox" className="mt-0.5 h-4 w-4 rounded accent-[#9e0b0f]" checked={Boolean(form.urgente)} onChange={(e) => patch({ urgente: e.target.checked })} />
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded accent-[#9e0b0f]"
+                    checked={Boolean(form.urgente)}
+                    onChange={(e) => patch({
+                      urgente: e.target.checked,
+                      ...(!e.target.checked ? { urgentDeadline: null, urgentReason: null } : {}),
+                    })}
+                  />
                   <div>
                     <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Marcar como urgente</span>
                     <p className="mt-0.5 text-xs text-zinc-500 dark:text-muted">Prioriza o projeto na fila de atendimento.</p>
                   </div>
                 </label>
+                {form.urgente && (
+                  <div className="space-y-3 rounded-xl border border-red-100 dark:border-red-900/40 bg-red-50/60 dark:bg-red-900/10 p-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        Prazo de urgência <span className="text-brand">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={(form.urgentDeadline as string | null | undefined)?.slice(0, 10) ?? ""}
+                        min={new Date().toISOString().slice(0, 10)}
+                        onChange={(e) => patch({ urgentDeadline: e.target.value || null })}
+                        className="w-full rounded-lg border border-zinc-300 dark:border-white/8 bg-white dark:bg-panel-soft px-3 py-2 text-sm outline-none focus:border-brand dark:text-foreground"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        Motivo da urgência <span className="text-brand">*</span>
+                      </label>
+                      <textarea
+                        value={(form.urgentReason as string | null | undefined) ?? ""}
+                        onChange={(e) => patch({ urgentReason: e.target.value || null })}
+                        placeholder="Descreva o motivo da urgência..."
+                        rows={2}
+                        className="w-full rounded-lg border border-zinc-300 dark:border-white/8 bg-white dark:bg-panel-soft px-3 py-2 text-sm outline-none focus:border-brand dark:text-foreground dark:placeholder:text-zinc-600"
+                      />
+                    </div>
+                  </div>
+                )}
                 {props.mode === "edit" && props.project && (
                   <button type="button" className="rounded-xl border border-zinc-300 dark:border-white/15 bg-white dark:bg-panel-soft px-3 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300 transition hover:bg-zinc-50 dark:hover:bg-white/8" onClick={() => {
                     const result = props.onMoveStatus(props.project!.id, form.status_atual as ProjectStatus);

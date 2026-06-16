@@ -15,9 +15,9 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     tipo_cabine: "",
     codigo_projeto: "ABC-123-4567",
     vendedor: "RENATO",
-    proj_obra_recebido: false,
-    local_cabine_definido: false,
-    alinhamento: false,
+    proj_obra_recebido: true,
+    local_cabine_definido: true,
+    alinhamento: true,
     data_lancamento: "2026-05-01",
     data_alinhamento: "2026-01-01",
     status_atual: "CADASTRO INICIAL",
@@ -49,19 +49,15 @@ describe("projects alerts", () => {
       id: "p-urgent",
       codigo_projeto: "URG-100-0001",
       urgente: true,
-      proj_obra_recebido: true,
-      local_cabine_definido: true,
-      alinhamento: true,
-      data_alinhamento: "2025-01-01",
       updated_at: "2025-01-01",
     });
 
-    const pendingData = makeProject({
+    const cadastroIncompleto = makeProject({
       id: "p-pending",
       codigo_projeto: "PEN-300-0003",
       proj_obra_recebido: false,
       local_cabine_definido: false,
-      data_alinhamento: null,
+      alinhamento: false,
     });
 
     const review = makeProject({
@@ -69,29 +65,26 @@ describe("projects alerts", () => {
       codigo_projeto: "REV-200-0002",
       status_atual: "REVISAO DE ESTUDO",
       status_entered_at: "2026-01-01",
-      proj_obra_recebido: true,
-      local_cabine_definido: true,
-      alinhamento: true,
-      data_alinhamento: "2026-05-15",
-      updated_at: "2026-05-15",
     });
 
-    render(<ProjectsAlerts projects={[urgent, review, pendingData]} onOpen={onOpen} />);
+    render(<ProjectsAlerts projects={[urgent, review, cadastroIncompleto]} onOpen={onOpen} />);
 
     expect(screen.getByRole("heading", { name: "Urgentes" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Atrasados" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Aguardando documentacao" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Aguardando localizacao da cabine" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Revisao de estudo ativa" })).toBeInTheDocument();
-    expect(screen.getAllByText(/Proxima acao:/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Em Revisão de Estudo" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Cadastro inicial sem alinhamento completo" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText(/Próxima ação:/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Ação recomendada:/i).length).toBeGreaterThan(0);
 
     await user.click(screen.getAllByText("URG-100-0001")[0]);
 
-    expect(onOpen).toHaveBeenCalledTimes(1);
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: "p-urgent" }));
   });
 
   it("mostra estado vazio quando nao ha alertas", () => {
+    const hoje = new Date().toISOString().slice(0, 10);
     render(
       <ProjectsAlerts
         projects={[
@@ -100,15 +93,22 @@ describe("projects alerts", () => {
             local_cabine_definido: true,
             alinhamento: true,
             urgente: false,
-            status_atual: "CADASTRO INICIAL",
-            data_alinhamento: null,
-            updated_at: "2026-05-27",
+            status_atual: "ANTE-PROJETO APROVADO",
+            updated_at: hoje,
           }),
         ]}
         onOpen={vi.fn()}
       />,
     );
 
-    expect(screen.getByText(/Nenhum alerta para os filtros atuais/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nenhum alerta no momento/i)).toBeInTheDocument();
+  });
+
+  it("mostra loading e error states", () => {
+    const { rerender } = render(<ProjectsAlerts projects={[]} onOpen={vi.fn()} loading />);
+    expect(screen.queryByText(/Nenhum alerta no momento/i)).not.toBeInTheDocument();
+
+    rerender(<ProjectsAlerts projects={[]} onOpen={vi.fn()} error onRetry={vi.fn()} />);
+    expect(screen.getByText(/Não foi possível carregar os alertas/i)).toBeInTheDocument();
   });
 });

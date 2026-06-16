@@ -2,7 +2,6 @@
 
 import { nanoid } from "nanoid";
 import { create, type StoreApi } from "zustand";
-import { persist } from "zustand/middleware";
 import type {
   AuditEvent,
   Construtora,
@@ -353,39 +352,6 @@ function buildStore(set: any, get: () => MasterDataState): MasterDataState {
 
 // ─── Singleton with persist ───────────────────────────────────────────────────
 
-export const useMasterDataStore = create<MasterDataState>()(
-  persist(
-    (set, get) => buildStore(set, get),
-    {
-      name: "tsteck:master-data",
-      // v3: limpeza oficial — zera dados mockados antigos que ainda estejam no
-      // localStorage do navegador. A partir daqui, só dados reais cadastrados.
-      version: 3,
-      migrate: (persisted, fromVersion) => {
-        const state = (persisted as Partial<MasterDataState>) ?? {};
-        if (fromVersion < 3) {
-          return {
-            ...state,
-            construtoras: [],
-            obras: [],
-            equipamentos: [],
-            tiposCabine: [],
-            vendedores: [],
-            engenheiros: [],
-            auditLog: [],
-          } as MasterDataState;
-        }
-        return state as MasterDataState;
-      },
-      partialize: (state) => ({
-        construtoras: state.construtoras,
-        obras: state.obras,
-        equipamentos: state.equipamentos,
-        tiposCabine: state.tiposCabine,
-        vendedores: state.vendedores,
-        engenheiros: state.engenheiros,
-        auditLog: state.auditLog,
-      }),
-    },
-  ),
-);
+// Store em memória (SEM localStorage). É hidratado a partir do MySQL via
+// hydrateMasterDataFromApi() — MySQL é a fonte única da verdade.
+export const useMasterDataStore = create<MasterDataState>()((set, get) => buildStore(set, get));

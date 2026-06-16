@@ -1,7 +1,7 @@
 ﻿import { getStatusTheme } from "@/features/projects/domain/status-theme";
 import { getCurrentStatusDeadline } from "@/features/projects/domain/project-rules";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
-import { format, isValid, parseISO } from "date-fns";
+import { differenceInCalendarDays, format, isValid, parseISO } from "date-fns";
 
 const BASE_BADGE_CLASS =
   "inline-flex h-7 max-w-full items-center whitespace-nowrap overflow-hidden text-ellipsis rounded-full border px-2.5 text-[11px] font-semibold tracking-wide";
@@ -15,12 +15,44 @@ export function StatusBadge({ status }: { status: ProjectStatus }) {
   );
 }
 
-export function UrgenteBadge({ urgente }: { urgente: boolean }) {
+export function UrgenteBadge({ urgente, urgentDeadline }: { urgente: boolean; urgentDeadline?: string | null }) {
   if (!urgente) return null;
+
+  let label = "Urgente";
+  let tooltip = "Prioridade urgente";
+
+  if (urgentDeadline) {
+    const due = parseISO(urgentDeadline.slice(0, 10));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diff = differenceInCalendarDays(due, today);
+    if (diff < 0) {
+      label = `Urgente · ${Math.abs(diff)}d atrasado`;
+      tooltip = `Prazo vencido há ${Math.abs(diff)} dia(s): ${urgentDeadline.slice(0, 10)}`;
+    } else if (diff === 0) {
+      label = "Urgente · vence hoje";
+      tooltip = `Prazo de urgência vence hoje: ${urgentDeadline.slice(0, 10)}`;
+    } else {
+      label = `Urgente · ${diff}d restantes`;
+      tooltip = `Prazo de urgência: ${urgentDeadline.slice(0, 10)} (${diff} dia(s) restantes)`;
+    }
+  }
+
+  const isOverdue = urgentDeadline
+    ? differenceInCalendarDays(parseISO(urgentDeadline.slice(0, 10)), new Date()) < 0
+    : false;
+
   return (
-    <span className={`${BASE_BADGE_CLASS} gap-1 border-red-200 bg-red-50 text-[#9e0b0f] dark:border-red-700/50 dark:bg-red-900/20 dark:text-red-300`}>
-      <span className="h-1.5 w-1.5 rounded-full bg-[#9e0b0f]" />
-      Urgente
+    <span
+      title={tooltip}
+      className={`${BASE_BADGE_CLASS} gap-1 ${
+        isOverdue
+          ? "border-red-400 bg-red-100 text-red-800 dark:border-red-600 dark:bg-red-900/40 dark:text-red-200"
+          : "border-red-200 bg-red-50 text-[#9e0b0f] dark:border-red-700/50 dark:bg-red-900/20 dark:text-red-300"
+      }`}
+    >
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+      <span className="truncate">{label}</span>
     </span>
   );
 }

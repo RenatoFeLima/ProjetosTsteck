@@ -110,7 +110,7 @@ function CardContent({ project }: { project: Project }) {
           <span className="flex-1 min-w-0 font-mono text-[12.5px] font-bold leading-tight text-zinc-900 dark:text-foreground">
             {project.codigo_projeto}
           </span>
-          {project.urgente && <UrgenteBadge urgente />}
+          {project.urgente && <UrgenteBadge urgente urgentDeadline={project.urgentDeadline} />}
         </div>
 
         {/* Row 2: construtora */}

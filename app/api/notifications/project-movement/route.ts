@@ -5,6 +5,13 @@ import {
   isValidEmail,
   type ProjectNotificationPayload,
 } from "@/features/projects/services/project-notification-service";
+import { startTimer, logPerf } from "@/server/perf";
+import {
+  notificationKeyFor,
+  notificationAlreadySent,
+  recordNotification,
+} from "@/lib/mail/notification-log";
+import { getSession } from "@/server/auth/session";
 
 /** Escapa caracteres HTML para evitar injeção no template do e-mail. */
 function escapeHtml(str: unknown): string {
@@ -38,6 +45,12 @@ export async function POST(request: NextRequest) {
   // Valida o e-mail do vendedor apenas se informado.
   const sellerEmailValid = typeof body.sellerEmail === "string" && isValidEmail(body.sellerEmail);
 
+  // "Alterado por" = usuário autenticado da sessão (não o placeholder do front).
+  const session = await getSession();
+  const changedByName = session
+    ? session.name || session.username || "Usuário do sistema"
+    : body.changedBy || "Usuário do sistema";
+
   // Sanitiza todos os campos de texto usados no HTML do e-mail.
   const sanitized: ProjectNotificationPayload = {
     projectId: escapeHtml(body.projectId),
@@ -49,7 +62,7 @@ export async function POST(request: NextRequest) {
     oldStatus: body.oldStatus ? escapeHtml(body.oldStatus) : undefined,
     newStatus: body.newStatus ? escapeHtml(body.newStatus) : undefined,
     eventType: body.eventType,
-    changedBy: escapeHtml(body.changedBy),
+    changedBy: escapeHtml(changedByName),
     changedAt: body.changedAt,
     urgencyReason: body.urgencyReason ? escapeHtml(body.urgencyReason) : undefined,
     notes: body.notes ? escapeHtml(body.notes) : undefined,
@@ -60,7 +73,60 @@ export async function POST(request: NextRequest) {
   };
 
   const recipients = getProjectNotificationRecipients(sellerEmailValid ? body.sellerEmail : undefined);
-  const result = await sendProjectMovementEmail(sanitized, recipients.to, recipients.cc);
+  const key = notificationKeyFor(body);
 
-  return NextResponse.json(result, { status: result.success ? 200 : 500 });
+  // Log seguro (sem expor o e-mail completo) para rastrear o fluxo nos Runtime Logs.
+  const logLine = (resultado: string) =>
+    console.info(
+      `[notify/movement] project=${body.projectId} code=${body.projectCode} ` +
+        `${body.oldStatus ?? "-"}->${body.newStatus ?? "-"} sellerEmail=${sellerEmailValid ? "sim" : "nao"} ` +
+        `key=${key} resultado=${resultado}`,
+    );
+
+  // Notificação é secundária: nunca derruba o fluxo nem retorna 500.
+  const stop = startTimer();
+
+  // Sem destinatário (vendedor sem e-mail válido): não envia e registra ignorado.
+  if (recipients.to.length === 0) {
+    await recordNotification({ payload: body, key, sentTo: [], success: false, ignored: true });
+    logLine("ignored");
+    logPerf("POST /api/notifications/project-movement", stop(), { success: false });
+    return NextResponse.json(
+      { success: false, message: "Notificação ignorada: vendedor sem e-mail cadastrado." },
+      { status: 200 },
+    );
+  }
+
+  // Idempotência: não reenvia o mesmo evento (mesma chave) já enviado com sucesso.
+  if (await notificationAlreadySent(key)) {
+    logLine("duplicate");
+    logPerf("POST /api/notifications/project-movement", stop(), { success: true });
+    return NextResponse.json(
+      { success: true, message: "Notificação já enviada anteriormente (sem duplicar)." },
+      { status: 200 },
+    );
+  }
+
+  try {
+    const result = await sendProjectMovementEmail(sanitized, recipients.to);
+    await recordNotification({
+      payload: body,
+      key,
+      sentTo: recipients.to,
+      success: result.success,
+      error: result.success ? undefined : result.message,
+    });
+    logLine(result.success ? "sent" : "failed");
+    logPerf("POST /api/notifications/project-movement", stop(), { success: result.success });
+    return NextResponse.json(result, { status: 200 });
+  } catch (err) {
+    await recordNotification({ payload: body, key, sentTo: recipients.to, success: false, error: (err as Error)?.message });
+    logLine("failed");
+    logPerf("POST /api/notifications/project-movement", stop(), { success: false });
+    console.error("[notifications/project-movement] falha ao enviar e-mail:", err);
+    return NextResponse.json(
+      { success: false, message: "Falha ao enviar e-mail (registrada, fluxo não afetado)." },
+      { status: 200 },
+    );
+  }
 }

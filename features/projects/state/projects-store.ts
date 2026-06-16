@@ -103,7 +103,7 @@ type StoreState = {
   createProject: (input: ProjectInput) => { ok: boolean; error?: string; missing?: string[]; project?: Project };
   updateProject: (id: string, patch: Partial<Project>) => Promise<{ ok: boolean; error?: string }>;
   deleteProject: (id: string) => void;
-  toggleUrgente: (id: string) => void;
+  toggleUrgente: (id: string, urgentData?: { reason: string; deadline: string }) => void;
   moveStatus: (id: string, nextStatus: ProjectStatus, origem: StatusHistoryItem["origem"], nota?: string, finalCode?: string) => { ok: boolean; error?: string };
   addObservation: (projetoId: string, texto: string, usuario: string) => void;
   getProjectStatusHistory: (projectId: string) => StatusHistoryItem[];
@@ -426,18 +426,24 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     }));
   },
 
-  toggleUrgente: (id) => {
+  toggleUrgente: (id, urgentData) => {
     const willBeUrgent = !get().projects.find((p) => p.id === id)?.urgente;
     set((state) => ({
       projects: state.projects.map((project) =>
-        project.id === id ? { ...project, urgente: !project.urgente, updated_at: nowDate() } : project,
+        project.id === id ? {
+          ...project,
+          urgente: willBeUrgent,
+          urgentDeadline: willBeUrgent ? (urgentData?.deadline ?? null) : null,
+          urgentReason: willBeUrgent ? (urgentData?.reason ?? null) : null,
+          updated_at: nowDate(),
+        } : project,
       ),
     }));
     if (isPending(id)) {
       debugLog("urgência adiada: projeto ainda não persistido", id);
       return;
     }
-    void apiSetUrgency(id, willBeUrgent)
+    void apiSetUrgency(id, willBeUrgent, urgentData?.reason, urgentData?.deadline)
       .then((real) => set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) })))
       .catch(onPersistFailure("urgência", "Não foi possível atualizar a urgência do projeto."));
   },
@@ -451,7 +457,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       return { ok: false, error: validation.reason ?? "Transicao de status nao permitida." };
     }
 
-    // Código final (ao entrar em Projeto Final Enviado): atualiza otimisticamente.
+    // Código final (ao entrar em Projeto Aprovado, status terminal): atualiza otimisticamente.
     const codeToApply = finalCode?.trim() ? finalCode.trim() : current.codigo_projeto;
 
     const now = nowDate();

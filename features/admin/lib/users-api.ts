@@ -11,7 +11,8 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((data as { error?: string }).error ?? "Erro na requisição.");
+    const d = data as { error?: string; message?: string };
+    throw new Error(d.message ?? d.error ?? "Erro na requisição.");
   }
   return data as T;
 }

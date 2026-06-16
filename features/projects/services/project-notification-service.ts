@@ -66,20 +66,20 @@ export function isValidEmail(email: string): boolean {
 }
 
 /**
- * Retorna os destinatários de e-mail para um projeto.
- * Regras:
- * - to: vendedor responsável (se tiver e-mail válido)
- * - cc: projetos@tsteck.com.br
- * - Se sem vendedor: to = projetos@tsteck.com.br, sem cc
+ * Destinatários de e-mail de um projeto.
+ * Regra (única): SOMENTE o vendedor responsável recebe.
+ * - to: [e-mail do vendedor] quando válido.
+ * - Sem vendedor ou sem e-mail válido: `to` vazio → o chamador NÃO envia e
+ *   registra a notificação como ignorada por ausência de destinatário.
+ * Não há mais cópia/CC/BCC para o time (projetos@tsteck.com.br foi removido).
  */
 export function getProjectNotificationRecipients(
   sellerEmail: string | undefined,
-): { to: string[]; cc?: string[] } {
-  const teamEmail = process.env.PROJECTS_TEAM_EMAIL ?? "projetos@tsteck.com.br";
+): { to: string[] } {
   if (sellerEmail && isValidEmail(sellerEmail)) {
-    return { to: [sellerEmail], cc: [teamEmail] };
+    return { to: [sellerEmail] };
   }
-  return { to: [teamEmail] };
+  return { to: [] };
 }
 
 /**

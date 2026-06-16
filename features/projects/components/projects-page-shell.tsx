@@ -13,16 +13,14 @@ import { ProjectsKpiDashboard } from "./projects-kpi-dashboard";
 import { ProjectStatusChangeDialog } from "./project-status-change-dialog";
 import { KpiDashboardErrorBoundary } from "./kpi-dashboard-error-boundary";
 import { PageContainer } from "./page-container";
-import { useProjectsStore } from "@/features/projects/state/projects-store";
+import { useProjectsStore, setProjectsErrorSink } from "@/features/projects/state/projects-store";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
-import { useAuth } from "@/features/auth/hooks/use-auth";
-import { getCurrentStatusDeadline } from "@/features/projects/domain/project-rules";
+import { hydrateMasterDataFromApi } from "@/features/master-data/lib/master-data-hydrate";
+import { computePrazoBadge, computePrazoEntrega, todayIsoDate } from "@/features/projects/domain/project-rules";
+import { countAlerts } from "@/features/projects/domain/project-alerts";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
-import {
-  sendProjectNotification,
-  sendProjectCreatedNotification,
-} from "@/features/projects/services/project-notification-service";
-import type { ProjectNotificationEventType } from "@/features/projects/services/project-notification-service";
+import { sendProjectNotification } from "@/features/projects/services/project-notification-service";
+import { useAuth } from "@/features/auth/hooks/use-auth";
 
 export function ProjectsPageShell() {
   const {
@@ -38,6 +36,7 @@ export function ProjectsPageShell() {
     toggleUrgente,
     moveStatus,
     statusHistory,
+    observations: allObservations,
     getProjectStatusHistory,
     getProjectObservations,
     isCodigoProjetoDuplicado,
@@ -46,9 +45,10 @@ export function ProjectsPageShell() {
 
   const { vendedores } = useMasterDataStore();
 
+  // Autor das observações/ações = usuário autenticado da sessão (não placeholder).
   const { session } = useAuth();
-  const currentUsername = session?.user.username ?? "usuario.local";
-  const perms = session?.user.permissions;
+  const currentUserName =
+    session?.user?.name?.trim() || session?.user?.username?.trim() || "Usuário do sistema";
 
   /** Retorna e-mail do vendedor pelo nome cadastrado. */
   function getVendorEmail(vendedorName: string): string | undefined {
@@ -56,6 +56,18 @@ export function ProjectsPageShell() {
       (v) => v.name.toLowerCase().trim() === vendedorName.toLowerCase().trim() && v.active,
     );
     return found?.email?.trim() || undefined;
+  }
+
+  // Notifica SOMENTE o vendedor (fire-and-forget). Chama sempre o backend, que
+  // decide enviar (vendedor com e-mail) ou ignorar (sem e-mail) e registra o
+  // resultado; nunca bloqueia o fluxo. A observação reflete a mensagem retornada.
+  function dispatchSellerEmail(
+    projectId: string,
+    payload: Parameters<typeof sendProjectNotification>[0],
+  ) {
+    void sendProjectNotification(payload).then((emailResult) => {
+      addObservation(projectId, `Notificacao por e-mail ao vendedor: ${emailResult.message}`, "sistema");
+    });
   }
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -80,19 +92,23 @@ export function ProjectsPageShell() {
 
   const history = useMemo(
     () => (drawerContext ? getProjectStatusHistory(drawerContext.projectId) : []),
-    [drawerContext, getProjectStatusHistory],
+    // statusHistory na dep p/ recomputar quando o detalhe é carregado do MySQL.
+    [drawerContext, getProjectStatusHistory, statusHistory],
   );
 
   const observations = useMemo(
     () => (drawerContext ? getProjectObservations(drawerContext.projectId) : []),
-    [drawerContext, getProjectObservations],
+    [drawerContext, getProjectObservations, allObservations],
   );
 
   const kpis = useMemo(() => {
     const total = baseProjects.length;
-    const atrasados = baseProjects.filter((project) => getCurrentStatusDeadline(project).isOverdue).length;
+    const atrasados = baseProjects.filter((project) => {
+      const prazo = computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido);
+      return computePrazoBadge(todayIsoDate(), prazo) === "atrasado";
+    }).length;
     const urgentes = baseProjects.filter((project) => project.urgente).length;
-    const finalizados = baseProjects.filter((project) => project.status_atual === "PROJETO FINAL ENVIADO").length;
+    const finalizados = baseProjects.filter((project) => project.status_atual === "PROJETO APROVADO").length;
     const andamento = Math.max(total - finalizados, 0);
 
     return { total, atrasados, urgentes, finalizados, andamento };
@@ -101,31 +117,40 @@ export function ProjectsPageShell() {
   const projects = useMemo(() => {
     if (kpiFilter === "all" || kpiFilter === "total") return baseProjects;
     if (kpiFilter === "urgentes") return baseProjects.filter((project) => project.urgente);
-    if (kpiFilter === "finalizados") return baseProjects.filter((project) => project.status_atual === "PROJETO FINAL ENVIADO");
+    if (kpiFilter === "finalizados") return baseProjects.filter((project) => project.status_atual === "PROJETO APROVADO");
     if (kpiFilter === "atrasados") {
-      return baseProjects.filter((project) => getCurrentStatusDeadline(project).isOverdue);
+      return baseProjects.filter((project) => {
+        const prazo = computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido);
+        return computePrazoBadge(todayIsoDate(), prazo) === "atrasado";
+      });
     }
-    return baseProjects.filter((project) => project.status_atual !== "PROJETO FINAL ENVIADO");
+    return baseProjects.filter((project) => project.status_atual !== "PROJETO APROVADO");
   }, [baseProjects, kpiFilter]);
 
-  const alerts = useMemo(
-    () =>
-      projects.filter((project) => {
-        const dl = getCurrentStatusDeadline(project);
-        return project.urgente || dl.isOverdue || (dl.hasDeadline && (dl.daysRemaining ?? 999) <= 15);
-      }),
-    [projects],
-  );
+  // Contador da aba Alertas = projetos distintos com ao menos um alerta (mesma
+  // regra da aba Alertas), já respeitando os filtros globais aplicados em `projects`.
+  const alertCount = useMemo(() => countAlerts(projects), [projects]);
 
   const tabCounts = useMemo(
-    () => ({ table: projects.length, kanban: projects.length, kpis: allProjects.length, alerts: alerts.length }),
-    [projects.length, allProjects.length, alerts.length],
+    () => ({ table: projects.length, kanban: projects.length, kpis: allProjects.length, alerts: alertCount }),
+    [projects.length, allProjects.length, alertCount],
   );
 
   useEffect(() => {
     setLastUpdatedAt(new Date().toLocaleString());
+    // Erros de ação real do store (ex.: validação 400 ao salvar) viram toast.
+    setProjectsErrorSink((message) => {
+      setToast(message);
+      window.setTimeout(() => setToast(""), 4000);
+    });
+    // Hidrata projetos e cadastros mestres a partir do MySQL (fonte da verdade).
+    void useProjectsStore.getState().hydrate();
+    void hydrateMasterDataFromApi();
     const timer = window.setTimeout(() => setTableState("ready"), 420);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      setProjectsErrorSink(null);
+    };
   }, []);
 
   function touchLastUpdated() {
@@ -174,7 +199,8 @@ export function ProjectsPageShell() {
     if (!project) return;
 
     const oldStatus = project.status_atual;
-    const result = moveStatus(project.id, nextStatus, "acao-rapida");
+    // Observação vira o MOTIVO da revisão (reason) exigido pelo backend.
+    const result = moveStatus(project.id, nextStatus, "acao-rapida", observation);
     if (!result.ok) {
       notify(result.error ?? "Nao foi possivel alterar o status.");
       return;
@@ -184,7 +210,7 @@ export function ProjectsPageShell() {
       addObservation(
         project.id,
         `Mudanca de status via menu de acoes: ${oldStatus} -> ${nextStatus}. Observacao: ${observation.trim()}`,
-        currentUsername,
+        currentUserName,
       );
     }
 
@@ -192,12 +218,24 @@ export function ProjectsPageShell() {
     touchLastUpdated();
     notify("Status atualizado com sucesso.");
 
-    notifyStatusChange({
-      project,
-      oldStatus,
-      newStatus: nextStatus,
-      notes: observation,
-    });
+    // Elaborar Ante-Projeto e Projeto Aprovado (terminal) têm e-mail próprio no
+    // backend (esteira/45d e finalização) — evita o e-mail genérico duplicado.
+    if (nextStatus !== "ELABORAR ANTE-PROJETO" && nextStatus !== "PROJETO APROVADO") {
+      dispatchSellerEmail(project.id, {
+        projectId: project.id,
+        projectCode: project.codigo_projeto,
+        constructorName: project.construtora,
+        workName: project.obra,
+        sellerName: project.vendedor,
+        sellerEmail: getVendorEmail(project.vendedor) ?? "",
+        oldStatus,
+        newStatus: nextStatus,
+        eventType: "STATUS_CHANGED",
+        changedBy: currentUserName,
+        changedAt: new Date().toISOString(),
+        notes: observation?.trim() || undefined,
+      });
+    }
   }
 
   function notify(message: string) {
@@ -205,161 +243,53 @@ export function ProjectsPageShell() {
     window.setTimeout(() => setToast(""), 3000);
   }
 
-  /**
-   * Dispara a notificação de e-mail de mudança de status (fire-and-forget).
-   * Usado por TODOS os caminhos que alteram status: Kanban, dialog de ação
-   * rápida e edição pelo drawer de detalhes. Centralizar evita que algum
-   * caminho fique sem enviar e-mail (causa do bug em que mudanças pelo drawer
-   * nao notificavam o vendedor).
-   */
-  function notifyStatusChange(args: {
-    project: Project;
-    oldStatus: ProjectStatus;
-    newStatus: ProjectStatus;
-    notes?: string;
-  }) {
-    const { project, oldStatus, newStatus, notes } = args;
-    if (oldStatus === newStatus) return;
-
-    const isReleased = oldStatus === "CADASTRO INICIAL" && newStatus === "ELABORAR ANTE-PROJETO";
-    const isFinished = newStatus === "PROJETO FINAL ENVIADO";
-    const eventType: ProjectNotificationEventType = isReleased
-      ? "PROJECT_RELEASED_TO_ELABORATE_ANTE_PROJECT"
-      : isFinished
-        ? "PROJECT_FINISHED"
-        : "STATUS_CHANGED";
-
-    const sellerEmail = getVendorEmail(project.vendedor);
-
-    sendProjectNotification({
-      projectId: project.id,
-      projectCode: project.codigo_projeto,
-      constructorName: project.construtora,
-      workName: project.obra,
-      sellerName: project.vendedor,
-      sellerEmail: sellerEmail ?? "",
-      oldStatus,
-      newStatus,
-      eventType,
-      changedBy: currentUsername,
-      changedAt: new Date().toISOString(),
-      notes: notes?.trim() || undefined,
-      ...(isReleased ? { deadlineDays: 45 } : {}),
-    }).then((emailResult) => {
-      const dest = sellerEmail ?? "equipe de projetos";
-      if (!emailResult.success) {
-        addObservation(project.id, `Falha ao enviar e-mail para [${dest}].`, "sistema");
-        notify("Status atualizado, mas não foi possível enviar o e-mail ao vendedor.");
-      } else {
-        addObservation(project.id, `E-mail enviado para [${dest}] sobre alteração de status.`, "sistema");
-      }
-    });
-
-    if (!sellerEmail && project.vendedor && project.vendedor !== "SEM VENDEDOR") {
-      addObservation(project.id, "Vendedor sem e-mail cadastrado: aviso enviado apenas à equipe de projetos.", "sistema");
-    }
-  }
-
-  /**
-   * Envolve updateProject e dispara e-mail de notificação sempre que o status
-   * do projeto muda (qualquer transição), inclusive na edição pelo drawer de
-   * detalhes. Antes, só a transição CADASTRO INICIAL → ELABORAR notificava.
-   */
-  function handleUpdateProject(id: string, patch: Partial<Project>): { ok: boolean; error?: string } {
-    const current = allProjects.find((p) => p.id === id);
-    const oldStatus = current?.status_atual;
-    const newStatus = patch.status_atual ?? oldStatus;
-
-    const result = updateProject(id, patch);
-
-    if (result.ok && current && oldStatus && newStatus && oldStatus !== newStatus) {
-      // Usa os dados resultantes (patch sobrepõe os atuais) para o destinatário correto.
-      notifyStatusChange({
-        project: { ...current, ...patch },
-        oldStatus,
-        newStatus,
-      });
-    }
-
-    return result;
-  }
-
-  function markUrgentWithReason(payload: { projectId: string; urgencyReason: string; updatedAt: string; updatedBy: string }) {
+  function markUrgentWithReason(payload: { projectId: string; urgencyReason: string; urgentDeadline: string; updatedAt: string; updatedBy: string }) {
     const target = baseProjects.find((project) => project.id === payload.projectId);
     if (!target || target.urgente) return;
 
-    toggleUrgente(payload.projectId);
-
-    const when = new Date(payload.updatedAt).toLocaleString();
-    addObservation(
-      payload.projectId,
-      `Projeto marcado como urgente por ${payload.updatedBy} em ${when}. Justificativa: ${payload.urgencyReason}`,
-      payload.updatedBy,
-    );
+    toggleUrgente(payload.projectId, { reason: payload.urgencyReason, deadline: payload.urgentDeadline });
 
     touchLastUpdated();
     notify("Projeto marcado como urgente.");
 
-    // Disparar e-mail ao vendedor (fire-and-forget)
-    const sellerEmail = getVendorEmail(target.vendedor);
-    if (sellerEmail) {
-      sendProjectNotification({
-        projectId: target.id,
-        projectCode: target.codigo_projeto,
-        constructorName: target.construtora,
-        workName: target.obra,
-        sellerName: target.vendedor,
-        sellerEmail,
-        newStatus: target.status_atual,
-        eventType: "MARKED_URGENT",
-        changedBy: payload.updatedBy,
-        changedAt: payload.updatedAt,
-        urgencyReason: payload.urgencyReason,
-      }).then((emailResult) => {
-        if (!emailResult.success) {
-          addObservation(target.id, `Falha ao enviar e-mail para [${sellerEmail}].`, "sistema");
-        } else {
-          addObservation(target.id, `E-mail enviado para [${sellerEmail}] sobre marcação de urgência.`, "sistema");
-        }
-      });
-    } else if (target.vendedor && target.vendedor !== "SEM VENDEDOR") {
-      addObservation(target.id, "E-mail não enviado: vendedor sem e-mail cadastrado.", "sistema");
-    }
+    dispatchSellerEmail(target.id, {
+      projectId: target.id,
+      projectCode: target.codigo_projeto,
+      constructorName: target.construtora,
+      workName: target.obra,
+      sellerName: target.vendedor,
+      sellerEmail: getVendorEmail(target.vendedor) ?? "",
+      newStatus: target.status_atual,
+      eventType: "MARKED_URGENT",
+      changedBy: currentUserName,
+      changedAt: payload.updatedAt,
+      urgencyReason: payload.urgencyReason,
+    });
   }
 
   function removeUrgent(project: Project) {
     if (!project.urgente) return;
 
     toggleUrgente(project.id);
-    const by = currentUsername;
+    const by = currentUserName;
     const when = new Date().toLocaleString();
     addObservation(project.id, `Urgencia removida por ${by} em ${when}.`, by);
 
     touchLastUpdated();
     notify("Urgencia removida do projeto.");
 
-    // Disparar e-mail ao vendedor (fire-and-forget)
-    const sellerEmail = getVendorEmail(project.vendedor);
-    if (sellerEmail) {
-      sendProjectNotification({
-        projectId: project.id,
-        projectCode: project.codigo_projeto,
-        constructorName: project.construtora,
-        workName: project.obra,
-        sellerName: project.vendedor,
-        sellerEmail,
-        newStatus: project.status_atual,
-        eventType: "URGENCY_REMOVED",
-        changedBy: by,
-        changedAt: new Date().toISOString(),
-      }).then((emailResult) => {
-        if (!emailResult.success) {
-          addObservation(project.id, `Falha ao enviar e-mail para [${sellerEmail}].`, "sistema");
-        } else {
-          addObservation(project.id, `E-mail enviado para [${sellerEmail}] sobre remoção de urgência.`, "sistema");
-        }
-      });
-    }
+    dispatchSellerEmail(project.id, {
+      projectId: project.id,
+      projectCode: project.codigo_projeto,
+      constructorName: project.construtora,
+      workName: project.obra,
+      sellerName: project.vendedor,
+      sellerEmail: getVendorEmail(project.vendedor) ?? "",
+      newStatus: project.status_atual,
+      eventType: "URGENCY_REMOVED",
+      changedBy: by,
+      changedAt: new Date().toISOString(),
+    });
   }
 
   function retryTableLoad() {
@@ -402,8 +332,7 @@ export function ProjectsPageShell() {
                 Atualizado: {lastUpdatedAt}
               </span>
             )}
-            {/* Dropdown Novo Projeto — visível apenas com permissão de criar */}
-            {(perms?.projects.create ?? true) && (
+            {/* Dropdown Novo Projeto */}
             <div
               className="relative"
               onBlur={(e) => {
@@ -454,7 +383,6 @@ export function ProjectsPageShell() {
                 </div>
               )}
             </div>
-            )}
           </div>
         </div>
 
@@ -487,10 +415,10 @@ export function ProjectsPageShell() {
           <ProjectsTable
             projects={projects}
             onViewDetails={openDetails}
-            onEditProject={perms?.projects.edit !== false ? openEdit : undefined}
-            onChangeStatus={perms?.projects.changeStatus !== false ? openStatusDialog : undefined}
+            onEditProject={openEdit}
+            onChangeStatus={openStatusDialog}
             onViewHistory={openHistory}
-            onMarkUrgente={perms?.projects.markUrgent !== false ? markUrgentWithReason : undefined}
+            onMarkUrgente={markUrgentWithReason}
             onRemoveUrgente={removeUrgent}
             onClearFilters={clearAllFilters}
             state={tableState}
@@ -502,25 +430,39 @@ export function ProjectsPageShell() {
             projects={projects}
             onOpen={openDetails}
             notify={notify}
-            canDrag={perms?.kanban.dragAndDrop !== false}
-            onMoveStatus={(projectId, status, observation) => {
+            isCodigoDuplicado={isCodigoProjetoDuplicado}
+            onMoveStatus={(projectId, status, observation, finalCode) => {
               const current = projects.find((item) => item.id === projectId);
               const oldStatus = current?.status_atual;
-              const result = moveStatus(projectId, status, "kanban", observation?.trim() || undefined);
+              // observation = MOTIVO da revisão (reason); finalCode = código final ao
+              // concluir. O backend exige motivo p/ revisão e atualiza o código no final.
+              const result = moveStatus(projectId, status, "kanban", observation, finalCode);
 
-              if (result.ok && current && oldStatus) {
+              if (result.ok && current) {
                 const message = observation?.trim()
                   ? `Mudanca de status via Kanban: ${oldStatus} -> ${status}. Observacao: ${observation.trim()}`
                   : `Mudanca de status via Kanban: ${oldStatus} -> ${status}.`;
-                addObservation(projectId, message, currentUsername);
+                addObservation(projectId, message, currentUserName);
                 touchLastUpdated();
 
-                notifyStatusChange({
-                  project: current,
-                  oldStatus,
-                  newStatus: status,
-                  notes: observation,
-                });
+                // ELABORAR e PROJETO APROVADO (terminal) têm e-mail próprio no
+                // backend (esteira/45d e finalização com o código final). Evita duplicidade.
+                if (status !== "ELABORAR ANTE-PROJETO" && status !== "PROJETO APROVADO") {
+                  dispatchSellerEmail(projectId, {
+                    projectId: current.id,
+                    projectCode: current.codigo_projeto,
+                    constructorName: current.construtora,
+                    workName: current.obra,
+                    sellerName: current.vendedor,
+                    sellerEmail: getVendorEmail(current.vendedor) ?? "",
+                    oldStatus,
+                    newStatus: status,
+                    eventType: "STATUS_CHANGED",
+                    changedBy: currentUserName,
+                    changedAt: new Date().toISOString(),
+                    notes: observation?.trim() || undefined,
+                  });
+                }
               }
 
               if (!result.ok) notify(result.error ?? "Falha na movimentacao");
@@ -536,7 +478,15 @@ export function ProjectsPageShell() {
               />
             </KpiDashboardErrorBoundary>
           )}
-          {activeView === "alerts" && <ProjectsAlerts projects={alerts} onOpen={openDetails} />}
+          {activeView === "alerts" && (
+            <ProjectsAlerts
+              projects={projects}
+              onOpen={openDetails}
+              loading={tableState === "loading"}
+              error={tableState === "error"}
+              onRetry={retryTableLoad}
+            />
+          )}
         </section>
 
         {tableState === "error" && (
@@ -557,40 +507,12 @@ export function ProjectsPageShell() {
           onClose={() => {
             setModalOpen(false);
           }}
-          onCreate={(input) => {
-            const result = createProject(input as Parameters<typeof createProject>[0]);
-            if (result.ok && result.project) {
-              const proj = result.project;
-              const sellerEmail = getVendorEmail(proj.vendedor);
-              sendProjectCreatedNotification({
-                projectId: proj.id,
-                projectCode: proj.codigo_projeto,
-                constructorName: proj.construtora,
-                workName: proj.obra,
-                sellerName: proj.vendedor,
-                sellerEmail: sellerEmail ?? "",
-                equipamento: proj.equipamento,
-                tipoCabine: proj.tipo_cabine,
-                eventType: "PROJECT_CREATED",
-                changedBy: currentUsername,
-                changedAt: new Date().toISOString(),
-              }).then((emailResult) => {
-                const dest = sellerEmail ?? "equipe de projetos";
-                if (!emailResult.success) {
-                  addObservation(proj.id, `Falha ao enviar e-mail de cadastro para [${dest}].`, "sistema");
-                } else {
-                  addObservation(proj.id, `E-mail de novo cadastro enviado para [${dest}].`, "sistema");
-                }
-              });
-              touchLastUpdated();
-            }
-            return result;
-          }}
-          onUpdate={handleUpdateProject}
+          onCreate={(input) => createProject(input as Parameters<typeof createProject>[0])}
+          onUpdate={updateProject}
           onDelete={deleteProject}
           onMoveStatus={(id, status) => moveStatus(id, status, "formulario")}
           isCodigoDuplicado={isCodigoProjetoDuplicado}
-          onAddObservation={(id, text) => addObservation(id, text, currentUsername)}
+          onAddObservation={(id, text) => addObservation(id, text, currentUserName)}
           notify={notify}
         />
 
@@ -604,8 +526,8 @@ export function ProjectsPageShell() {
             statusHistory={history}
             observations={observations}
             onClose={() => setDrawerContext(null)}
-            onUpdate={handleUpdateProject}
-            onAddObservation={(id, text) => addObservation(id, text, currentUsername)}
+            onUpdate={updateProject}
+            onAddObservation={(id, text) => addObservation(id, text, currentUserName)}
             isCodigoDuplicado={isCodigoProjetoDuplicado}
             notify={notify}
           />

@@ -45,10 +45,12 @@ const ALLOWED_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
   "ELABORAR ANTE-PROJETO": ["ANTE-PROJETO ENVIADO"],
   "ANTE-PROJETO ENVIADO": ["ANTE-PROJETO APROVADO", "REVISAO DE ESTUDO"],
   "REVISAO DE ESTUDO": ["ANTE-PROJETO ENVIADO"],
-  "ANTE-PROJETO APROVADO": ["PROJETO APROVADO"],
-  "PROJETO APROVADO": ["PROJETO FINAL ENVIADO"],
-  "PROJETO FINAL ENVIADO": ["REVISAO DE PROJETO FINAL"],
+  // Fluxo final invertido: Projeto Final Enviado vem ANTES; Projeto Aprovado é o
+  // último status oficial (terminal).
+  "ANTE-PROJETO APROVADO": ["PROJETO FINAL ENVIADO"],
+  "PROJETO FINAL ENVIADO": ["PROJETO APROVADO", "REVISAO DE PROJETO FINAL"],
   "REVISAO DE PROJETO FINAL": ["PROJETO FINAL ENVIADO"],
+  "PROJETO APROVADO": [],
 };
 
 export type StatusTransitionValidation = {
@@ -113,6 +115,24 @@ export type CurrentStatusDeadline = {
  */
 export function getCurrentStatusDeadline(project: Project, todayOverride?: string): CurrentStatusDeadline {
   const today = todayOverride ?? todayIsoDate();
+  const todayDate = parseISO(today);
+
+  // Prazo absoluto (vindo de importação CSV) tem prioridade sobre o cálculo por status.
+  if (project.deadline) {
+    const dueDateStr = project.deadline.slice(0, 10);
+    const dueDate = parseISO(dueDateStr);
+    const diff = differenceInCalendarDays(dueDate, todayDate);
+    const isOverdue = diff < 0;
+    return {
+      hasDeadline: true,
+      dueDate: dueDateStr,
+      daysRemaining: isOverdue ? 0 : diff,
+      isOverdue,
+      overdueDays: isOverdue ? Math.abs(diff) : 0,
+      label: isOverdue ? `${Math.abs(diff)}d atraso` : diff === 0 ? "Vence hoje" : `${diff}d restantes`,
+    };
+  }
+
   const { status_atual, status_entered_at } = project;
   const deadlineDays = STATUS_DEADLINE_DAYS[status_atual];
 
@@ -122,7 +142,6 @@ export function getCurrentStatusDeadline(project: Project, todayOverride?: strin
 
   const enteredAt = parseISO(status_entered_at);
   const dueDate = addDays(enteredAt, deadlineDays);
-  const todayDate = parseISO(today);
   const daysRemaining = differenceInCalendarDays(dueDate, todayDate);
   const isOverdue = daysRemaining < 0;
   const daysElapsed = Math.max(differenceInCalendarDays(todayDate, enteredAt), 0);
@@ -136,7 +155,7 @@ export function getCurrentStatusDeadline(project: Project, todayOverride?: strin
     daysRemaining: isOverdue ? 0 : daysRemaining,
     isOverdue,
     overdueDays: isOverdue ? Math.abs(daysRemaining) : 0,
-    label: isOverdue ? `${Math.abs(daysRemaining)}d atraso` : `${daysRemaining}d restantes`,
+    label: isOverdue ? `${Math.abs(daysRemaining)}d atraso` : daysRemaining === 0 ? "Vence hoje" : `${daysRemaining}d restantes`,
   };
 }
 
@@ -156,6 +175,23 @@ export function getCodeSortableSuffix(code: string): string | number {
 
 export function todayIsoDate(): string {
   return formatISO(new Date(), { representation: "date" });
+}
+
+/**
+ * Normaliza qualquer data (ISO completo, Date ou já yyyy-MM-dd) para o formato
+ * exigido por <input type="date"> (yyyy-MM-dd). Nunca passe ISO completo para um
+ * input date — gera o warning "does not conform to the required format".
+ * Para strings já em yyyy-MM-dd (ou ISO), usa a porção de data literal, evitando
+ * deslocamento de fuso horário.
+ */
+export function toDateInputValue(value?: string | Date | null): string {
+  if (!value) return "";
+  if (typeof value === "string") {
+    const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+  }
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 }
 
 export function computePrazoEntrega(dataAlinhamento: string | null, prazoPrerequisitosOk = true): string | null {
@@ -237,8 +273,8 @@ export function statusOrder(status: ProjectStatus): number {
     "ELABORAR ANTE-PROJETO": 1,
     "ANTE-PROJETO ENVIADO": 2,
     "ANTE-PROJETO APROVADO": 3,
-    "PROJETO APROVADO": 4,
-    "PROJETO FINAL ENVIADO": 5,
+    "PROJETO FINAL ENVIADO": 4,
+    "PROJETO APROVADO": 5,
     "REVISAO DE ESTUDO": 6,
     "REVISAO DE PROJETO FINAL": 7,
   };
@@ -269,9 +305,9 @@ export function computeNextAction(project: Project): string {
   if (project.status_atual === "ELABORAR ANTE-PROJETO") return "Elaborar anteprojeto";
   if (project.status_atual === "ANTE-PROJETO ENVIADO") return "Aguardando aprovacao do cliente";
   if (project.status_atual === "REVISAO DE ESTUDO") return "Revisar estudo e reenviar anteprojeto";
-  if (project.status_atual === "ANTE-PROJETO APROVADO") return "Consolidar projeto aprovado";
-  if (project.status_atual === "PROJETO APROVADO") return "Preparar envio do projeto final";
-  if (project.status_atual === "PROJETO FINAL ENVIADO") return "Acompanhar validacao final";
+  if (project.status_atual === "ANTE-PROJETO APROVADO") return "Preparar e enviar o projeto final";
+  if (project.status_atual === "PROJETO FINAL ENVIADO") return "Validar e aprovar o projeto final";
+  if (project.status_atual === "PROJETO APROVADO") return "Projeto concluido";
   if (project.status_atual === "REVISAO DE PROJETO FINAL") return "Revisar projeto final e reenviar";
   return "Verificar pendencias";
 }

@@ -13,7 +13,7 @@ type ProjectsTableProps = {
   onEditProject?: (project: Project) => void;
   onChangeStatus?: (project: Project) => void;
   onViewHistory: (project: Project) => void;
-  onMarkUrgente?: (payload: { projectId: string; urgencyReason: string; updatedAt: string; updatedBy: string }) => void;
+  onMarkUrgente?: (payload: { projectId: string; urgencyReason: string; urgentDeadline: string; updatedAt: string; updatedBy: string }) => void;
   onRemoveUrgente: (project: Project) => void;
   onClearFilters?: () => void;
   state?: "loading" | "ready" | "error";
@@ -276,7 +276,7 @@ export function ProjectsTable({
                           <DropdownMenu.Separator className="my-1 h-px bg-zinc-100 dark:bg-white/8" />
                           <DropdownMenu.Group>
                             <DropdownMenu.Item
-                              disabled={project.status_atual === "PROJETO FINAL ENVIADO" || !onChangeStatus}
+                              disabled={project.status_atual === "PROJETO APROVADO" || !onChangeStatus}
                               onSelect={() => onChangeStatus?.(project)}
                               className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 dark:text-zinc-300 outline-none hover:bg-zinc-100 dark:hover:bg-white/8 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
                             >
@@ -284,7 +284,7 @@ export function ProjectsTable({
                               Alterar status
                             </DropdownMenu.Item>
                             <DropdownMenu.Item
-                              disabled={project.status_atual === "PROJETO FINAL ENVIADO" || !onMarkUrgente}
+                              disabled={project.status_atual === "PROJETO APROVADO" || !onMarkUrgente}
                               onSelect={() => {
                                 if (project.urgente) {
                                   setRemoveUrgencyProject(project);

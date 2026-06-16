@@ -1,15 +1,16 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Loader2, X } from "lucide-react";
 import type { TipoCabine } from "@/features/master-data/domain/master-data-types";
+import { useSavingSubmit } from "@/features/master-data/hooks/use-saving-submit";
 
 type Props = {
   open: boolean;
   mode: "create" | "edit";
   item?: TipoCabine;
   onClose: () => void;
-  onSave: (data: Partial<TipoCabine>) => void;
+  onSave: (data: Partial<TipoCabine>) => void | Promise<unknown>;
 };
 
 const inputCls = "w-full rounded-xl border border-line bg-white dark:bg-panel-soft px-3 py-2.5 text-sm text-zinc-900 dark:text-foreground dark:placeholder:text-zinc-600 outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15";
@@ -27,37 +28,44 @@ export function TipoCabineFormDialog({ open, mode, item, onClose, onSave }: Prop
   const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const { saving, saveError, reset, submit } = useSavingSubmit();
 
   useEffect(() => {
     if (open) {
       setName(item?.name ?? "");
       setDescription(item?.description ?? "");
+      reset();
       setTimeout(() => nameRef.current?.focus(), 50);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, item]);
+
+  function requestClose() {
+    if (!saving) onClose();
+  }
 
   useEffect(() => {
     if (!open) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") requestClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, onClose, saving]);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    onSave({ name: name.trim(), description: description.trim() });
+    void submit(() => onSave({ name: name.trim(), description: description.trim() }));
   }
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-900/60 p-4 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-zinc-900/60 p-4 backdrop-blur-sm">
       <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-panel border border-line dark:border-white/8 shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-6 py-4">
           <h2 className="text-base font-bold text-zinc-900 dark:text-foreground">{mode === "create" ? "Novo Tipo de Cabine" : "Editar Tipo de Cabine"}</h2>
-          <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/8"><X size={16} /></button>
+          <button type="button" onClick={requestClose} disabled={saving} className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/8 disabled:opacity-40"><X size={16} /></button>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4 p-6">
           <Field label="Nome *">
@@ -66,9 +74,17 @@ export function TipoCabineFormDialog({ open, mode, item, onClose, onSave }: Prop
           <Field label="Descrição">
             <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} className={inputCls + " resize-none"} />
           </Field>
+          {saveError && (
+            <p className="rounded-xl border border-red-100 dark:border-red-700/40 bg-red-50 dark:bg-red-900/20 px-3 py-2 text-xs font-medium text-red-600 dark:text-red-300" role="alert">
+              {saveError}
+            </p>
+          )}
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="rounded-xl border border-line dark:border-white/15 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:bg-white/8">Cancelar</button>
-            <button type="submit" disabled={!name.trim()} className="rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-brand disabled:opacity-40">Salvar</button>
+            <button type="button" onClick={requestClose} disabled={saving} className="rounded-xl border border-line dark:border-white/15 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:border-zinc-300 dark:hover:bg-white/8 disabled:opacity-40">Cancelar</button>
+            <button type="submit" disabled={!name.trim() || saving} className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2 text-sm font-semibold text-white hover:bg-brand disabled:opacity-40">
+              {saving && <Loader2 size={14} className="animate-spin" />}
+              {saving ? "Salvando..." : "Salvar"}
+            </button>
           </div>
         </form>
       </div>

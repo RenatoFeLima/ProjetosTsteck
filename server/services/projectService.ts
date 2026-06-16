@@ -14,6 +14,28 @@ import {
   type DbStatus,
 } from "@/features/projects/domain/project-status-map";
 import { writeAudit } from "./auditService";
+import { startTimer, logPerf } from "@/server/perf";
+import {
+  dispatchProjectNotification,
+  QUEUE_MESSAGE,
+  ELABORATE_MESSAGE,
+} from "@/lib/mail/notify-project";
+import {
+  maxCodeSuffix,
+  padSuffix,
+  hasValidFinalCode,
+  extractCodeSuffix,
+  suggestNextCode,
+} from "@/features/projects/domain/project-code";
+
+/** Extrai relações (vendedor/construtora/obra) do row Prisma para a notificação. */
+function relProject(row: unknown): {
+  seller?: { name?: string; email?: string };
+  builder?: { name?: string };
+  work?: { name?: string };
+} {
+  return row as never;
+}
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -56,6 +78,9 @@ function serializeProject(p: any) {
     data_envio: null,
     data_aprovacao: null,
     urgente: p.priority === "URGENTE",
+    deadline: iso(p.deadline),
+    urgentDeadline: iso(p.urgentDeadline),
+    urgentReason: p.urgentReason ?? null,
     reviewCount: p.reviewStudyCount,
     finalReviewCount: p.finalReviewCount,
     created_at: iso(p.createdAt) ?? "",
@@ -80,6 +105,9 @@ export type ProjectInput = {
   local_cabine_definido?: boolean;
   alinhamento?: boolean;
   data_alinhamento?: string | null;
+  urgente?: boolean;
+  urgentDeadline?: string | null;
+  urgentReason?: string | null;
 };
 
 async function resolveRefs(data: ProjectInput) {
@@ -89,27 +117,25 @@ async function resolveRefs(data: ProjectInput) {
     : null;
   if (!constructor) throw new HttpError(400, `Construtora "${construtora}" não encontrada nos cadastros ativos.`);
 
+  // Obra depende da construtora; o resto é independente → roda em paralelo
+  // (1 round-trip em vez de ~5 sequenciais entre Vercel e o MySQL).
   const obra = (data.obra ?? "").trim();
-  const work = obra
-    ? await prisma.work.findFirst({ where: { name: obra, constructorId: constructor.id, active: true } })
-    : null;
-  if (!work) throw new HttpError(400, `Obra "${obra}" não encontrada para a construtora selecionada.`);
-
   const vendedor = (data.vendedor ?? "").trim();
-  const seller = vendedor ? await prisma.seller.findFirst({ where: { name: vendedor, active: true } }) : null;
-  if (!seller) throw new HttpError(400, `Vendedor "${vendedor}" não encontrado nos cadastros ativos.`);
-
   const equipamento = (data.equipamento ?? "").trim();
-  const equipment = equipamento
-    ? await prisma.equipment.findFirst({ where: { code: equipamento, active: true } })
-    : null;
-  if (!equipment) throw new HttpError(400, `Equipamento "${equipamento}" não encontrado nos cadastros ativos.`);
-
   const tipo = (data.tipo_cabine ?? "").trim();
-  const cabinType = tipo ? await prisma.cabinType.findFirst({ where: { name: tipo, active: true } }) : null;
-
   const engNome = (data.engenheiro_nome ?? "").trim();
-  const engineer = engNome ? await prisma.engineer.findFirst({ where: { name: engNome, active: true } }) : null;
+
+  const [work, seller, equipment, cabinType, engineer] = await Promise.all([
+    obra ? prisma.work.findFirst({ where: { name: obra, constructorId: constructor.id, active: true }, select: { id: true } }) : null,
+    vendedor ? prisma.seller.findFirst({ where: { name: vendedor, active: true }, select: { id: true } }) : null,
+    equipamento ? prisma.equipment.findFirst({ where: { code: equipamento, active: true }, select: { id: true } }) : null,
+    tipo ? prisma.cabinType.findFirst({ where: { name: tipo, active: true }, select: { id: true } }) : null,
+    engNome ? prisma.engineer.findFirst({ where: { name: engNome, active: true }, select: { id: true } }) : null,
+  ]);
+
+  if (!work) throw new HttpError(400, `Obra "${obra}" não encontrada para a construtora selecionada.`);
+  if (!seller) throw new HttpError(400, `Vendedor "${vendedor}" não encontrado nos cadastros ativos.`);
+  if (!equipment) throw new HttpError(400, `Equipamento "${equipamento}" não encontrado nos cadastros ativos.`);
 
   return {
     constructorId: constructor.id,
@@ -145,13 +171,16 @@ export async function getProject(actor: SessionUser, id: string): Promise<Serial
 export async function createProject(actor: SessionUser, data: ProjectInput): Promise<SerializedProject> {
   assertPermission(actor, (p) => p.projects.create);
 
+  const stop = startTimer();
   const code = (data.codigo_projeto ?? "").trim();
   if (!code) throw new HttpError(400, "Código do projeto é obrigatório.");
-  if (await prisma.project.findUnique({ where: { code } })) {
+  if (await prisma.project.findUnique({ where: { code }, select: { id: true } })) {
     throw new HttpError(409, `Já existe um projeto com o código "${code}".`);
   }
 
+  const tRefs = startTimer();
   const refs = await resolveRefs(data);
+  const refsMs = tRefs();
 
   const projectReceived = !!data.proj_obra_recebido;
   const cabinLocationDefined = !!data.local_cabine_definido;
@@ -165,6 +194,7 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
 
   const now = new Date();
 
+  const tCreate = startTimer();
   const created = await prisma.project.create({
     data: {
       code,
@@ -172,7 +202,7 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
       engineerName: (data.engenheiro_nome ?? "").trim() || null,
       engineerPhone: (data.engenheiro_celular ?? "").trim() || null,
       status: initialStatus,
-      priority: "NORMAL",
+      priority: data.urgente ? "URGENTE" : "NORMAL",
       projectReceived,
       cabinLocationDefined,
       alignmentCompleted,
@@ -185,7 +215,9 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
     },
     include: PROJECT_INCLUDE,
   });
+  const createMs = tCreate();
 
+  const tAudit = startTimer();
   await writeAudit({
     action: "PROJECT_CREATED",
     actorUserId: actor.id,
@@ -193,6 +225,26 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
     entityType: "project",
     entityId: created.id,
     message: `${actor.name} criou o projeto ${code} (status inicial ${DB_TO_UI_STATUS[initialStatus]}).`,
+  });
+  logPerf("service.createProject", stop(), { success: true, phases: { refs: refsMs, prismaCreate: createMs, audit: tAudit() } });
+
+  // E-mail ao vendedor (best-effort; awaitado para garantir o envio no serverless).
+  // Cadastro Inicial -> "em fila"; criado já em Elaborar Ante-Projeto -> "esteira".
+  const releasedOnCreate = initialStatus === "ELABORAR_ANTE_PROJETO";
+  const rel = relProject(created);
+  await dispatchProjectNotification({
+    projectId: created.id,
+    projectCode: code,
+    constructorName: rel.builder?.name ?? "",
+    workName: rel.work?.name ?? "",
+    sellerName: rel.seller?.name ?? "",
+    sellerEmail: rel.seller?.email ?? "",
+    newStatus: DB_TO_UI_STATUS[initialStatus],
+    eventType: releasedOnCreate ? "PROJECT_RELEASED_TO_ELABORATE_ANTE_PROJECT" : "PROJECT_CREATED",
+    changedBy: actor.name,
+    changedAt: now.toISOString(),
+    nextAction: releasedOnCreate ? undefined : QUEUE_MESSAGE,
+    notes: releasedOnCreate ? ELABORATE_MESSAGE : undefined,
   });
 
   return serializeProject(created);
@@ -216,6 +268,15 @@ export async function updateProject(actor: SessionUser, id: string, data: Projec
       cabinLocationDefined: data.local_cabine_definido,
       alignmentCompleted: data.alinhamento,
       alignmentDate: data.data_alinhamento !== undefined ? (data.data_alinhamento ? new Date(data.data_alinhamento) : null) : undefined,
+      // Urgência editável pelo formulário: persiste priority + deadline + reason.
+      priority: data.urgente === undefined ? undefined : data.urgente ? "URGENTE" : "NORMAL",
+      ...(data.urgente === true ? {
+        urgentDeadline: data.urgentDeadline ? new Date(data.urgentDeadline) : undefined,
+        urgentReason: data.urgentReason?.trim() || undefined,
+      } : data.urgente === false ? {
+        urgentDeadline: null,
+        urgentReason: null,
+      } : {}),
       updatedById: actor.id,
     },
     include: PROJECT_INCLUDE,
@@ -230,6 +291,20 @@ export async function updateProject(actor: SessionUser, id: string, data: Projec
     message: `${actor.name} editou o projeto ${updated.code}.`,
   });
 
+  // Alinhamento automático: projeto em CADASTRO_INICIAL que passou a ter os 3
+  // pré-requisitos avança sozinho para ELABORAR_ANTE_PROJETO (prazo de 45 dias).
+  if (
+    updated.status === "CADASTRO_INICIAL" &&
+    updated.projectReceived &&
+    updated.cabinLocationDefined &&
+    updated.alignmentCompleted
+  ) {
+    return changeStatus(actor, id, "ELABORAR_ANTE_PROJETO", {
+      source: "alinhamento-automatico",
+      note: "Alinhamento concluído na edição — liberado automaticamente.",
+    });
+  }
+
   return serializeProject(updated);
 }
 
@@ -237,11 +312,14 @@ export async function changeStatus(
   actor: SessionUser,
   id: string,
   toStatusInput: string,
-  opts: { reason?: string; source?: string; note?: string } = {},
+  opts: { reason?: string; source?: string; note?: string; finalCode?: string } = {},
 ): Promise<SerializedProject> {
   assertPermission(actor, (p) => p.projects.changeStatus);
 
+  const stop = startTimer();
+  const tQuery = startTimer();
   const project = await prisma.project.findUnique({ where: { id } });
+  const queryMs = tQuery();
   if (!project) throw new HttpError(404, "Projeto não encontrado.");
 
   const from = project.status as DbStatus;
@@ -255,22 +333,29 @@ export async function changeStatus(
     );
   }
 
-  // Pré-requisitos para liberar a elaboração do ante-projeto.
-  if (from === "CADASTRO_INICIAL" && to === "ELABORAR_ANTE_PROJETO") {
-    const missing: string[] = [];
-    if (!project.projectReceived) missing.push("Projeto de obra recebido");
-    if (!project.cabinLocationDefined) missing.push("Local da cabine definido");
-    if (!project.alignmentCompleted) missing.push("Alinhamento concluído");
-    if (missing.length) throw new HttpError(400, `Alinhamento não concluído: ${missing.join(", ")}.`);
-  }
-
   const enteringReview = to === REVIEW_STUDY || to === REVIEW_FINAL;
   if (enteringReview && !opts.reason?.trim()) {
     throw new HttpError(400, "Informe o motivo da revisão.");
   }
 
+  // Código final: ao entrar em "Projeto Aprovado" (status terminal) pode-se
+  // confirmar/atualizar o código. Valida formato e duplicidade ANTES da transação.
+  let finalCodeToApply: string | null = null;
+  if (to === "PROJETO_APROVADO" && opts.finalCode?.trim()) {
+    const code = opts.finalCode.trim();
+    if (!hasValidFinalCode(code)) {
+      throw new HttpError(400, "Código final inválido: deve terminar com 4 dígitos numéricos.");
+    }
+    if (code !== project.code) {
+      const clash = await prisma.project.findFirst({ where: { code, id: { not: id } }, select: { id: true } });
+      if (clash) throw new HttpError(409, `Já existe um projeto com o código "${code}".`);
+      finalCodeToApply = code;
+    }
+  }
+
   const now = new Date();
 
+  const tTx = startTimer();
   await prisma.$transaction(async (tx) => {
     // Fecha o registro de histórico aberto do status anterior.
     await tx.projectStatusHistory.updateMany({
@@ -308,29 +393,67 @@ export async function changeStatus(
       await tx.projectFinalReviewHistory.updateMany({ where: { projectId: id, exitedAt: null }, data: { exitedAt: now } });
     }
 
+    // Ao sair de CADASTRO_INICIAL, as 3 flags de pré-requisito são marcadas true.
+    const leavingCadastroInicial = from === "CADASTRO_INICIAL";
     await tx.project.update({
       where: { id },
       data: {
         status: to,
         currentStatusEnteredAt: now,
         updatedById: actor.id,
+        ...(leavingCadastroInicial ? { projectReceived: true, cabinLocationDefined: true, alignmentCompleted: true } : {}),
+        ...(finalCodeToApply ? { code: finalCodeToApply } : {}),
         ...(to === REVIEW_STUDY ? { reviewStudyCount: { increment: 1 } } : {}),
         ...(to === REVIEW_FINAL ? { finalReviewCount: { increment: 1 } } : {}),
+        ...(to === "PROJETO_APROVADO" ? { priority: "NORMAL" } : {}),
       },
     });
   });
+  const txMs = tTx();
 
+  const tAudit = startTimer();
   await writeAudit({
     action: "PROJECT_STATUS_CHANGED",
     actorUserId: actor.id,
     actorName: actor.name,
     entityType: "project",
     entityId: id,
-    message: `${actor.name} alterou o status do projeto ${project.code}: ${DB_TO_UI_STATUS[from]} → ${DB_TO_UI_STATUS[to]}.`,
-    metadata: opts.reason ? { reason: opts.reason } : undefined,
+    message: `${actor.name} alterou o status do projeto ${project.code}: ${DB_TO_UI_STATUS[from]} → ${DB_TO_UI_STATUS[to]}.${finalCodeToApply ? ` Código final: ${project.code} → ${finalCodeToApply}.` : ""}`,
+    metadata: {
+      ...(opts.reason ? { reason: opts.reason } : {}),
+      ...(finalCodeToApply ? { finalCode: finalCodeToApply, previousCode: project.code } : {}),
+    },
+  });
+  const auditMs = tAudit();
+
+  const reloaded = await reload(id);
+  const result = serializeProject(reloaded);
+  logPerf("service.changeStatus", stop(), {
+    success: true,
+    phases: { query: queryMs, transaction: txMs, audit: auditMs },
   });
 
-  return serializeProject(await reload(id));
+  // E-mails de etapa ao vendedor (best-effort, awaitado): liberação para
+  // anteprojeto e finalização — esta usa o CÓDIGO FINAL já atualizado (reloaded).
+  if (to === "ELABORAR_ANTE_PROJETO" || to === "PROJETO_APROVADO") {
+    const rel = relProject(reloaded);
+    const isFinal = to === "PROJETO_APROVADO";
+    await dispatchProjectNotification({
+      projectId: id,
+      projectCode: reloaded.code,
+      constructorName: rel.builder?.name ?? "",
+      workName: rel.work?.name ?? "",
+      sellerName: rel.seller?.name ?? "",
+      sellerEmail: rel.seller?.email ?? "",
+      newStatus: DB_TO_UI_STATUS[to],
+      eventType: isFinal ? "PROJECT_FINISHED" : "PROJECT_RELEASED_TO_ELABORATE_ANTE_PROJECT",
+      changedBy: actor.name,
+      changedAt: now.toISOString(),
+      notes: isFinal ? undefined : ELABORATE_MESSAGE,
+    });
+  }
+
+  return result;
 }
 
 export async function setUrgency(
@@ -338,14 +461,23 @@ export async function setUrgency(
   id: string,
   urgent: boolean,
   reason?: string,
+  deadline?: string,
 ): Promise<SerializedProject> {
   assertPermission(actor, (p) => p.projects.markUrgent);
   const project = await prisma.project.findUnique({ where: { id } });
   if (!project) throw new HttpError(404, "Projeto não encontrado.");
 
+  if (urgent && project.status === "PROJETO_APROVADO") {
+    throw new HttpError(400, "Projetos aprovados não podem ser marcados como urgentes.");
+  }
+  if (urgent && !deadline) throw new HttpError(400, "Informe o prazo de urgência.");
+  if (urgent && !reason?.trim()) throw new HttpError(400, "Informe o motivo da urgência.");
+
   await prisma.project.update({
     where: { id },
-    data: { priority: urgent ? "URGENTE" : "NORMAL", updatedById: actor.id },
+    data: urgent
+      ? { priority: "URGENTE", urgentDeadline: new Date(deadline!), urgentReason: reason!.trim(), updatedById: actor.id }
+      : { priority: "NORMAL", urgentDeadline: null, urgentReason: null, updatedById: actor.id },
   });
 
   if (reason?.trim()) {
@@ -353,7 +485,9 @@ export async function setUrgency(
       data: {
         projectId: id,
         author: actor.name,
-        text: urgent ? `Marcado como urgente: ${reason.trim()}` : `Urgência removida: ${reason.trim()}`,
+        text: urgent
+          ? `Marcado como urgente (prazo: ${deadline}): ${reason.trim()}`
+          : `Urgência removida: ${reason.trim()}`,
       },
     });
   }
@@ -364,7 +498,7 @@ export async function setUrgency(
     actorName: actor.name,
     entityType: "project",
     entityId: id,
-    message: `${actor.name} ${urgent ? "marcou como urgente" : "removeu a urgência d"}o projeto ${project.code}.`,
+    message: `${actor.name} ${urgent ? `marcou como urgente (prazo: ${deadline})` : "removeu a urgência d"}o projeto ${project.code}.`,
   });
 
   return serializeProject(await reload(id));
@@ -435,6 +569,120 @@ export async function getHistory(actor: SessionUser, id: string) {
       reason: r.reason ?? "",
       changedBy: r.requestedBy ?? "",
     })),
+  };
+}
+
+// Histórico de status de TODOS os projetos — base real para os KPIs de tempo
+// (tempo médio por status, fluxo completo, SLA, gargalos). Sem isso o dashboard
+// só teria o histórico carregado pontualmente na sessão.
+export async function listAllStatusHistory(actor: SessionUser) {
+  assertPermission(actor, (p) => p.projects.view);
+  const rows = await prisma.projectStatusHistory.findMany({
+    orderBy: { enteredAt: "asc" },
+    select: { id: true, projectId: true, fromStatus: true, toStatus: true, enteredAt: true, source: true, note: true },
+  });
+  return rows.map((h) => ({
+    id: h.id,
+    projeto_id: h.projectId,
+    status_de: h.fromStatus ? DB_TO_UI_STATUS[h.fromStatus as DbStatus] : null,
+    status_para: DB_TO_UI_STATUS[h.toStatus as DbStatus],
+    alterado_em: h.enteredAt.toISOString(),
+    origem: (h.source ?? "sistema") as any,
+    nota: h.note ?? undefined,
+  }));
+}
+
+// Revisões agregadas de TODOS os projetos (entrada/saída) — base dos SLAs de
+// revisão (20 dias). O cálculo de prazo e o respeito aos filtros são feitos no
+// cliente, cruzando projectId com os projetos filtrados.
+export async function listAllReviews(actor: SessionUser) {
+  assertPermission(actor, (p) => p.projects.view);
+  const [study, finalRev] = await Promise.all([
+    prisma.projectReviewStudyHistory.findMany({ select: { projectId: true, enteredAt: true, exitedAt: true } }),
+    prisma.projectFinalReviewHistory.findMany({ select: { projectId: true, enteredAt: true, exitedAt: true } }),
+  ]);
+  const map = (r: { projectId: string; enteredAt: Date; exitedAt: Date | null }) => ({
+    projectId: r.projectId,
+    enteredAt: r.enteredAt.toISOString(),
+    exitedAt: r.exitedAt ? r.exitedAt.toISOString() : null,
+  });
+  return { reviewStudy: study.map(map), finalReview: finalRev.map(map) };
+}
+
+export type NextCodeSuggestion = {
+  /** Maior sufixo GLOBAL (compat) — usado como fallback quando não há finalizados. */
+  maxSuffix: number;
+  /** Próximo sufixo GLOBAL (compat). */
+  nextSuffix: string;
+  /** Código do último/maior projeto que já chegou em PROJETO_APROVADO (terminal). */
+  lastFinalCode: string | null;
+  /** Código provisório do projeto sendo movimentado (informação secundária). */
+  currentDraftCode: string | null;
+  /** Sugestão do código final: próximo sequencial sobre o último finalizado. */
+  suggestedFinalCode: string | null;
+};
+
+/** Sugestão do próximo código final. A referência principal é o ÚLTIMO projeto
+ *  que já chegou em PROJETO_APROVADO (maior sufixo numérico entre os
+ *  finalizados): "De:" = esse código, "Para:" = prefixo + sufixo + 1. Se não
+ *  existir finalizado anterior, usa o código provisório atual como fallback. */
+export async function nextCodeSuggestion(
+  actor: SessionUser,
+  currentCode?: string,
+): Promise<NextCodeSuggestion> {
+  assertPermission(actor, (p) => p.projects.view);
+
+  // Compat: sufixo global (todos os projetos).
+  const allRows = await prisma.project.findMany({ select: { code: true } });
+  const globalMax = maxCodeSuffix(allRows.map((r) => r.code));
+
+  // Projetos que já chegaram em PROJETO_APROVADO (terminal) — status atual OU
+  // histórico (um aprovado pode voltar para revisão e retornar).
+  const ids = new Set<string>();
+  const [historyHits, currentFinal] = await Promise.all([
+    prisma.projectStatusHistory.findMany({
+      where: { toStatus: "PROJETO_APROVADO" },
+      select: { projectId: true },
+    }),
+    prisma.project.findMany({
+      where: { status: "PROJETO_APROVADO" },
+      select: { id: true },
+    }),
+  ]);
+  historyHits.forEach((r) => ids.add(r.projectId));
+  currentFinal.forEach((p) => ids.add(p.id));
+
+  const finalProjects = ids.size
+    ? await prisma.project.findMany({ where: { id: { in: [...ids] } }, select: { code: true } })
+    : [];
+
+  // Referência = código finalizado de maior sufixo numérico.
+  let lastFinalCode: string | null = null;
+  let maxFinalSuffix = -1;
+  for (const p of finalProjects) {
+    const n = extractCodeSuffix(p.code);
+    if (n !== null && n > maxFinalSuffix) {
+      maxFinalSuffix = n;
+      lastFinalCode = p.code;
+    }
+  }
+
+  // Base da sugestão: último finalizado; senão, código provisório atual.
+  const draft = currentCode?.trim() || null;
+  let suggestedFinalCode: string | null = null;
+  if (lastFinalCode) {
+    suggestedFinalCode = suggestNextCode(lastFinalCode, maxFinalSuffix);
+  } else if (draft) {
+    const draftSuffix = extractCodeSuffix(draft);
+    suggestedFinalCode = suggestNextCode(draft, draftSuffix ?? globalMax);
+  }
+
+  return {
+    maxSuffix: globalMax,
+    nextSuffix: padSuffix(globalMax + 1),
+    lastFinalCode,
+    currentDraftCode: draft,
+    suggestedFinalCode,
   };
 }
 

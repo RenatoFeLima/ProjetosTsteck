@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -36,6 +36,7 @@ import { PROJECT_STATUSES, type Project, type ProjectStatus, type StatusHistoryI
 import { computeNextAction, getCurrentStatusDeadline, todayIsoDate } from "@/features/projects/domain/project-rules";
 import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { KpiCard } from "./kpi-card";
+import { useProjectsStore } from "@/features/projects/state/projects-store";
 
 type ProjectsKpiDashboardProps = {
   projects: Project[];
@@ -76,11 +77,35 @@ const STATUS_COLORS: Record<ProjectStatus, string> = {
   "ELABORAR ANTE-PROJETO": "#3b82f6",
   "ANTE-PROJETO ENVIADO": "#f59e0b",
   "ANTE-PROJETO APROVADO": "#10b981",
-  "PROJETO APROVADO": "#0ea5e9",
-  "PROJETO FINAL ENVIADO": "#027a48",
+  "PROJETO FINAL ENVIADO": "#0ea5e9",
+  "PROJETO APROVADO": "#027a48",
   "REVISAO DE ESTUDO": "#ea580c",
   "REVISAO DE PROJETO FINAL": "#f43f5e",
 };
+
+// Container padrão dos gráficos: altura fixa + min-w-0 + overflow-hidden.
+// - Renderiza o gráfico só APÓS o mount (1 paint), quando o container já tem
+//   dimensões reais — evita o warning do Recharts "width(-1) height(-1)" que
+//   ocorre quando o ResponsiveContainer mede o container antes do layout.
+// - Sem dados: mostra estado vazio em vez de tentar renderizar o gráfico.
+function ChartFrame({ isEmpty, children }: { isEmpty?: boolean; children: ReactNode }) {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setReady(true);
+  }, []);
+
+  return (
+    <div className="h-72 w-full min-w-0 overflow-hidden">
+      {isEmpty ? (
+        <div className="grid h-full place-items-center px-3 text-center text-xs text-zinc-500 dark:text-muted">
+          Nenhum dado disponível para este gráfico.
+        </div>
+      ) : ready ? (
+        children
+      ) : null}
+    </div>
+  );
+}
 
 function parseDate(value?: string | null): Date | null {
   if (!value) return null;
@@ -110,9 +135,9 @@ function projectStartDate(project: Project): Date {
 
 function findFinalizedAt(project: Project, historyByProject: Map<string, StatusHistoryItem[]>): Date | null {
   const entries = historyByProject.get(project.id) ?? [];
-  const hit = entries.find((item) => item.status_para === "PROJETO FINAL ENVIADO");
+  const hit = entries.find((item) => item.status_para === "PROJETO APROVADO");
   if (hit) return parseDate(hit.alterado_em);
-  if (project.status_atual === "PROJETO FINAL ENVIADO") {
+  if (project.status_atual === "PROJETO APROVADO") {
     return parseDate(project.data_final) ?? parseDate(project.updated_at);
   }
   return null;
@@ -188,6 +213,26 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
 
   const today = useMemo(() => parseISO(todayIsoDate()), []);
 
+  // Ao abrir a aba KPIs, carrega do MySQL os dados agregados (histórico de status
+  // completo + revisões) para que os indicadores de tempo e os SLAs de revisão
+  // sejam reais.
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const reviewStudyAgg = useProjectsStore((s) => s.reviewStudyAgg);
+  const finalReviewAgg = useProjectsStore((s) => s.finalReviewAgg);
+  useEffect(() => {
+    let active = true;
+    setHistoryLoading(true);
+    void useProjectsStore
+      .getState()
+      .loadAnalytics()
+      .finally(() => {
+        if (active) setHistoryLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const historyByProject = useMemo(() => {
     const map = new Map<string, StatusHistoryItem[]>();
     for (const item of statusHistory) {
@@ -251,8 +296,8 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       if (filters.situacao === "sem_prazo" && dl.hasDeadline) return false;
       if (filters.situacao === "dentro_prazo" && (dl.isOverdue || !dl.hasDeadline)) return false;
 
-      if (filters.abertoFinalizado === "abertos" && project.status_atual === "PROJETO FINAL ENVIADO") return false;
-      if (filters.abertoFinalizado === "finalizados" && project.status_atual !== "PROJETO FINAL ENVIADO") return false;
+      if (filters.abertoFinalizado === "abertos" && project.status_atual === "PROJETO APROVADO") return false;
+      if (filters.abertoFinalizado === "finalizados" && project.status_atual !== "PROJETO APROVADO") return false;
 
       return true;
     });
@@ -284,12 +329,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
 
   const analytics = useMemo(() => {
     const total = filteredProjects.length;
-    const ongoing = filteredProjects.filter((item) => item.status_atual !== "PROJETO FINAL ENVIADO");
-    const finalized = filteredProjects.filter((item) => item.status_atual === "PROJETO FINAL ENVIADO");
+    const ongoing = filteredProjects.filter((item) => item.status_atual !== "PROJETO APROVADO");
+    const finalized = filteredProjects.filter((item) => item.status_atual === "PROJETO APROVADO");
     const urgent = filteredProjects.filter((item) => item.urgente);
 
     const overdue = filteredProjects.filter((item) => {
-      if (item.status_atual === "PROJETO FINAL ENVIADO") return false;
+      if (item.status_atual === "PROJETO APROVADO") return false;
       return getCurrentStatusDeadline(item).isOverdue;
     });
 
@@ -421,6 +466,17 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       .sort((a, b) => b.totalProjetos - a.totalProjetos)
       .slice(0, 10);
 
+    const byEquipamento = Array.from(
+      filteredProjects.reduce((acc, project) => {
+        const key = project.equipamento || "Sem equipamento";
+        acc.set(key, (acc.get(key) ?? 0) + 1);
+        return acc;
+      }, new Map<string, number>()),
+    )
+      .map(([nome, totalProjetos]) => ({ nome, totalProjetos }))
+      .sort((a, b) => b.totalProjetos - a.totalProjetos)
+      .slice(0, 10);
+
     const priority = [
       { nome: "Urgente", total: urgent.length, color: "#9e0b0f" },
       { nome: "Normal", total: total - urgent.length, color: "#9ca3af" },
@@ -461,6 +517,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       "ANTE-PROJETO ENVIADO",
       "ANTE-PROJETO APROVADO",
       "PROJETO FINAL ENVIADO",
+      "PROJETO APROVADO",
     ].map((status) => ({
       etapa: status,
       total: filteredProjects.filter((item) => item.status_atual === status).length,
@@ -643,6 +700,31 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       byObra: finalReviewsByObra,
     };
 
+    // ─── SLA de revisões (20 dias) ─────────────────────────────────────────────
+    // Cruza as revisões agregadas (entrada/saída) com os projetos filtrados.
+    // Fechada: dentro do SLA se (saída - entrada) <= 20 dias.
+    // Aberta: dentro enquanto (hoje - entrada) <= 20; acima disso conta como fora.
+    const SLA_REVIEW_DAYS = 20;
+    const filteredIds = new Set(filteredProjects.map((p) => p.id));
+    const computeReviewSla = (entries: { projectId: string; enteredAt: string; exitedAt: string | null }[]) => {
+      const relevant = entries.filter((e) => filteredIds.has(e.projectId));
+      let within = 0;
+      for (const entry of relevant) {
+        const start = parseDate(entry.enteredAt);
+        if (!start) continue;
+        const end = entry.exitedAt ? parseDate(entry.exitedAt) : today;
+        const days = end ? Math.max(differenceInCalendarDays(end, start), 0) : 0;
+        if (days <= SLA_REVIEW_DAYS) within += 1;
+      }
+      return {
+        total: relevant.length,
+        within,
+        rate: relevant.length ? (within / relevant.length) * 100 : null,
+      };
+    };
+    const reviewStudySla = computeReviewSla(reviewStudyAgg);
+    const finalReviewSla = computeReviewSla(finalReviewAgg);
+
     return {
       total,
       ongoing,
@@ -653,6 +735,8 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       avgDelivery,
       completionRate,
       slaRate,
+      reviewStudySla,
+      finalReviewSla,
       avgAgeOpen,
       estimatedByFallback,
       statusCounts,
@@ -660,6 +744,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       monthly,
       bySeller,
       byConstrutora,
+      byEquipamento,
       priority,
       deadlineSituation,
       funnel,
@@ -672,13 +757,13 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       reviews,
       finalReviews,
     };
-  }, [filteredProjects, historyByProject, today]);
+  }, [filteredProjects, historyByProject, today, reviewStudyAgg, finalReviewAgg]);
 
   const previousMetrics = useMemo(() => {
     const total = previousPeriodProjects.length;
-    const finalized = previousPeriodProjects.filter((item) => item.status_atual === "PROJETO FINAL ENVIADO").length;
+    const finalized = previousPeriodProjects.filter((item) => item.status_atual === "PROJETO APROVADO").length;
     const overdue = previousPeriodProjects.filter((item) => {
-      if (item.status_atual === "PROJETO FINAL ENVIADO") return false;
+      if (item.status_atual === "PROJETO APROVADO") return false;
       return getCurrentStatusDeadline(item).isOverdue;
     }).length;
     const urgent = previousPeriodProjects.filter((item) => item.urgente).length;
@@ -755,7 +840,21 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
         key: "sla",
         label: "SLA no Prazo",
         value: `${analytics.slaRate.toFixed(1)}%`,
-        tooltip: "Percentual de finalizados dentro do prazo.",
+        tooltip: "Percentual de finalizados dentro do prazo (45 dias de Elaborar Ante-Projeto).",
+        icon: CheckCircle2,
+      },
+      {
+        key: "slaRevisaoEstudo",
+        label: "SLA Revisao de Estudo",
+        value: analytics.reviewStudySla.rate === null ? "N/D" : `${analytics.reviewStudySla.rate.toFixed(1)}%`,
+        tooltip: "Percentual de revisoes de estudo dentro de 20 dias (abertas ha mais de 20 dias contam como fora).",
+        icon: CheckCircle2,
+      },
+      {
+        key: "slaRevisaoFinal",
+        label: "SLA Revisao Proj. Final",
+        value: analytics.finalReviewSla.rate === null ? "N/D" : `${analytics.finalReviewSla.rate.toFixed(1)}%`,
+        tooltip: "Percentual de revisoes de projeto final dentro de 20 dias (abertas ha mais de 20 dias contam como fora).",
         icon: CheckCircle2,
       },
       {
@@ -862,6 +961,11 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             <p className="inline-flex items-center gap-1 rounded-full bg-zinc-100 dark:bg-white/8 px-2 py-1 font-semibold">
               <BarChart3 size={12} /> Projetos considerados: {filteredProjects.length}
             </p>
+            {historyLoading && (
+              <p className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-1 font-semibold text-amber-700 dark:text-amber-300">
+                <RefreshCcw size={12} className="animate-spin" /> Carregando indicadores de tempo...
+              </p>
+            )}
           </div>
         </div>
       </section>
@@ -1066,8 +1170,8 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       <section className="grid gap-3 xl:grid-cols-2">
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Projetos por Status</h3>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <ChartFrame isEmpty={analytics.statusCounts.length === 0}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={analytics.statusCounts}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" className="[.light_&]:stroke-gray-200" />
                 <XAxis dataKey="status" tick={{ fontSize: 10, fill: 'currentColor' }} interval={0} angle={-15} textAnchor="end" height={60} />
@@ -1086,12 +1190,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Tempo Medio por Status (dias)</h3>
-          <div className="h-72 w-full">
+          <ChartFrame isEmpty={analytics.avgByStatus.length === 0}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={analytics.avgByStatus} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -1101,12 +1205,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <Bar dataKey="dias" fill="#262626" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Evolucao Mensal (Criados vs Finalizados)</h3>
-          <div className="h-72 w-full">
+          <ChartFrame isEmpty={analytics.monthly.length === 0}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <AreaChart data={analytics.monthly}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -1118,12 +1222,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <Area type="monotone" dataKey="finalizados" name="Finalizados" stroke="#9e0b0f" fill="rgba(158,11,15,0.2)" />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Projetos por Vendedor</h3>
-          <div className="h-72 w-full">
+          <ChartFrame isEmpty={analytics.bySeller.length === 0}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={analytics.bySeller} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -1133,12 +1237,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <Bar dataKey="totalProjetos" fill="#6366f1" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Projetos por Construtora</h3>
-          <div className="h-72 w-full">
+          <ChartFrame isEmpty={analytics.byConstrutora.length === 0}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={analytics.byConstrutora} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -1148,12 +1252,27 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <Bar dataKey="totalProjetos" fill="#9e0b0f" radius={[0, 6, 6, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
+        </article>
+
+        <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
+          <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Projetos por Equipamento</h3>
+          <ChartFrame isEmpty={analytics.byEquipamento.length === 0}>
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <BarChart data={analytics.byEquipamento} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis type="number" allowDecimals={false} tick={{ fill: 'currentColor' }} />
+                <YAxis dataKey="nome" type="category" width={120} tick={{ fontSize: 10, fill: 'currentColor' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--panel)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, color: 'var(--foreground)' }} />
+                <Bar dataKey="totalProjetos" fill="#0ea5e9" radius={[0, 6, 6, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartFrame>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Distribuicao de Prioridade</h3>
-          <div className="h-72 w-full">
+          <ChartFrame isEmpty={analytics.priority.length === 0}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie data={analytics.priority} dataKey="total" nameKey="nome" outerRadius={96} label>
@@ -1165,12 +1284,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Situacao de Prazo</h3>
-          <div className="h-72 w-full">
+          <ChartFrame isEmpty={analytics.deadlineSituation.length === 0}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <PieChart>
                 <Pie data={analytics.deadlineSituation} dataKey="total" nameKey="nome" innerRadius={40} outerRadius={96} label>
@@ -1182,12 +1301,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
 
         <article className="min-w-0 rounded-2xl border border-line bg-white dark:bg-panel p-3">
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Funil do Fluxo de Projetos</h3>
-          <div className="h-72 w-full">
+          <ChartFrame isEmpty={analytics.funnel.length === 0}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={analytics.funnel}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -1197,7 +1316,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <Bar dataKey="total" fill="#6366f1" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </article>
       </section>
 
@@ -1396,7 +1515,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                   <td className="px-2 py-2"><StatusBadge status={row.project.status_atual} /></td>
                   <td className="px-2 py-2"><PrazoBadge project={row.project} /></td>
                   <td className="px-2 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200">{row.diasNoStatus}</td>
-                  <td className="px-2 py-2"><UrgenteBadge urgente={row.project.urgente} /></td>
+                  <td className="px-2 py-2"><UrgenteBadge urgente={row.project.urgente} urgentDeadline={row.project.urgentDeadline} /></td>
                   <td className="px-2 py-2 text-xs text-zinc-700 dark:text-zinc-300">{row.motivo}</td>
                   <td className="px-2 py-2 text-xs text-zinc-700 dark:text-zinc-300">{row.acao}</td>
                 </tr>
@@ -1412,7 +1531,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       </section>
 
       {selectedStatus && drilldownStats && (
-        <div className="fixed inset-0 z-[96] bg-black/45" onMouseDown={(event) => event.target === event.currentTarget && setSelectedStatus(null)}>
+        <div className="fixed inset-0 z-[96] bg-black/45">
           <aside className="ml-auto h-full w-full max-w-[680px] overflow-y-auto border-l border-line bg-white dark:bg-panel p-4 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
             <header className="mb-3 flex items-center gap-2 border-b border-zinc-200 dark:border-white/8 pb-2">
               <ListChecks size={16} className="text-zinc-600 dark:text-zinc-400" />
@@ -1433,7 +1552,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <article key={project.id} className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-2.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono text-xs font-semibold text-zinc-900 dark:text-foreground">{project.codigo_projeto}</span>
-                    <UrgenteBadge urgente={project.urgente} />
+                    <UrgenteBadge urgente={project.urgente} urgentDeadline={project.urgentDeadline} />
                     <StatusBadge status={project.status_atual} />
                   </div>
                   <p className="mt-1 text-xs text-zinc-700 dark:text-zinc-300">{project.construtora} - {project.obra}</p>

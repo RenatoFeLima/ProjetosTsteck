@@ -374,6 +374,17 @@ export function ProjectDetailsDrawer({
       return false;
     }
 
+    if (payload.urgente) {
+      if (!payload.urgentDeadline) {
+        notify("Informe o prazo de urgência.");
+        return false;
+      }
+      if (!payload.urgentReason?.trim()) {
+        notify("Informe o motivo da urgência.");
+        return false;
+      }
+    }
+
     return true;
   }
 
@@ -468,7 +479,7 @@ export function ProjectDetailsDrawer({
             <>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <StatusBadge status={project.status_atual} />
-                <UrgenteBadge urgente={project.urgente} />
+                <UrgenteBadge urgente={project.urgente} urgentDeadline={project.urgentDeadline} />
                 <PrazoBadge project={project} />
               </div>
               <div className="mt-3">
@@ -741,13 +752,45 @@ export function ProjectDetailsDrawer({
                     type="checkbox"
                     className="mt-0.5 h-4 w-4 rounded accent-[#9e0b0f]"
                     checked={Boolean(editForm.urgente)}
-                    onChange={(e) => patchEdit({ urgente: e.target.checked })}
+                    onChange={(e) => patchEdit({
+                      urgente: e.target.checked,
+                      ...(!e.target.checked ? { urgentDeadline: null, urgentReason: null } : {}),
+                    })}
+                    disabled={project.status_atual === "PROJETO APROVADO"}
                   />
                   <div>
                     <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Marcar como urgente</span>
                     <p className="mt-0.5 text-xs text-zinc-500 dark:text-muted">Prioriza o projeto na fila de atendimento.</p>
                   </div>
                 </label>
+                {editForm.urgente && (
+                  <div className="mt-3 space-y-3 rounded-xl border border-red-100 dark:border-red-900/40 bg-red-50/60 dark:bg-red-900/10 p-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        Prazo de urgência <span className="text-brand">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={editForm.urgentDeadline?.slice(0, 10) ?? ""}
+                        min={new Date().toISOString().slice(0, 10)}
+                        onChange={(e) => patchEdit({ urgentDeadline: e.target.value || null })}
+                        className="w-full rounded-lg border border-zinc-300 dark:border-white/8 bg-white dark:bg-panel-soft px-3 py-2 text-sm outline-none focus:border-brand dark:text-foreground"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                        Motivo da urgência <span className="text-brand">*</span>
+                      </label>
+                      <textarea
+                        value={editForm.urgentReason ?? ""}
+                        onChange={(e) => patchEdit({ urgentReason: e.target.value || null })}
+                        placeholder="Descreva o motivo da urgência..."
+                        rows={2}
+                        className="w-full rounded-lg border border-zinc-300 dark:border-white/8 bg-white dark:bg-panel-soft px-3 py-2 text-sm outline-none focus:border-brand dark:text-foreground dark:placeholder:text-zinc-600"
+                      />
+                    </div>
+                  </div>
+                )}
               </SectionCard>
             </div>
           ) : (
