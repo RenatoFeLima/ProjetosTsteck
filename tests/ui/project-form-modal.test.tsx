@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProjectFormModal } from "@/features/projects/components/project-form-modal";
@@ -141,5 +141,41 @@ describe("project form modal create flow", () => {
     await user.click(screen.getByRole("button", { name: /Confirmar e salvar/i }));
 
     expect(props.onCreate).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("urgency modal in form modal", () => {
+  it("abre UrgencyJustificationDialog ao clicar em Marcar como urgente (create)", async () => {
+    const user = userEvent.setup();
+    const props = buildCreateProps();
+
+    render(<ProjectFormModal {...props} />);
+
+    const checkbox = screen.getByRole("checkbox", { name: /Marcar como urgente/i });
+    await user.click(checkbox);
+
+    expect(screen.getByText(/Definir prazo de urgência/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Novo prazo de entrega/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Motivo da urgência/i)).toBeInTheDocument();
+  });
+
+  it("nao marca urgente direto — aguarda confirmacao do modal", async () => {
+    const user = userEvent.setup();
+    const props = buildCreateProps();
+
+    render(<ProjectFormModal {...props} />);
+
+    const checkbox = screen.getByRole("checkbox", { name: /Marcar como urgente/i });
+    expect(checkbox).not.toBeChecked();
+
+    await user.click(checkbox);
+
+    // O modal abre mas o form ainda nao tem urgente=true
+    const urgencyDialog = screen.getByRole("dialog", { name: /Definir prazo de urgência/i });
+    expect(urgencyDialog).toBeInTheDocument();
+
+    // Cancelar dentro do dialog fecha o modal sem alterar estado
+    await user.click(within(urgencyDialog).getByRole("button", { name: /Cancelar/i }));
+    expect(screen.queryByText(/Definir prazo de urgência/i)).not.toBeInTheDocument();
   });
 });

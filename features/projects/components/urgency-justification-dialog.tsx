@@ -103,7 +103,9 @@ export function UrgencyJustificationDialog({
 
   const deadlineError = touched && !validDeadline ? "Informe o prazo de urgência." : "";
 
+  console.log("[URGENCY_DIALOG_RENDER] open:", open, "hasProject:", Boolean(project));
   if (!open || !project) return null;
+  console.log("[URGENCY_DIALOG_PORTAL] rendering via createPortal for project:", project.id);
 
   const content = (
     <div className="fixed inset-0 z-[9999] grid place-items-center bg-black/50 p-4">

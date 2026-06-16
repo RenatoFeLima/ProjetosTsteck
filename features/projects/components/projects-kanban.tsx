@@ -535,7 +535,9 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
       nextStatus: targetStatus,
     };
     // Ante-Projeto Enviado: confirma/atualiza o código antes de mover.
+    console.log("[MOVE_TO_STATUS]", targetStatus, "projectId:", projectId);
     if (targetStatus === "ANTE-PROJETO ENVIADO") {
+      console.log("[OPEN_CODE_DIALOG_KANBAN] setFinalCodeMove for project:", projectId);
       setFinalCodeMove(move);
       return;
     }

@@ -203,7 +203,9 @@ export function ProjectsPageShell() {
     if (!project) return;
 
     // Ante-Projeto Enviado: abre o modal de código antes de mover.
+    console.log("[APPLY_STATUS_CHANGE] nextStatus:", nextStatus, "project:", project?.id);
     if (nextStatus === "ANTE-PROJETO ENVIADO") {
+      console.log("[OPEN_CODE_DIALOG_SHELL] setAnteProjFinalCodePending for project:", project?.id);
       setStatusChangeProject(undefined);
       setAnteProjFinalCodePending({ project, observation });
       return;

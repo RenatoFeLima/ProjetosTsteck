@@ -755,8 +755,10 @@ export function ProjectDetailsDrawer({
                     className="mt-0.5 h-4 w-4 rounded accent-[#9e0b0f]"
                     checked={Boolean(editForm.urgente)}
                     onChange={(e) => {
+                      console.log("[URGENT_CLICK_DRAWER] checked:", e.target.checked, "project:", project?.id);
                       if (e.target.checked) {
                         setUrgencyDialogOpen(true);
+                        console.log("[OPEN_URGENCY_DIALOG_DRAWER] state set to true");
                       } else {
                         patchEdit({ urgente: false, urgentDeadline: null, urgentReason: null });
                       }

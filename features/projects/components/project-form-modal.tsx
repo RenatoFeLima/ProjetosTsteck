@@ -645,8 +645,10 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                     className="mt-0.5 h-4 w-4 rounded accent-[#9e0b0f]"
                     checked={Boolean(form.urgente)}
                     onChange={(e) => {
+                      console.log("[URGENT_CLICK_FORM] checked:", e.target.checked, "mode:", props.mode);
                       if (e.target.checked) {
                         setUrgencyDialogOpen(true);
+                        console.log("[OPEN_URGENCY_DIALOG_FORM] state set to true");
                       } else {
                         patch({ urgente: false, urgentDeadline: null, urgentReason: null });
                       }

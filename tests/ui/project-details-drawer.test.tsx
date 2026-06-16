@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProjectDetailsDrawer } from "@/features/projects/components/project-details-drawer";
@@ -96,5 +96,59 @@ describe("project details drawer", () => {
     expect(onAddObservation).toHaveBeenCalledTimes(1);
     expect(onAddObservation).toHaveBeenCalledWith("p1", "Pendencia com fornecedor");
     expect(notify).toHaveBeenCalledWith(expect.stringMatching(/Observacao registrada/i));
+  });
+});
+
+describe("urgency modal in project details drawer (edit mode)", () => {
+  function renderDrawerEditMode(overrides: Partial<Project> = {}) {
+    const project = makeProject({ ...overrides });
+    render(
+      <ProjectDetailsDrawer
+        open
+        project={project}
+        initialMode="edit"
+        statusHistory={[]}
+        observations={[]}
+        onClose={vi.fn()}
+        onUpdate={vi.fn(() => Promise.resolve({ ok: true }))}
+        isCodigoDuplicado={vi.fn(() => false)}
+        onAddObservation={vi.fn()}
+        notify={vi.fn()}
+      />,
+    );
+    return { project };
+  }
+
+  it("abre UrgencyJustificationDialog ao clicar em Marcar como urgente no drawer", async () => {
+    const user = userEvent.setup();
+    renderDrawerEditMode();
+
+    const checkbox = screen.getByRole("checkbox", { name: /Marcar como urgente/i });
+    await user.click(checkbox);
+
+    expect(screen.getByText(/Definir prazo de urgência/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Novo prazo de entrega/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Motivo da urgência/i)).toBeInTheDocument();
+  });
+
+  it("cancelar modal nao marca urgente", async () => {
+    const user = userEvent.setup();
+    renderDrawerEditMode();
+
+    const checkbox = screen.getByRole("checkbox", { name: /Marcar como urgente/i });
+    await user.click(checkbox);
+
+    const urgencyDialog = screen.getByRole("dialog", { name: /Definir prazo de urgência/i });
+    expect(urgencyDialog).toBeInTheDocument();
+
+    await user.click(within(urgencyDialog).getByRole("button", { name: /Cancelar/i }));
+    expect(screen.queryByText(/Definir prazo de urgência/i)).not.toBeInTheDocument();
+    expect(checkbox).not.toBeChecked();
+  });
+
+  it("checkbox desabilitado em PROJETO APROVADO", () => {
+    renderDrawerEditMode({ status_atual: "PROJETO APROVADO" });
+    const checkbox = screen.getByRole("checkbox", { name: /Marcar como urgente/i });
+    expect(checkbox).toBeDisabled();
   });
 });
