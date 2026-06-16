@@ -11,6 +11,7 @@ import { ProjectsToolbar } from "./projects-toolbar";
 import { ProjectDetailsDrawer } from "./project-details-drawer";
 import { ProjectsKpiDashboard } from "./projects-kpi-dashboard";
 import { ProjectStatusChangeDialog } from "./project-status-change-dialog";
+import { UrgencyJustificationDialog } from "./urgency-justification-dialog";
 import { KpiDashboardErrorBoundary } from "./kpi-dashboard-error-boundary";
 import { PageContainer } from "./page-container";
 import { useProjectsStore, setProjectsErrorSink } from "@/features/projects/state/projects-store";
@@ -78,6 +79,7 @@ export function ProjectsPageShell() {
     section: "overview" | "history";
   } | null>(null);
   const [statusChangeProject, setStatusChangeProject] = useState<Project | undefined>(undefined);
+  const [selectedUrgencyProject, setSelectedUrgencyProject] = useState<Project | undefined>(undefined);
   const [toast, setToast] = useState<string>("");
   const [tableState, setTableState] = useState<"loading" | "ready" | "error">("loading");
   const [kpiFilter, setKpiFilter] = useState<"all" | "total" | "andamento" | "atrasados" | "urgentes" | "finalizados">("all");
@@ -418,7 +420,7 @@ export function ProjectsPageShell() {
             onEditProject={openEdit}
             onChangeStatus={openStatusDialog}
             onViewHistory={openHistory}
-            onMarkUrgente={markUrgentWithReason}
+            onMarkUrgente={(project) => setSelectedUrgencyProject(project)}
             onRemoveUrgente={removeUrgent}
             onClearFilters={clearAllFilters}
             state={tableState}
@@ -497,6 +499,16 @@ export function ProjectsPageShell() {
             </p>
           </section>
         )}
+
+        <UrgencyJustificationDialog
+          open={Boolean(selectedUrgencyProject)}
+          project={selectedUrgencyProject}
+          onCancel={() => setSelectedUrgencyProject(undefined)}
+          onConfirm={(payload) => {
+            markUrgentWithReason(payload);
+            setSelectedUrgencyProject(undefined);
+          }}
+        />
 
         <ProjectFormModal
           open={modalOpen}

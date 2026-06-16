@@ -78,13 +78,14 @@ describe("projects table urgency flow", () => {
     expect(onViewHistory).toHaveBeenCalledWith(project);
   });
 
-  it("exige prazo e justificativa para marcar urgencia", async () => {
+  it("chama onMarkUrgente com o projeto ao clicar em Marcar como urgente", async () => {
     const user = userEvent.setup();
     const onMarkUrgente = vi.fn();
+    const project = makeProject();
 
     render(
       <ProjectsTable
-        projects={[makeProject()]}
+        projects={[project]}
         onViewDetails={vi.fn()}
         onEditProject={vi.fn()}
         onChangeStatus={vi.fn()}
@@ -97,35 +98,33 @@ describe("projects table urgency flow", () => {
     await user.click(screen.getByRole("button", { name: /Abrir acoes do projeto/i }));
     await user.click(screen.getByRole("menuitem", { name: /Marcar como urgente/i }));
 
-    // Novo título do modal
-    expect(screen.getByText(/Definir prazo de urgência/i)).toBeInTheDocument();
-
-    const confirmButton = screen.getByRole("button", { name: /Confirmar urgência/i });
-    expect(confirmButton).toBeDisabled();
-
-    // Preenche prazo (campo obrigatório)
-    const today = new Date();
-    const futureDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 10);
-    const yyyy = futureDate.getFullYear();
-    const mm = String(futureDate.getMonth() + 1).padStart(2, "0");
-    const dd = String(futureDate.getDate()).padStart(2, "0");
-    await user.type(screen.getByLabelText(/Novo prazo de entrega/i), `${yyyy}-${mm}-${dd}`);
-
-    // Mesmo com prazo preenchido, motivo ainda em branco → desabilitado
-    expect(confirmButton).toBeDisabled();
-
-    // Preenche motivo
-    await user.type(screen.getByLabelText(/Motivo da urgência/i), "Cliente solicitou prioridade para inicio imediato.");
-    expect(confirmButton).toBeEnabled();
-
-    await user.click(confirmButton);
-
+    // A tabela agora delega o dialog ao shell — apenas repassa o projeto
     expect(onMarkUrgente).toHaveBeenCalledTimes(1);
-    expect(onMarkUrgente.mock.calls[0][0]).toMatchObject({
-      projectId: "p1",
-      urgencyReason: "Cliente solicitou prioridade para inicio imediato.",
-      urgentDeadline: `${yyyy}-${mm}-${dd}`,
-    });
+    expect(onMarkUrgente).toHaveBeenCalledWith(project);
+  });
+
+  it("item Marcar como urgente desabilitado em PROJETO APROVADO", async () => {
+    const user = userEvent.setup();
+    const onMarkUrgente = vi.fn();
+    const project = makeProject({ status_atual: "PROJETO APROVADO" });
+
+    render(
+      <ProjectsTable
+        projects={[project]}
+        onViewDetails={vi.fn()}
+        onEditProject={vi.fn()}
+        onChangeStatus={vi.fn()}
+        onViewHistory={vi.fn()}
+        onMarkUrgente={onMarkUrgente}
+        onRemoveUrgente={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Abrir acoes do projeto/i }));
+    const item = screen.getByRole("menuitem", { name: /Marcar como urgente/i });
+    // Radix renderiza disabled via aria-disabled
+    expect(item).toHaveAttribute("aria-disabled", "true");
+    expect(onMarkUrgente).not.toHaveBeenCalled();
   });
 
   it("pede confirmacao antes de remover urgencia", async () => {

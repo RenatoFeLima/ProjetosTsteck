@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle } from "lucide-react";
 import type { Project } from "@/features/projects/domain/project-types";
 
@@ -102,8 +103,8 @@ export function UrgencyJustificationDialog({
 
   if (!open || !project) return null;
 
-  return (
-    <div className="fixed inset-0 z-[95] grid place-items-center bg-black/50 p-4">
+  const content = (
+    <div className="fixed inset-0 z-[9999] grid place-items-center bg-black/50 p-4">
       <article
         role="dialog"
         aria-modal="true"
@@ -199,4 +200,6 @@ export function UrgencyJustificationDialog({
       </article>
     </div>
   );
+
+  return createPortal(content, document.body);
 }
