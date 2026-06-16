@@ -21,7 +21,8 @@
     "db:export-json": "dotenv -e .env.local -- tsx prisma/export-data.ts",
     "db:reset-operational": "dotenv -e .env.local -- tsx prisma/reset-operational-data.ts",
     "db:patch-jun2026": "dotenv -e .env.local -- tsx prisma/patch-status-jun2026.ts",
-    "db:patch-jun2026:dry": "dotenv -e .env.local -- tsx prisma/patch-status-jun2026.ts --dry-run"
+    "db:patch-jun2026:dry": "dotenv -e .env.local -- tsx prisma/patch-status-jun2026.ts --dry-run",
+    "db:backup-ante": "dotenv -e .env.local -- tsx prisma/backup-ante-snapshot.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
