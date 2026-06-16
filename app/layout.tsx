@@ -26,6 +26,10 @@ const rajdhani = Rajdhani({
 export const metadata: Metadata = {
   title: "TSTECK Projetos",
   description: "Controle de projetos de cabines - fase local",
+  other: {
+    "x-build-version": "diagnostic-v4",
+    "x-build-commit": "7d6d1c4",
+  },
 };
 
 export default function RootLayout({
