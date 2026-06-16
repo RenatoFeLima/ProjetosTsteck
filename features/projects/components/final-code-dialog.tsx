@@ -87,7 +87,8 @@ export function FinalCodeDialog({ open, currentCode, ignoreId, isCodigoDuplicado
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4"
+      data-testid="final-code-dialog"
+      className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 p-4"
     >
       <article
         role="dialog"

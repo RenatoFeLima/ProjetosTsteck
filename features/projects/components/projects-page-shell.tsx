@@ -141,6 +141,7 @@ export function ProjectsPageShell() {
   );
 
   useEffect(() => {
+    console.log("[BUILD_VERSION]", "diagnostic-v4");
     setLastUpdatedAt(new Date().toLocaleString());
     // Erros de ação real do store (ex.: validação 400 ao salvar) viram toast.
     setProjectsErrorSink((message) => {
@@ -202,12 +203,18 @@ export function ProjectsPageShell() {
     const project = statusChangeProject;
     if (!project) return;
 
-    // Ante-Projeto Enviado: abre o modal de código antes de mover.
-    console.log("[APPLY_STATUS_CHANGE] nextStatus:", nextStatus, "project:", project?.id);
-    if (nextStatus === "ANTE-PROJETO ENVIADO") {
+    console.log("[STATUS_CHANGE_REQUEST]", { nextStatus, nextStatusJSON: JSON.stringify(nextStatus), projectId: project?.id });
+    const shouldOpenCodeDialog = nextStatus === "ANTE-PROJETO ENVIADO";
+    console.log("[SHOULD_OPEN_CODE_DIALOG]", shouldOpenCodeDialog, "comparison:", JSON.stringify(nextStatus), "===", JSON.stringify("ANTE-PROJETO ENVIADO"));
+
+    if (shouldOpenCodeDialog) {
       console.log("[OPEN_CODE_DIALOG_SHELL] setAnteProjFinalCodePending for project:", project?.id);
       setStatusChangeProject(undefined);
       setAnteProjFinalCodePending({ project, observation });
+      setTimeout(() => {
+        const exists = Boolean(document.querySelector('[data-testid="final-code-dialog"]'));
+        console.log("[CODE_DIALOG_DOM_EXISTS]", exists, new Date().toISOString());
+      }, 150);
       return;
     }
 
@@ -601,6 +608,11 @@ export function ProjectsPageShell() {
         {toast && (
           <div className="fixed right-4 bottom-4 rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg">{toast}</div>
         )}
+
+        {/* DEBUG: badge de versão — remover após confirmar em produção */}
+        <div className="fixed bottom-2 left-2 z-[999999] rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-mono text-zinc-300 opacity-70 pointer-events-none select-none">
+          BUILD: diagnostic-v4
+        </div>
       </PageContainer>
     </main>
   );

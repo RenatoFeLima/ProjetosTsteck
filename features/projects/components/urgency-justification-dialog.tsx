@@ -108,7 +108,7 @@ export function UrgencyJustificationDialog({
   console.log("[URGENCY_DIALOG_PORTAL] rendering via createPortal for project:", project.id);
 
   const content = (
-    <div className="fixed inset-0 z-[9999] grid place-items-center bg-black/50 p-4">
+    <div data-testid="urgency-deadline-dialog" className="fixed inset-0 z-[999999] grid place-items-center bg-black/50 p-4">
       <article
         role="dialog"
         aria-modal="true"
