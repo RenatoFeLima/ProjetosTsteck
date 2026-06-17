@@ -217,4 +217,22 @@ describe("urgency justification dialog", () => {
     render(<UrgencyJustificationDialog open project={project} onCancel={vi.fn()} onConfirm={onConfirm} />);
     expect(screen.getByRole("button", { name: /Confirmar urgência/i })).toBeDisabled();
   });
+
+  it("confirma com apenas prazo — urgencyReason fica string vazia (motivo é opcional)", async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+
+    render(<UrgencyJustificationDialog open project={project} onCancel={vi.fn()} onConfirm={onConfirm} />);
+
+    fireEvent.change(screen.getByLabelText(/Novo prazo de entrega/i), { target: { value: "2026-12-31" } });
+
+    await user.click(screen.getByRole("button", { name: /Confirmar urgência/i }));
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onConfirm.mock.calls[0][0]).toMatchObject({
+      projectId: "p1",
+      urgentDeadline: "2026-12-31",
+      urgencyReason: "",
+    });
+  });
 });

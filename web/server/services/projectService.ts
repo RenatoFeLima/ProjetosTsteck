@@ -295,7 +295,7 @@ export async function updateProject(actor: SessionUser, id: string, data: Projec
       priority: data.urgente === undefined ? undefined : data.urgente ? "URGENTE" : "NORMAL",
       ...(data.urgente === true ? {
         urgentDeadline: data.urgentDeadline ? new Date(data.urgentDeadline) : undefined,
-        urgentReason: data.urgentReason?.trim() || undefined,
+        urgentReason: data.urgentReason?.trim() || null,
       } : data.urgente === false ? {
         urgentDeadline: null,
         urgentReason: null,
@@ -494,26 +494,27 @@ export async function setUrgency(
     throw new HttpError(400, "Projetos aprovados não podem ser marcados como urgentes.");
   }
   if (urgent && !deadline) throw new HttpError(400, "Informe o prazo de urgência.");
-  if (urgent && !reason?.trim()) throw new HttpError(400, "Informe o motivo da urgência.");
+
+  const trimmedReason = reason?.trim() || null;
 
   await prisma.project.update({
     where: { id },
     data: urgent
-      ? { priority: "URGENTE", urgentDeadline: new Date(deadline!), urgentReason: reason!.trim(), updatedById: actor.id }
+      ? { priority: "URGENTE", urgentDeadline: new Date(deadline!), urgentReason: trimmedReason, updatedById: actor.id }
       : { priority: "NORMAL", urgentDeadline: null, urgentReason: null, updatedById: actor.id },
   });
 
-  if (reason?.trim()) {
-    await prisma.projectObservation.create({
-      data: {
-        projectId: id,
-        author: actor.name,
-        text: urgent
-          ? `Marcado como urgente (prazo: ${deadline}): ${reason.trim()}`
-          : `Urgência removida: ${reason.trim()}`,
-      },
-    });
-  }
+  const obsText = urgent
+    ? trimmedReason
+      ? `Marcado como urgente (prazo: ${deadline}): ${trimmedReason}`
+      : `Marcado como urgente (prazo: ${deadline}).`
+    : trimmedReason
+      ? `Urgência removida: ${trimmedReason}`
+      : "Urgência removida.";
+
+  await prisma.projectObservation.create({
+    data: { projectId: id, author: actor.name, text: obsText },
+  });
 
   await writeAudit({
     action: urgent ? "PROJECT_MARKED_URGENT" : "PROJECT_URGENCY_REMOVED",

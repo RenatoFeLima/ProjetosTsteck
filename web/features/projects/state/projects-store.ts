@@ -434,7 +434,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
           ...project,
           urgente: willBeUrgent,
           urgentDeadline: willBeUrgent ? (urgentData?.deadline ?? null) : null,
-          urgentReason: willBeUrgent ? (urgentData?.reason ?? null) : null,
+          urgentReason: willBeUrgent ? (urgentData?.reason?.trim() || null) : null,
           updated_at: nowDate(),
         } : project,
       ),

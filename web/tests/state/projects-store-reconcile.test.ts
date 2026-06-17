@@ -230,6 +230,57 @@ describe("urgência", () => {
       expect.objectContaining({ urgente: true }),
     );
   });
+
+  it("marca urgente SEM motivo: salva deadline, urgentReason fica null", async () => {
+    useProjectsStore.setState({ projects: [realProject("u5", "URG-000-0005")] });
+    const persisted = {
+      ...realProject("u5", "URG-000-0005"),
+      urgente: true,
+      urgentDeadline: "2026-12-31",
+      urgentReason: null,
+    };
+    vi.mocked(api.apiSetUrgency).mockResolvedValue(persisted);
+
+    useProjectsStore.getState().toggleUrgente("u5", { reason: "", deadline: "2026-12-31" });
+
+    const optimistic = useProjectsStore.getState().projects.find((p) => p.id === "u5");
+    expect(optimistic?.urgente).toBe(true);
+    expect(optimistic?.urgentDeadline).toBe("2026-12-31");
+    expect(optimistic?.urgentReason).toBeNull();
+    expect(api.apiSetUrgency).toHaveBeenCalledWith("u5", true, "", "2026-12-31");
+
+    await flush();
+    const reconciled = useProjectsStore.getState().projects.find((p) => p.id === "u5");
+    expect(reconciled?.urgente).toBe(true);
+    expect(reconciled?.urgentDeadline).toBe("2026-12-31");
+    expect(reconciled?.urgentReason).toBeNull();
+  });
+
+  it("edição com urgente+deadline sem motivo envia urgentReason null ao backend", async () => {
+    useProjectsStore.setState({ projects: [realProject("u6", "URG-000-0006")] });
+    const persisted = {
+      ...realProject("u6", "URG-000-0006"),
+      urgente: true,
+      urgentDeadline: "2026-11-30",
+      urgentReason: null,
+    };
+    vi.mocked(api.apiUpdateProject).mockResolvedValue(persisted);
+
+    await useProjectsStore.getState().updateProject("u6", {
+      urgente: true,
+      urgentDeadline: "2026-11-30",
+      urgentReason: null,
+    });
+
+    expect(api.apiUpdateProject).toHaveBeenCalledWith(
+      "u6",
+      expect.objectContaining({ urgente: true, urgentDeadline: "2026-11-30", urgentReason: null }),
+    );
+    const updated = useProjectsStore.getState().projects.find((p) => p.id === "u6");
+    expect(updated?.urgente).toBe(true);
+    expect(updated?.urgentDeadline).toBe("2026-11-30");
+    expect(updated?.urgentReason).toBeNull();
+  });
 });
 
 describe("carregamento do detalhe (drawer)", () => {

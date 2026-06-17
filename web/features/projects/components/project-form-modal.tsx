@@ -789,7 +789,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
       }}
       onCancel={() => setUrgencyDialogOpen(false)}
       onConfirm={(payload) => {
-        patch({ urgente: true, urgentDeadline: payload.urgentDeadline, urgentReason: payload.urgencyReason });
+        patch({ urgente: true, urgentDeadline: payload.urgentDeadline, urgentReason: payload.urgencyReason.trim() || null });
         setUrgencyDialogOpen(false);
       }}
     />

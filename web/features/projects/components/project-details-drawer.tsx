@@ -381,10 +381,6 @@ export function ProjectDetailsDrawer({
         notify("Informe o prazo de urgência.");
         return false;
       }
-      if (!payload.urgentReason?.trim()) {
-        notify("Informe o motivo da urgência.");
-        return false;
-      }
     }
 
     return true;
@@ -1021,7 +1017,7 @@ export function ProjectDetailsDrawer({
         project={project}
         onCancel={() => setUrgencyDialogOpen(false)}
         onConfirm={(payload) => {
-          patchEdit({ urgente: true, urgentDeadline: payload.urgentDeadline, urgentReason: payload.urgencyReason });
+          patchEdit({ urgente: true, urgentDeadline: payload.urgentDeadline, urgentReason: payload.urgencyReason.trim() || null });
           setUrgencyDialogOpen(false);
         }}
       />
