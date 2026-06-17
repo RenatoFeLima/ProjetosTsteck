@@ -138,18 +138,70 @@ describe("reconciliação de id otimista", () => {
 });
 
 describe("urgência", () => {
-  it("marca urgente e mantém após a resposta da API (não some ao reidratar)", async () => {
+  it("marca urgente com prazo+motivo e preserva urgentDeadline/urgentReason após a API", async () => {
     useProjectsStore.setState({ projects: [realProject("u1", "URG-000-0001")] });
-    // A API persiste e devolve o projeto urgente (priority -> urgente=true).
-    vi.mocked(api.apiSetUrgency).mockResolvedValue({ ...realProject("u1", "URG-000-0001"), urgente: true });
+    // A API persiste e devolve o projeto urgente com prazo e motivo.
+    const persisted = {
+      ...realProject("u1", "URG-000-0001"),
+      urgente: true,
+      urgentDeadline: "2026-12-31",
+      urgentReason: "Cliente solicitou prioridade imediata.",
+    };
+    vi.mocked(api.apiSetUrgency).mockResolvedValue(persisted);
 
-    useProjectsStore.getState().toggleUrgente("u1");
-    expect(useProjectsStore.getState().projects.find((p) => p.id === "u1")?.urgente).toBe(true); // otimista
-    expect(api.apiSetUrgency).toHaveBeenCalledWith("u1", true);
+    useProjectsStore
+      .getState()
+      .toggleUrgente("u1", { reason: "Cliente solicitou prioridade imediata.", deadline: "2026-12-31" });
+
+    // Estado otimista: urgência + prazo + motivo já aplicados.
+    const optimistic = useProjectsStore.getState().projects.find((p) => p.id === "u1");
+    expect(optimistic?.urgente).toBe(true);
+    expect(optimistic?.urgentDeadline).toBe("2026-12-31");
+    expect(optimistic?.urgentReason).toBe("Cliente solicitou prioridade imediata.");
+    // Contrato atual: prazo e motivo vão ao backend junto da flag.
+    expect(api.apiSetUrgency).toHaveBeenCalledWith("u1", true, "Cliente solicitou prioridade imediata.", "2026-12-31");
 
     await flush();
-    // Após a resposta da API, continua urgente (antes o real podia sobrescrever p/ false).
-    expect(useProjectsStore.getState().projects.find((p) => p.id === "u1")?.urgente).toBe(true);
+    // Após a resposta da API, prazo/motivo/urgência são preservados (não somem ao reconciliar).
+    const reconciled = useProjectsStore.getState().projects.find((p) => p.id === "u1");
+    expect(reconciled?.urgente).toBe(true);
+    expect(reconciled?.urgentDeadline).toBe("2026-12-31");
+    expect(reconciled?.urgentReason).toBe("Cliente solicitou prioridade imediata.");
+  });
+
+  it("remover urgência limpa urgentDeadline e urgentReason", async () => {
+    useProjectsStore.setState({
+      projects: [
+        {
+          ...realProject("u4", "URG-000-0004"),
+          urgente: true,
+          urgentDeadline: "2026-12-31",
+          urgentReason: "motivo antigo",
+        },
+      ],
+    });
+    // DELETE de urgência devolve o projeto sem prazo/motivo.
+    vi.mocked(api.apiSetUrgency).mockResolvedValue({
+      ...realProject("u4", "URG-000-0004"),
+      urgente: false,
+      urgentDeadline: null,
+      urgentReason: null,
+    });
+
+    useProjectsStore.getState().toggleUrgente("u4");
+
+    // Otimista: ao remover, prazo e motivo são limpos imediatamente.
+    const optimistic = useProjectsStore.getState().projects.find((p) => p.id === "u4");
+    expect(optimistic?.urgente).toBe(false);
+    expect(optimistic?.urgentDeadline).toBeNull();
+    expect(optimistic?.urgentReason).toBeNull();
+    expect(api.apiSetUrgency).toHaveBeenCalledWith("u4", false, undefined, undefined);
+
+    await flush();
+    const reconciled = useProjectsStore.getState().projects.find((p) => p.id === "u4");
+    expect(reconciled?.urgente).toBe(false);
+    expect(reconciled?.urgentDeadline).toBeNull();
+    expect(reconciled?.urgentReason).toBeNull();
   });
 
   it("faz rollback e reporta erro se a API de urgência falhar", async () => {

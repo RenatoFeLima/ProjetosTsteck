@@ -1,7 +1,8 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProjectsTable } from "@/features/projects/components/projects-table";
+import { UrgencyJustificationDialog } from "@/features/projects/components/urgency-justification-dialog";
 import type { Project } from "@/features/projects/domain/project-types";
 
 function makeProject(overrides: Partial<Project> = {}): Project {
@@ -78,13 +79,17 @@ describe("projects table urgency flow", () => {
     expect(onViewHistory).toHaveBeenCalledWith(project);
   });
 
-  it("exige justificativa para marcar urgencia", async () => {
+  // Contrato atual: a tabela apenas sinaliza a intenção de marcar urgência
+  // chamando onMarkUrgente(project). O modal de prazo/justificativa é renderizado
+  // pelo ProjectsPageShell (fora da árvore da tabela), não pela própria tabela.
+  it("marcar como urgente apenas dispara onMarkUrgente(project); o modal fica no shell", async () => {
     const user = userEvent.setup();
+    const project = makeProject();
     const onMarkUrgente = vi.fn();
 
     render(
       <ProjectsTable
-        projects={[makeProject()]}
+        projects={[project]}
         onViewDetails={vi.fn()}
         onEditProject={vi.fn()}
         onChangeStatus={vi.fn()}
@@ -97,21 +102,35 @@ describe("projects table urgency flow", () => {
     await user.click(screen.getByRole("button", { name: /Abrir acoes do projeto/i }));
     await user.click(screen.getByRole("menuitem", { name: /Marcar como urgente/i }));
 
-    expect(screen.getByText(/Justificar urgencia do projeto/i)).toBeInTheDocument();
-
-    const confirmButton = screen.getByRole("button", { name: /Confirmar urgencia/i });
-    expect(confirmButton).toBeDisabled();
-
-    await user.type(screen.getByLabelText(/Justificativa da urgencia/i), "Cliente solicitou prioridade para inicio imediato.");
-    expect(confirmButton).toBeEnabled();
-
-    await user.click(confirmButton);
-
+    // A tabela passa o Project (não um payload) e não renderiza o modal de urgência.
     expect(onMarkUrgente).toHaveBeenCalledTimes(1);
-    expect(onMarkUrgente.mock.calls[0][0]).toMatchObject({
-      projectId: "p1",
-      urgencyReason: "Cliente solicitou prioridade para inicio imediato.",
-    });
+    expect(onMarkUrgente).toHaveBeenCalledWith(project);
+    expect(screen.queryByText(/Definir prazo de urgência/i)).not.toBeInTheDocument();
+  });
+
+  it("PROJETO APROVADO desabilita a ação de marcar urgência", async () => {
+    const user = userEvent.setup();
+    const project = makeProject({ status_atual: "PROJETO APROVADO", id: "p-aprovado" });
+    const onMarkUrgente = vi.fn();
+
+    render(
+      <ProjectsTable
+        projects={[project]}
+        onViewDetails={vi.fn()}
+        onEditProject={vi.fn()}
+        onChangeStatus={vi.fn()}
+        onViewHistory={vi.fn()}
+        onMarkUrgente={onMarkUrgente}
+        onRemoveUrgente={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Abrir acoes do projeto/i }));
+    const item = screen.getByRole("menuitem", { name: /Marcar como urgente/i });
+    expect(item).toHaveAttribute("data-disabled");
+
+    await user.click(item);
+    expect(onMarkUrgente).not.toHaveBeenCalled();
   });
 
   it("pede confirmacao antes de remover urgencia", async () => {
@@ -139,5 +158,44 @@ describe("projects table urgency flow", () => {
     await user.click(screen.getByRole("button", { name: /^Remover urgencia$/i }));
 
     expect(onRemoveUrgente).toHaveBeenCalledWith(project);
+  });
+});
+
+// Modal de urgência (renderizado pelo shell). Exige prazo + motivo antes de
+// confirmar e devolve urgentDeadline/urgentReason no payload de confirmação.
+describe("urgency justification dialog", () => {
+  const project = {
+    id: "p1",
+    codigo_projeto: "ABC-123-4567",
+    construtora: "ACRY",
+    obra: "ARTHUR DE AZEVEDO",
+  };
+
+  it("usa o título 'Definir prazo de urgência' e exige prazo + motivo", async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+
+    render(<UrgencyJustificationDialog open project={project} onCancel={vi.fn()} onConfirm={onConfirm} />);
+
+    expect(screen.getByText(/Definir prazo de urgência/i)).toBeInTheDocument();
+
+    const confirmButton = screen.getByRole("button", { name: /Confirmar urgência/i });
+    expect(confirmButton).toBeDisabled();
+
+    // Só o motivo não habilita: o prazo também é obrigatório.
+    await user.type(screen.getByLabelText(/Motivo da urgência/i), "Cliente solicitou prioridade imediata.");
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/Novo prazo de entrega/i), { target: { value: "2026-12-31" } });
+    expect(confirmButton).toBeEnabled();
+
+    await user.click(confirmButton);
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onConfirm.mock.calls[0][0]).toMatchObject({
+      projectId: "p1",
+      urgencyReason: "Cliente solicitou prioridade imediata.",
+      urgentDeadline: "2026-12-31",
+    });
   });
 });
