@@ -62,6 +62,97 @@ afterEach(() => {
   cleanup();
 });
 
+function buildEditProps(project: Project) {
+  return {
+    open: true,
+    mode: "edit" as const,
+    quickMode: false,
+    project,
+    statusHistory: [],
+    observations: [],
+    onClose: vi.fn(),
+    onCreate: vi.fn<(input: Partial<Project>) => { ok: boolean; error?: string; missing?: string[] }>(() => ({ ok: true })),
+    onUpdate: vi.fn(() => Promise.resolve({ ok: true })),
+    onDelete: vi.fn(),
+    onMoveStatus: vi.fn(() => ({ ok: true })),
+    isCodigoDuplicado: vi.fn(() => false),
+    onAddObservation: vi.fn(),
+    notify: vi.fn(),
+  };
+}
+
+function makeProject(overrides: Partial<Project> = {}): Project {
+  return {
+    id: "proj-1",
+    construtora: "ACRY",
+    obra: "ARTHUR DE AZEVEDO",
+    equipamento: "EK-15/26",
+    tipo_cabine: "",
+    codigo_projeto: "CRE-RES-2051",
+    vendedor: "RENATO",
+    engenheiro_nome: null,
+    engenheiro_celular: null,
+    proj_obra_recebido: true,
+    local_cabine_definido: true,
+    alinhamento: true,
+    data_lancamento: "2026-01-01",
+    data_alinhamento: "2026-01-02",
+    status_atual: "ANTE-PROJETO ENVIADO",
+    status_entered_at: "2026-05-01",
+    data_envio: "2026-05-01",
+    data_aprovacao: null,
+    urgente: false,
+    urgentDeadline: null,
+    urgentReason: null,
+    updated_at: "2026-05-01",
+    reviewCount: 0,
+    reviewHistory: [],
+    finalReviewCount: 0,
+    finalReviewHistory: [],
+    ...overrides,
+  };
+}
+
+describe("project form modal edit flow — código do projeto", () => {
+  it("envia o código editado no payload ao salvar em modo edição", async () => {
+    const user = userEvent.setup();
+    const project = makeProject();
+    const props = buildEditProps(project);
+
+    render(<ProjectFormModal {...props} />);
+
+    const codeInput = screen.getByPlaceholderText(/AAA-AAA-AAAA/i);
+    await user.clear(codeInput);
+    await user.type(codeInput, "CRE-RES-9999");
+
+    // modo edição: salva diretamente sem modal de confirmação intermediário
+    await user.click(screen.getByRole("button", { name: /Salvar/i }));
+
+    expect(props.onUpdate).toHaveBeenCalledWith(
+      "proj-1",
+      expect.objectContaining({ codigo_projeto: "CRE-RES-9999" }),
+    );
+  });
+
+  it("não envia o payload se o código novo for duplicado", async () => {
+    const user = userEvent.setup();
+    const project = makeProject();
+    const props = buildEditProps(project);
+    props.isCodigoDuplicado = vi.fn(() => true);
+
+    render(<ProjectFormModal {...props} />);
+
+    const codeInput = screen.getByPlaceholderText(/AAA-AAA-AAAA/i);
+    await user.clear(codeInput);
+    await user.type(codeInput, "CRE-DUP-0001");
+
+    await user.click(screen.getByRole("button", { name: /Salvar/i }));
+
+    expect(props.onUpdate).not.toHaveBeenCalled();
+    expect(props.notify).toHaveBeenCalledWith(expect.stringMatching(/código.*já existe|já existe.*código/i));
+  });
+});
+
 describe("project form modal create flow", () => {
   it("nao abre modal de confirmacao quando campos obrigatorios faltam", async () => {
     const user = userEvent.setup();

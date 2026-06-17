@@ -270,10 +270,23 @@ export async function updateProject(actor: SessionUser, id: string, data: Projec
   // Reaproveita resolução de cadastros (edição mantém os relacionamentos por nome).
   const refs = await resolveRefs(data);
 
+  // Código do projeto: editável via formulário. Valida duplicidade se o campo vier
+  // preenchido e diferente do código atual.
+  let codeUpdate: { code: string } | undefined;
+  if (data.codigo_projeto !== undefined) {
+    const newCode = data.codigo_projeto.trim();
+    if (newCode && newCode !== existing.code) {
+      const clash = await prisma.project.findFirst({ where: { code: newCode, id: { not: id } }, select: { id: true } });
+      if (clash) throw new HttpError(409, `Já existe um projeto com o código "${newCode}".`);
+      codeUpdate = { code: newCode };
+    }
+  }
+
   const updated = await prisma.project.update({
     where: { id },
     data: {
       ...refs,
+      ...codeUpdate,
       engineerName: data.engenheiro_nome !== undefined ? (data.engenheiro_nome.trim() || null) : undefined,
       engineerPhone: data.engenheiro_celular !== undefined ? (data.engenheiro_celular.trim() || null) : undefined,
       projectReceived: data.proj_obra_recebido,
