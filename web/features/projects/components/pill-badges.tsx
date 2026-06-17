@@ -1,5 +1,5 @@
 ﻿import { getStatusTheme } from "@/features/projects/domain/status-theme";
-import { getCurrentStatusDeadline, shouldShowOperationalDeadline } from "@/features/projects/domain/project-rules";
+import { countBusinessDays, getCurrentStatusDeadline, shouldShowOperationalDeadline } from "@/features/projects/domain/project-rules";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
 import { differenceInCalendarDays, format, isValid, parseISO } from "date-fns";
 
@@ -20,27 +20,29 @@ export function UrgenteBadge({ urgente, urgentDeadline }: { urgente: boolean; ur
 
   let label = "Urgente";
   let tooltip = "Prioridade urgente";
+  let isOverdue = false;
 
   if (urgentDeadline) {
     const due = parseISO(urgentDeadline.slice(0, 10));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const diff = differenceInCalendarDays(due, today);
-    if (diff < 0) {
-      label = `Urgente · ${Math.abs(diff)}d atrasado`;
-      tooltip = `Prazo vencido há ${Math.abs(diff)} dia(s): ${urgentDeadline.slice(0, 10)}`;
-    } else if (diff === 0) {
-      label = "Urgente · vence hoje";
-      tooltip = `Prazo de urgência vence hoje: ${urgentDeadline.slice(0, 10)}`;
+    const calDiff = differenceInCalendarDays(due, today);
+    const bizDiff = countBusinessDays(today, due);
+    const dateLabel = format(due, "dd/MM/yyyy");
+
+    if (calDiff < 0) {
+      isOverdue = true;
+      const absBiz = Math.abs(bizDiff);
+      label = `Urgente · ${absBiz}d ${absBiz === 1 ? "útil" : "úteis"} atrasado · ${dateLabel}`;
+      tooltip = `Prazo de urgência vencido há ${absBiz} dia(s) útil(eis): ${dateLabel}`;
+    } else if (calDiff === 0) {
+      label = `Urgente · vence hoje · ${dateLabel}`;
+      tooltip = `Prazo de urgência vence hoje: ${dateLabel}`;
     } else {
-      label = `Urgente · ${diff}d restantes`;
-      tooltip = `Prazo de urgência: ${urgentDeadline.slice(0, 10)} (${diff} dia(s) restantes)`;
+      label = `Urgente · ${bizDiff}d ${bizDiff === 1 ? "útil" : "úteis"} restantes · ${dateLabel}`;
+      tooltip = `Prazo de urgência: ${dateLabel} (${bizDiff} dia(s) útil(eis) restantes)`;
     }
   }
-
-  const isOverdue = urgentDeadline
-    ? differenceInCalendarDays(parseISO(urgentDeadline.slice(0, 10)), new Date()) < 0
-    : false;
 
   return (
     <span

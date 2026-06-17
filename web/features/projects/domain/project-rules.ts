@@ -1,4 +1,23 @@
-import { addDays, differenceInCalendarDays, formatISO, parseISO } from "date-fns";
+import { addDays, differenceInCalendarDays, formatISO, parseISO, isWeekend } from "date-fns";
+
+/**
+ * Conta dias úteis (seg–sex, sem feriados) entre `from` e `to`.
+ * Valor positivo = `to` está no futuro; negativo = `to` está no passado.
+ * Ambas as datas são normalizadas para meia-noite antes da contagem.
+ */
+export function countBusinessDays(from: Date, to: Date): number {
+  const a = new Date(from); a.setHours(0, 0, 0, 0);
+  const b = new Date(to);   b.setHours(0, 0, 0, 0);
+  if (a.getTime() === b.getTime()) return 0;
+  const forward = b > a;
+  let cursor = new Date(a);
+  let count = 0;
+  while (cursor.getTime() !== b.getTime()) {
+    cursor = addDays(cursor, forward ? 1 : -1);
+    if (!isWeekend(cursor)) count++;
+  }
+  return forward ? count : -count;
+}
 import type {
   AlignmentAutomationResult,
   PrazoBadge,

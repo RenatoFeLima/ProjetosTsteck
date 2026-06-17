@@ -4,6 +4,7 @@ import {
   computeOperationalKpis,
   computePrazoBadge,
   computePrazoEntrega,
+  countBusinessDays,
   shouldShowOperationalDeadline,
   toDateInputValue,
   transitionStatus,
@@ -165,5 +166,30 @@ describe("project rules", () => {
     expect(kpis.slaTargetDias).toBe(4);
     expect(kpis.slaRestanteDias).toBe(-6);
     expect(kpis.slaState).toBe("estourado");
+  });
+});
+
+describe("countBusinessDays", () => {
+  it("retorna 0 quando as datas são iguais", () => {
+    const d = new Date("2026-06-17");
+    expect(countBusinessDays(d, d)).toBe(0);
+  });
+
+  it("conta dias úteis de segunda a sexta (semana cheia = 5)", () => {
+    // seg 16/06 → sex 20/06 = 4 dias contados a partir de seg (ter, qua, qui, sex)
+    expect(countBusinessDays(new Date("2026-06-16"), new Date("2026-06-20"))).toBe(4);
+  });
+
+  it("pula fim de semana: seg → próxima seg = 5 dias úteis", () => {
+    expect(countBusinessDays(new Date("2026-06-16"), new Date("2026-06-23"))).toBe(5);
+  });
+
+  it("retorna negativo quando to está no passado", () => {
+    expect(countBusinessDays(new Date("2026-06-20"), new Date("2026-06-16"))).toBe(-4);
+  });
+
+  it("sábado e domingo não contam", () => {
+    // sex 19/06 → seg 22/06 = 1 dia útil (apenas a seg conta)
+    expect(countBusinessDays(new Date("2026-06-19"), new Date("2026-06-22"))).toBe(1);
   });
 });
