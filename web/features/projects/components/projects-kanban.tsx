@@ -110,7 +110,7 @@ function CardContent({ project }: { project: Project }) {
           <span className="flex-1 min-w-0 font-mono text-[12.5px] font-bold leading-tight text-zinc-900 dark:text-foreground">
             {project.codigo_projeto}
           </span>
-          {project.urgente && <UrgenteBadge urgente />}
+          {project.urgente && <UrgenteBadge urgente urgentDeadline={project.urgentDeadline} />}
         </div>
 
         {/* Row 2: construtora */}
@@ -534,8 +534,10 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
       fromStatus: current.status_atual,
       nextStatus: targetStatus,
     };
-    // Status final: confirma/atualiza o código final antes de concluir.
-    if (targetStatus === FINAL_STATUS) {
+    // Ante-Projeto Enviado: confirma/atualiza o código antes de mover.
+    console.log("[MOVE_TO_STATUS]", targetStatus, "projectId:", projectId);
+    if (targetStatus === "ANTE-PROJETO ENVIADO") {
+      console.log("[OPEN_CODE_DIALOG_KANBAN] setFinalCodeMove for project:", projectId);
       setFinalCodeMove(move);
       return;
     }

@@ -212,6 +212,10 @@ model Project {
   // Quando presente, sobrepõe o cálculo baseado em STATUS_DEADLINE_DAYS.
   deadline               DateTime?
 
+  // Prazo e motivo de urgência (preenchidos ao marcar priority=URGENTE manualmente).
+  urgentDeadline         DateTime?
+  urgentReason           String?   @db.Text
+
   reviewStudyCount Int @default(0)
   finalReviewCount Int @default(0)
 

@@ -11,6 +11,8 @@ import { ProjectsToolbar } from "./projects-toolbar";
 import { ProjectDetailsDrawer } from "./project-details-drawer";
 import { ProjectsKpiDashboard } from "./projects-kpi-dashboard";
 import { ProjectStatusChangeDialog } from "./project-status-change-dialog";
+import { UrgencyJustificationDialog } from "./urgency-justification-dialog";
+import { FinalCodeDialog } from "./final-code-dialog";
 import { KpiDashboardErrorBoundary } from "./kpi-dashboard-error-boundary";
 import { PageContainer } from "./page-container";
 import { useProjectsStore, setProjectsErrorSink } from "@/features/projects/state/projects-store";
@@ -78,6 +80,8 @@ export function ProjectsPageShell() {
     section: "overview" | "history";
   } | null>(null);
   const [statusChangeProject, setStatusChangeProject] = useState<Project | undefined>(undefined);
+  const [selectedUrgencyProject, setSelectedUrgencyProject] = useState<Project | undefined>(undefined);
+  const [anteProjFinalCodePending, setAnteProjFinalCodePending] = useState<{ project: Project; observation?: string } | null>(null);
   const [toast, setToast] = useState<string>("");
   const [tableState, setTableState] = useState<"loading" | "ready" | "error">("loading");
   const [kpiFilter, setKpiFilter] = useState<"all" | "total" | "andamento" | "atrasados" | "urgentes" | "finalizados">("all");
@@ -137,6 +141,7 @@ export function ProjectsPageShell() {
   );
 
   useEffect(() => {
+    console.log("[BUILD_VERSION]", "diagnostic-v4");
     setLastUpdatedAt(new Date().toLocaleString());
     // Erros de ação real do store (ex.: validação 400 ao salvar) viram toast.
     setProjectsErrorSink((message) => {
@@ -198,6 +203,21 @@ export function ProjectsPageShell() {
     const project = statusChangeProject;
     if (!project) return;
 
+    console.log("[STATUS_CHANGE_REQUEST]", { nextStatus, nextStatusJSON: JSON.stringify(nextStatus), projectId: project?.id });
+    const shouldOpenCodeDialog = nextStatus === "ANTE-PROJETO ENVIADO";
+    console.log("[SHOULD_OPEN_CODE_DIALOG]", shouldOpenCodeDialog, "comparison:", JSON.stringify(nextStatus), "===", JSON.stringify("ANTE-PROJETO ENVIADO"));
+
+    if (shouldOpenCodeDialog) {
+      console.log("[OPEN_CODE_DIALOG_SHELL] setAnteProjFinalCodePending for project:", project?.id);
+      setStatusChangeProject(undefined);
+      setAnteProjFinalCodePending({ project, observation });
+      setTimeout(() => {
+        const exists = Boolean(document.querySelector('[data-testid="final-code-dialog"]'));
+        console.log("[CODE_DIALOG_DOM_EXISTS]", exists, new Date().toISOString());
+      }, 150);
+      return;
+    }
+
     const oldStatus = project.status_atual;
     // Observação vira o MOTIVO da revisão (reason) exigido pelo backend.
     const result = moveStatus(project.id, nextStatus, "acao-rapida", observation);
@@ -243,18 +263,11 @@ export function ProjectsPageShell() {
     window.setTimeout(() => setToast(""), 3000);
   }
 
-  function markUrgentWithReason(payload: { projectId: string; urgencyReason: string; updatedAt: string; updatedBy: string }) {
+  function markUrgentWithReason(payload: { projectId: string; urgencyReason: string; urgentDeadline: string; updatedAt: string; updatedBy: string }) {
     const target = baseProjects.find((project) => project.id === payload.projectId);
     if (!target || target.urgente) return;
 
-    toggleUrgente(payload.projectId);
-
-    const when = new Date(payload.updatedAt).toLocaleString();
-    addObservation(
-      payload.projectId,
-      `Projeto marcado como urgente por ${currentUserName} em ${when}. Justificativa: ${payload.urgencyReason}`,
-      currentUserName,
-    );
+    toggleUrgente(payload.projectId, { reason: payload.urgencyReason, deadline: payload.urgentDeadline });
 
     touchLastUpdated();
     notify("Projeto marcado como urgente.");
@@ -425,7 +438,7 @@ export function ProjectsPageShell() {
             onEditProject={openEdit}
             onChangeStatus={openStatusDialog}
             onViewHistory={openHistory}
-            onMarkUrgente={markUrgentWithReason}
+            onMarkUrgente={(project) => setSelectedUrgencyProject(project)}
             onRemoveUrgente={removeUrgent}
             onClearFilters={clearAllFilters}
             state={tableState}
@@ -505,6 +518,16 @@ export function ProjectsPageShell() {
           </section>
         )}
 
+        <UrgencyJustificationDialog
+          open={Boolean(selectedUrgencyProject)}
+          project={selectedUrgencyProject}
+          onCancel={() => setSelectedUrgencyProject(undefined)}
+          onConfirm={(payload) => {
+            markUrgentWithReason(payload);
+            setSelectedUrgencyProject(undefined);
+          }}
+        />
+
         <ProjectFormModal
           open={modalOpen}
           mode="create"
@@ -550,9 +573,62 @@ export function ProjectsPageShell() {
           />
         )}
 
+        <FinalCodeDialog
+          open={Boolean(anteProjFinalCodePending)}
+          currentCode={anteProjFinalCodePending?.project.codigo_projeto}
+          ignoreId={anteProjFinalCodePending?.project.id}
+          isCodigoDuplicado={isCodigoProjetoDuplicado}
+          onCancel={() => {
+            setAnteProjFinalCodePending(null);
+            notify("Movimentacao cancelada.");
+          }}
+          onConfirm={(finalCode) => {
+            const pending = anteProjFinalCodePending;
+            if (!pending) return;
+            const { project, observation } = pending;
+            const oldStatus = project.status_atual;
+            const result = moveStatus(project.id, "ANTE-PROJETO ENVIADO", "acao-rapida", observation, finalCode);
+            if (!result.ok) {
+              notify(result.error ?? "Falha ao atualizar status.");
+            } else {
+              if (observation?.trim()) {
+                addObservation(
+                  project.id,
+                  `Mudanca de status via menu de acoes: ${oldStatus} -> ANTE-PROJETO ENVIADO. Observacao: ${observation.trim()}`,
+                  currentUserName,
+                );
+              }
+              touchLastUpdated();
+              notify(`Ante-projeto enviado com o codigo ${finalCode}.`);
+            }
+            setAnteProjFinalCodePending(null);
+          }}
+        />
+
         {toast && (
           <div className="fixed right-4 bottom-4 rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg">{toast}</div>
         )}
+
+        {/* DEBUG: badge de versão — remover após confirmar em produção */}
+        <div
+          id="build-version-badge"
+          style={{
+            position: "fixed",
+            bottom: 8,
+            left: 8,
+            zIndex: 999999,
+            background: "red",
+            color: "white",
+            padding: "6px 10px",
+            borderRadius: 6,
+            fontSize: 12,
+            fontFamily: "monospace",
+            pointerEvents: "none",
+            userSelect: "none",
+          }}
+        >
+          BUILD diagnostic-v4 f9323fd
+        </div>
       </PageContainer>
     </main>
   );

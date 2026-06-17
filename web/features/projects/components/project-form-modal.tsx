@@ -10,6 +10,7 @@ import { SearchableCombobox } from "./searchable-combobox";
 import { ConfirmProjectCreateDialog } from "./confirm-project-create-dialog";
 import { MissingRequiredFieldsDialog } from "./missing-required-fields-dialog";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
+import { UrgencyJustificationDialog } from "./urgency-justification-dialog";
 import { formatPhone, formatProjectCode, normalizeEngineerName, stripPhone } from "./project-form-utils";
 
 const STATUS_OPTIONS: ProjectStatus[] = [
@@ -135,6 +136,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
   const [construtoraError, setConstrutoraError] = useState("");
   const [obraError, setObraError] = useState("");
+  const [urgencyDialogOpen, setUrgencyDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!props.open) return;
@@ -434,7 +436,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
               </p>
             </div>
             {props.mode === "edit" && form.status_atual && <StatusBadge status={form.status_atual} />}
-            <UrgenteBadge urgente={Boolean(form.urgente)} />
+            <UrgenteBadge urgente={Boolean(form.urgente)} urgentDeadline={form.urgentDeadline as string | null | undefined} />
             {props.mode === "edit" && props.project && <PrazoBadge project={props.project} />}
             <button
               className="ml-1 shrink-0 rounded-lg border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel-soft p-2 text-zinc-500 dark:text-zinc-400 transition hover:border-zinc-300 dark:hover:border-white/15 hover:text-zinc-900 dark:hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9e0b0f]/40"
@@ -638,7 +640,29 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                   />
                 )}
                 <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3 transition hover:border-zinc-300 dark:hover:border-white/15">
-                  <input type="checkbox" className="mt-0.5 h-4 w-4 rounded accent-[#9e0b0f]" checked={Boolean(form.urgente)} onChange={(e) => patch({ urgente: e.target.checked })} />
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded accent-[#9e0b0f]"
+                    checked={Boolean(form.urgente)}
+                    onChange={(e) => {
+                      console.log("[URGENT_CHECKBOX_RAW_EVENT]", {
+                        checked: e.currentTarget.checked,
+                        mode: props.mode,
+                        formCode: form.codigo_projeto,
+                      });
+                      if (e.target.checked) {
+                        console.log("[BEFORE_OPEN_URGENCY_DIALOG_FORM]");
+                        setUrgencyDialogOpen(true);
+                        console.log("[AFTER_OPEN_URGENCY_DIALOG_FORM]");
+                        setTimeout(() => {
+                          const exists = Boolean(document.querySelector('[data-testid="urgency-deadline-dialog"]'));
+                          console.log("[DIALOG_DOM_EXISTS_FORM]", exists, new Date().toISOString());
+                        }, 150);
+                      } else {
+                        patch({ urgente: false, urgentDeadline: null, urgentReason: null });
+                      }
+                    }}
+                  />
                   <div>
                     <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Marcar como urgente</span>
                     <p className="mt-0.5 text-xs text-zinc-500 dark:text-muted">Prioriza o projeto na fila de atendimento.</p>
@@ -763,6 +787,21 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
       onConfirmDiscard={() => {
         setDiscardDialogOpen(false);
         props.onClose();
+      }}
+    />
+
+    <UrgencyJustificationDialog
+      open={urgencyDialogOpen}
+      project={{
+        id: props.project?.id ?? "",
+        codigo_projeto: form.codigo_projeto ?? "(novo projeto)",
+        construtora: form.construtora ?? "",
+        obra: form.obra ?? "",
+      }}
+      onCancel={() => setUrgencyDialogOpen(false)}
+      onConfirm={(payload) => {
+        patch({ urgente: true, urgentDeadline: payload.urgentDeadline, urgentReason: payload.urgencyReason });
+        setUrgencyDialogOpen(false);
       }}
     />
     </div>

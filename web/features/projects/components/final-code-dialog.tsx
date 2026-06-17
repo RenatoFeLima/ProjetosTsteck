@@ -15,8 +15,8 @@ type Props = {
   onCancel: () => void;
 };
 
-/** Modal exibido ao mover um projeto para "Projeto Final Enviado": confirma/edita
- *  o código final, com sugestão automática (maior sufixo global + 1). */
+/** Modal exibido ao mover um projeto para "Ante-Projeto Enviado": confirma/edita
+ *  o código do projeto, com sugestão automática baseada no último código registrado. */
 export function FinalCodeDialog({ open, currentCode, ignoreId, isCodigoDuplicado, onConfirm, onCancel }: Props) {
   const [code, setCode] = useState("");
   // Referência "De:": código do último projeto que chegou em PROJETO APROVADO (terminal).
@@ -87,7 +87,8 @@ export function FinalCodeDialog({ open, currentCode, ignoreId, isCodigoDuplicado
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 p-4"
+      data-testid="final-code-dialog"
+      className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 p-4"
     >
       <article
         role="dialog"
@@ -102,10 +103,10 @@ export function FinalCodeDialog({ open, currentCode, ignoreId, isCodigoDuplicado
           </span>
           <div>
             <h2 id="final-code-title" className="text-lg font-bold text-zinc-900 dark:text-foreground">
-              Confirmar o código final do projeto
+              Confirmar o código do projeto
             </h2>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              Ao concluir, o código provisório pode ser atualizado para o código final. Confirme ou edite a sugestão.
+              Ao enviar o ante-projeto, o código provisório pode ser atualizado. Confirme ou edite a sugestão.
             </p>
           </div>
         </header>

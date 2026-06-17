@@ -4,7 +4,6 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { computeNextAction, getCodeSortableSuffix } from "@/features/projects/domain/project-rules";
 import { AlertTriangle, ArrowDownWideNarrow, ChevronLeft, ChevronRight, CircleDot, Copy, Eye, History, LoaderCircle, MoreHorizontal, PencilLine, RotateCcw, Workflow } from "lucide-react";
 import { DeadlineBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
-import { UrgencyJustificationDialog } from "./urgency-justification-dialog";
 import { RemoveUrgencyConfirmDialog } from "./remove-urgency-confirm-dialog";
 
 type ProjectsTableProps = {
@@ -13,7 +12,7 @@ type ProjectsTableProps = {
   onEditProject?: (project: Project) => void;
   onChangeStatus?: (project: Project) => void;
   onViewHistory: (project: Project) => void;
-  onMarkUrgente?: (payload: { projectId: string; urgencyReason: string; updatedAt: string; updatedBy: string }) => void;
+  onMarkUrgente?: (project: Project) => void;
   onRemoveUrgente: (project: Project) => void;
   onClearFilters?: () => void;
   state?: "loading" | "ready" | "error";
@@ -43,7 +42,6 @@ export function ProjectsTable({
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
-  const [urgencyDialogProject, setUrgencyDialogProject] = useState<Project | undefined>(undefined);
   const [removeUrgencyProject, setRemoveUrgencyProject] = useState<Project | undefined>(undefined);
 
   const sortedProjects = useMemo(() => {
@@ -290,7 +288,7 @@ export function ProjectsTable({
                                   setRemoveUrgencyProject(project);
                                   return;
                                 }
-                                setUrgencyDialogProject(project);
+                                onMarkUrgente?.(project);
                               }}
                               className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none hover:bg-zinc-100 dark:hover:bg-white/8 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
                             >
@@ -356,16 +354,6 @@ export function ProjectsTable({
           </div>
         </div>
       </div>
-
-      <UrgencyJustificationDialog
-        open={Boolean(urgencyDialogProject)}
-        project={urgencyDialogProject}
-        onCancel={() => setUrgencyDialogProject(undefined)}
-        onConfirm={(payload) => {
-          onMarkUrgente?.(payload);
-          setUrgencyDialogProject(undefined);
-        }}
-      />
 
       <RemoveUrgencyConfirmDialog
         open={Boolean(removeUrgencyProject)}

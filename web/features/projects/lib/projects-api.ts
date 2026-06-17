@@ -66,10 +66,10 @@ export async function apiGetNextCodeSuggestion(currentCode?: string): Promise<Ne
   return request<NextCodeSuggestion>(`/api/projects/next-code-suggestion${qs}`);
 }
 
-export async function apiSetUrgency(id: string, urgent: boolean, reason?: string): Promise<Project> {
+export async function apiSetUrgency(id: string, urgent: boolean, reason?: string, deadline?: string): Promise<Project> {
   const data = await request<{ project: Project }>(`/api/projects/${id}/urgency`, {
     method: urgent ? "POST" : "DELETE",
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason, deadline }),
   });
   return data.project;
 }

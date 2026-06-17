@@ -58,6 +58,10 @@ export type Project = {
   local_cabine_final?: boolean;
   data_final?: string | null;
   urgente: boolean;
+  /** Prazo de urgência definido ao marcar como urgente (ISO yyyy-MM-dd ou datetime). */
+  urgentDeadline?: string | null;
+  /** Motivo da urgência registrado ao marcar como urgente. */
+  urgentReason?: string | null;
   /** Quantidade total de vezes que o projeto entrou em Revisao de Estudo. */
   reviewCount: number;
   /** Historico detalhado de cada ciclo de Revisao de Estudo. */

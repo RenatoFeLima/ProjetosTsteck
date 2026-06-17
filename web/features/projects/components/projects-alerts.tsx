@@ -140,7 +140,7 @@ export function ProjectsAlerts({ projects, onOpen, loading, error, onRetry }: Pr
                       <strong className="font-display text-base tracking-tight text-zinc-900 dark:text-foreground">
                         {project.codigo_projeto}
                       </strong>
-                      {project.urgente && <UrgenteBadge urgente />}
+                      {project.urgente && <UrgenteBadge urgente urgentDeadline={project.urgentDeadline} />}
                       <StatusBadge status={project.status_atual} />
                     </div>
 

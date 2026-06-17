@@ -79,6 +79,8 @@ function serializeProject(p: any) {
     data_aprovacao: null,
     urgente: p.priority === "URGENTE",
     deadline: iso(p.deadline),
+    urgentDeadline: iso(p.urgentDeadline),
+    urgentReason: p.urgentReason ?? null,
     reviewCount: p.reviewStudyCount,
     finalReviewCount: p.finalReviewCount,
     created_at: iso(p.createdAt) ?? "",
@@ -104,6 +106,8 @@ export type ProjectInput = {
   alinhamento?: boolean;
   data_alinhamento?: string | null;
   urgente?: boolean;
+  urgentDeadline?: string | null;
+  urgentReason?: string | null;
 };
 
 async function resolveRefs(data: ProjectInput) {
@@ -174,6 +178,11 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
     throw new HttpError(409, `Já existe um projeto com o código "${code}".`);
   }
 
+  if (data.urgente) {
+    if (!data.urgentDeadline) throw new HttpError(400, "Prazo de urgência é obrigatório ao marcar o projeto como urgente.");
+    if (!data.urgentReason?.trim()) throw new HttpError(400, "Motivo da urgência é obrigatório ao marcar o projeto como urgente.");
+  }
+
   const tRefs = startTimer();
   const refs = await resolveRefs(data);
   const refsMs = tRefs();
@@ -199,6 +208,8 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
       engineerPhone: (data.engenheiro_celular ?? "").trim() || null,
       status: initialStatus,
       priority: data.urgente ? "URGENTE" : "NORMAL",
+      urgentDeadline: data.urgente && data.urgentDeadline ? new Date(data.urgentDeadline) : null,
+      urgentReason: data.urgente ? (data.urgentReason?.trim() || null) : null,
       projectReceived,
       cabinLocationDefined,
       alignmentCompleted,
@@ -251,6 +262,11 @@ export async function updateProject(actor: SessionUser, id: string, data: Projec
   const existing = await prisma.project.findUnique({ where: { id } });
   if (!existing) throw new HttpError(404, "Projeto não encontrado.");
 
+  if (data.urgente === true) {
+    if (!data.urgentDeadline) throw new HttpError(400, "Prazo de urgência é obrigatório ao marcar o projeto como urgente.");
+    if (!data.urgentReason?.trim()) throw new HttpError(400, "Motivo da urgência é obrigatório ao marcar o projeto como urgente.");
+  }
+
   // Reaproveita resolução de cadastros (edição mantém os relacionamentos por nome).
   const refs = await resolveRefs(data);
 
@@ -264,9 +280,15 @@ export async function updateProject(actor: SessionUser, id: string, data: Projec
       cabinLocationDefined: data.local_cabine_definido,
       alignmentCompleted: data.alinhamento,
       alignmentDate: data.data_alinhamento !== undefined ? (data.data_alinhamento ? new Date(data.data_alinhamento) : null) : undefined,
-      // Urgência editável pelo formulário: persiste em priority (antes era ignorado,
-      // então o badge "voltava" ao reidratar do MySQL).
+      // Urgência editável pelo formulário: persiste priority + deadline + reason.
       priority: data.urgente === undefined ? undefined : data.urgente ? "URGENTE" : "NORMAL",
+      ...(data.urgente === true ? {
+        urgentDeadline: data.urgentDeadline ? new Date(data.urgentDeadline) : undefined,
+        urgentReason: data.urgentReason?.trim() || undefined,
+      } : data.urgente === false ? {
+        urgentDeadline: null,
+        urgentReason: null,
+      } : {}),
       updatedById: actor.id,
     },
     include: PROJECT_INCLUDE,
@@ -328,10 +350,10 @@ export async function changeStatus(
     throw new HttpError(400, "Informe o motivo da revisão.");
   }
 
-  // Código final: ao entrar em "Projeto Aprovado" (status terminal) pode-se
+  // Código: ao entrar em "Ante-Projeto Enviado" ou "Projeto Aprovado" pode-se
   // confirmar/atualizar o código. Valida formato e duplicidade ANTES da transação.
   let finalCodeToApply: string | null = null;
-  if (to === "PROJETO_APROVADO" && opts.finalCode?.trim()) {
+  if ((to === "ANTE_PROJETO_ENVIADO" || to === "PROJETO_APROVADO") && opts.finalCode?.trim()) {
     const code = opts.finalCode.trim();
     if (!hasValidFinalCode(code)) {
       throw new HttpError(400, "Código final inválido: deve terminar com 4 dígitos numéricos.");
@@ -451,14 +473,23 @@ export async function setUrgency(
   id: string,
   urgent: boolean,
   reason?: string,
+  deadline?: string,
 ): Promise<SerializedProject> {
   assertPermission(actor, (p) => p.projects.markUrgent);
   const project = await prisma.project.findUnique({ where: { id } });
   if (!project) throw new HttpError(404, "Projeto não encontrado.");
 
+  if (urgent && project.status === "PROJETO_APROVADO") {
+    throw new HttpError(400, "Projetos aprovados não podem ser marcados como urgentes.");
+  }
+  if (urgent && !deadline) throw new HttpError(400, "Informe o prazo de urgência.");
+  if (urgent && !reason?.trim()) throw new HttpError(400, "Informe o motivo da urgência.");
+
   await prisma.project.update({
     where: { id },
-    data: { priority: urgent ? "URGENTE" : "NORMAL", updatedById: actor.id },
+    data: urgent
+      ? { priority: "URGENTE", urgentDeadline: new Date(deadline!), urgentReason: reason!.trim(), updatedById: actor.id }
+      : { priority: "NORMAL", urgentDeadline: null, urgentReason: null, updatedById: actor.id },
   });
 
   if (reason?.trim()) {
@@ -466,7 +497,9 @@ export async function setUrgency(
       data: {
         projectId: id,
         author: actor.name,
-        text: urgent ? `Marcado como urgente: ${reason.trim()}` : `Urgência removida: ${reason.trim()}`,
+        text: urgent
+          ? `Marcado como urgente (prazo: ${deadline}): ${reason.trim()}`
+          : `Urgência removida: ${reason.trim()}`,
       },
     });
   }
@@ -477,7 +510,7 @@ export async function setUrgency(
     actorName: actor.name,
     entityType: "project",
     entityId: id,
-    message: `${actor.name} ${urgent ? "marcou como urgente" : "removeu a urgência d"}o projeto ${project.code}.`,
+    message: `${actor.name} ${urgent ? `marcou como urgente (prazo: ${deadline})` : "removeu a urgência d"}o projeto ${project.code}.`,
   });
 
   return serializeProject(await reload(id));
@@ -593,7 +626,7 @@ export type NextCodeSuggestion = {
   maxSuffix: number;
   /** Próximo sufixo GLOBAL (compat). */
   nextSuffix: string;
-  /** Código do último/maior projeto que já chegou em PROJETO_APROVADO (terminal). */
+  /** Código do último/maior projeto que já chegou em ANTE_PROJETO_ENVIADO ou PROJETO_APROVADO. */
   lastFinalCode: string | null;
   /** Código provisório do projeto sendo movimentado (informação secundária). */
   currentDraftCode: string | null;
@@ -601,10 +634,10 @@ export type NextCodeSuggestion = {
   suggestedFinalCode: string | null;
 };
 
-/** Sugestão do próximo código final. A referência principal é o ÚLTIMO projeto
- *  que já chegou em PROJETO_APROVADO (maior sufixo numérico entre os
- *  finalizados): "De:" = esse código, "Para:" = prefixo + sufixo + 1. Se não
- *  existir finalizado anterior, usa o código provisório atual como fallback. */
+/** Sugestão do próximo código. A referência principal é o ÚLTIMO projeto
+ *  que já chegou em ANTE_PROJETO_ENVIADO ou PROJETO_APROVADO (maior sufixo
+ *  numérico): "De:" = esse código, "Para:" = prefixo + sufixo + 1. Se não
+ *  existir nenhum anterior, usa o código provisório atual como fallback. */
 export async function nextCodeSuggestion(
   actor: SessionUser,
   currentCode?: string,
@@ -615,16 +648,16 @@ export async function nextCodeSuggestion(
   const allRows = await prisma.project.findMany({ select: { code: true } });
   const globalMax = maxCodeSuffix(allRows.map((r) => r.code));
 
-  // Projetos que já chegaram em PROJETO_APROVADO (terminal) — status atual OU
-  // histórico (um aprovado pode voltar para revisão e retornar).
+  // Projetos que já chegaram em ANTE_PROJETO_ENVIADO ou PROJETO_APROVADO — status
+  // atual OU histórico (um projeto pode sair e voltar para esses status).
   const ids = new Set<string>();
   const [historyHits, currentFinal] = await Promise.all([
     prisma.projectStatusHistory.findMany({
-      where: { toStatus: "PROJETO_APROVADO" },
+      where: { toStatus: { in: ["ANTE_PROJETO_ENVIADO", "PROJETO_APROVADO"] } },
       select: { projectId: true },
     }),
     prisma.project.findMany({
-      where: { status: "PROJETO_APROVADO" },
+      where: { status: { in: ["ANTE_PROJETO_ENVIADO", "PROJETO_APROVADO"] } },
       select: { id: true },
     }),
   ]);

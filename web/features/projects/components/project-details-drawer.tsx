@@ -14,6 +14,7 @@ import type { Project, ProjectObservation, StatusHistoryItem } from "@/features/
 import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { SearchableCombobox } from "./searchable-combobox";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
+import { UrgencyJustificationDialog } from "./urgency-justification-dialog";
 import { formatPhone, formatProjectCode, normalizeEngineerName, stripPhone } from "./project-form-utils";
 import { useProjectsStore } from "@/features/projects/state/projects-store";
 
@@ -167,6 +168,7 @@ export function ProjectDetailsDrawer({
   const [discardOpen, setDiscardOpen] = useState(false);
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
   const [confirmAlignOpen, setConfirmAlignOpen] = useState(false);
+  const [urgencyDialogOpen, setUrgencyDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // per-field validation errors
@@ -374,6 +376,17 @@ export function ProjectDetailsDrawer({
       return false;
     }
 
+    if (payload.urgente) {
+      if (!payload.urgentDeadline) {
+        notify("Informe o prazo de urgência.");
+        return false;
+      }
+      if (!payload.urgentReason?.trim()) {
+        notify("Informe o motivo da urgência.");
+        return false;
+      }
+    }
+
     return true;
   }
 
@@ -468,7 +481,7 @@ export function ProjectDetailsDrawer({
             <>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <StatusBadge status={project.status_atual} />
-                <UrgenteBadge urgente={project.urgente} />
+                <UrgenteBadge urgente={project.urgente} urgentDeadline={project.urgentDeadline} />
                 <PrazoBadge project={project} />
               </div>
               <div className="mt-3">
@@ -741,7 +754,25 @@ export function ProjectDetailsDrawer({
                     type="checkbox"
                     className="mt-0.5 h-4 w-4 rounded accent-[#9e0b0f]"
                     checked={Boolean(editForm.urgente)}
-                    onChange={(e) => patchEdit({ urgente: e.target.checked })}
+                    onChange={(e) => {
+                      console.log("[URGENT_CHECKBOX_RAW_EVENT]", {
+                        checked: e.currentTarget.checked,
+                        source: "drawer",
+                        projectId: project?.id,
+                      });
+                      if (e.target.checked) {
+                        console.log("[BEFORE_OPEN_URGENCY_DIALOG_DRAWER]");
+                        setUrgencyDialogOpen(true);
+                        console.log("[AFTER_OPEN_URGENCY_DIALOG_DRAWER]");
+                        setTimeout(() => {
+                          const exists = Boolean(document.querySelector('[data-testid="urgency-deadline-dialog"]'));
+                          console.log("[DIALOG_DOM_EXISTS_DRAWER]", exists, new Date().toISOString());
+                        }, 150);
+                      } else {
+                        patchEdit({ urgente: false, urgentDeadline: null, urgentReason: null });
+                      }
+                    }}
+                    disabled={project.status_atual === "PROJETO APROVADO"}
                   />
                   <div>
                     <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Marcar como urgente</span>
@@ -995,6 +1026,16 @@ export function ProjectDetailsDrawer({
           </article>
         </div>
       )}
+
+      <UrgencyJustificationDialog
+        open={urgencyDialogOpen}
+        project={project}
+        onCancel={() => setUrgencyDialogOpen(false)}
+        onConfirm={(payload) => {
+          patchEdit({ urgente: true, urgentDeadline: payload.urgentDeadline, urgentReason: payload.urgencyReason });
+          setUrgencyDialogOpen(false);
+        }}
+      />
     </div>
   );
 }

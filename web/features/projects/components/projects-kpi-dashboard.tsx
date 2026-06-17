@@ -1515,7 +1515,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                   <td className="px-2 py-2"><StatusBadge status={row.project.status_atual} /></td>
                   <td className="px-2 py-2"><PrazoBadge project={row.project} /></td>
                   <td className="px-2 py-2 text-xs font-semibold text-zinc-800 dark:text-zinc-200">{row.diasNoStatus}</td>
-                  <td className="px-2 py-2"><UrgenteBadge urgente={row.project.urgente} /></td>
+                  <td className="px-2 py-2"><UrgenteBadge urgente={row.project.urgente} urgentDeadline={row.project.urgentDeadline} /></td>
                   <td className="px-2 py-2 text-xs text-zinc-700 dark:text-zinc-300">{row.motivo}</td>
                   <td className="px-2 py-2 text-xs text-zinc-700 dark:text-zinc-300">{row.acao}</td>
                 </tr>
@@ -1552,7 +1552,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                 <article key={project.id} className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-2.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono text-xs font-semibold text-zinc-900 dark:text-foreground">{project.codigo_projeto}</span>
-                    <UrgenteBadge urgente={project.urgente} />
+                    <UrgenteBadge urgente={project.urgente} urgentDeadline={project.urgentDeadline} />
                     <StatusBadge status={project.status_atual} />
                   </div>
                   <p className="mt-1 text-xs text-zinc-700 dark:text-zinc-300">{project.construtora} - {project.obra}</p>
