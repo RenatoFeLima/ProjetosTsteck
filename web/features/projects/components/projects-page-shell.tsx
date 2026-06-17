@@ -141,7 +141,6 @@ export function ProjectsPageShell() {
   );
 
   useEffect(() => {
-    console.log("[BUILD_VERSION]", "diagnostic-v4");
     setLastUpdatedAt(new Date().toLocaleString());
     // Erros de ação real do store (ex.: validação 400 ao salvar) viram toast.
     setProjectsErrorSink((message) => {
@@ -203,18 +202,13 @@ export function ProjectsPageShell() {
     const project = statusChangeProject;
     if (!project) return;
 
-    console.log("[STATUS_CHANGE_REQUEST]", { nextStatus, nextStatusJSON: JSON.stringify(nextStatus), projectId: project?.id });
+    // Mover para ANTE-PROJETO ENVIADO abre o modal de confirmação/edição de código
+    // antes de efetivar a troca de status (cancelar no modal não muda o status).
     const shouldOpenCodeDialog = nextStatus === "ANTE-PROJETO ENVIADO";
-    console.log("[SHOULD_OPEN_CODE_DIALOG]", shouldOpenCodeDialog, "comparison:", JSON.stringify(nextStatus), "===", JSON.stringify("ANTE-PROJETO ENVIADO"));
 
     if (shouldOpenCodeDialog) {
-      console.log("[OPEN_CODE_DIALOG_SHELL] setAnteProjFinalCodePending for project:", project?.id);
       setStatusChangeProject(undefined);
       setAnteProjFinalCodePending({ project, observation });
-      setTimeout(() => {
-        const exists = Boolean(document.querySelector('[data-testid="final-code-dialog"]'));
-        console.log("[CODE_DIALOG_DOM_EXISTS]", exists, new Date().toISOString());
-      }, 150);
       return;
     }
 
@@ -608,27 +602,6 @@ export function ProjectsPageShell() {
         {toast && (
           <div className="fixed right-4 bottom-4 rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg">{toast}</div>
         )}
-
-        {/* DEBUG: badge de versão — remover após confirmar em produção */}
-        <div
-          id="build-version-badge"
-          style={{
-            position: "fixed",
-            bottom: 8,
-            left: 8,
-            zIndex: 999999,
-            background: "red",
-            color: "white",
-            padding: "6px 10px",
-            borderRadius: 6,
-            fontSize: 12,
-            fontFamily: "monospace",
-            pointerEvents: "none",
-            userSelect: "none",
-          }}
-        >
-          BUILD diagnostic-v4 f9323fd
-        </div>
       </PageContainer>
     </main>
   );

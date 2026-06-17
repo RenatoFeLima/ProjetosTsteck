@@ -4,6 +4,7 @@ import {
   computeOperationalKpis,
   computePrazoBadge,
   computePrazoEntrega,
+  shouldShowOperationalDeadline,
   toDateInputValue,
   transitionStatus,
 } from "@/features/projects/domain/project-rules";
@@ -69,6 +70,28 @@ describe("project rules", () => {
   it("nao inicia contagem de prazo sem local da cabine e projeto da obra marcados", () => {
     expect(computePrazoEntrega("2026-05-01", false)).toBeNull();
     expect(computePrazoEntrega("2026-05-01", true)).toBe("2026-06-15");
+  });
+
+  describe("shouldShowOperationalDeadline", () => {
+    it("mostra prazo apenas nos status com SLA operacional ativo (sem urgência)", () => {
+      expect(shouldShowOperationalDeadline(makeProject({ status_atual: "ELABORAR ANTE-PROJETO" }))).toBe(true);
+      expect(shouldShowOperationalDeadline(makeProject({ status_atual: "REVISAO DE ESTUDO" }))).toBe(true);
+      expect(shouldShowOperationalDeadline(makeProject({ status_atual: "REVISAO DE PROJETO FINAL" }))).toBe(true);
+    });
+
+    it("não mostra prazo nos status sem SLA operacional (sem urgência)", () => {
+      expect(shouldShowOperationalDeadline(makeProject({ status_atual: "CADASTRO INICIAL" }))).toBe(false);
+      expect(shouldShowOperationalDeadline(makeProject({ status_atual: "ANTE-PROJETO ENVIADO" }))).toBe(false);
+      expect(shouldShowOperationalDeadline(makeProject({ status_atual: "ANTE-PROJETO APROVADO" }))).toBe(false);
+      expect(shouldShowOperationalDeadline(makeProject({ status_atual: "PROJETO FINAL ENVIADO" }))).toBe(false);
+      expect(shouldShowOperationalDeadline(makeProject({ status_atual: "PROJETO APROVADO" }))).toBe(false);
+    });
+
+    it("urgência tem prioridade: nunca mostra prazo operacional, mesmo em status com SLA", () => {
+      expect(shouldShowOperationalDeadline(makeProject({ status_atual: "ELABORAR ANTE-PROJETO", urgente: true }))).toBe(false);
+      expect(shouldShowOperationalDeadline(makeProject({ status_atual: "REVISAO DE ESTUDO", urgente: true }))).toBe(false);
+      expect(shouldShowOperationalDeadline(makeProject({ status_atual: "ANTE-PROJETO ENVIADO", urgente: true }))).toBe(false);
+    });
   });
 
   it("badge atrasado quando passou da data", () => {

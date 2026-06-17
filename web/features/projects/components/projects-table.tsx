@@ -220,7 +220,7 @@ export function ProjectsTable({
                 </td>
                 <td className="px-3 py-3 text-left whitespace-nowrap">
                   {project.urgente ? (
-                    <UrgenteBadge urgente={true} />
+                    <UrgenteBadge urgente={true} urgentDeadline={project.urgentDeadline} />
                   ) : (
                     <span className="inline-flex h-7 items-center rounded-full border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-2.5 text-[11px] font-semibold tracking-wide text-zinc-600 dark:text-zinc-400 whitespace-nowrap">Normal</span>
                   )}

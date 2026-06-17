@@ -159,6 +159,30 @@ export function getCurrentStatusDeadline(project: Project, todayOverride?: strin
   };
 }
 
+// Status com SLA operacional ativo: são os únicos onde o prazo normal de
+// execução faz sentido exibir no card/tabela/Kanban.
+const OPERATIONAL_DEADLINE_STATUSES: ProjectStatus[] = [
+  "ELABORAR ANTE-PROJETO",
+  "REVISAO DE ESTUDO",
+  "REVISAO DE PROJETO FINAL",
+];
+
+/**
+ * Decide se o prazo operacional normal deve aparecer no card/tabela/Kanban.
+ *
+ * Regra de prioridade visual:
+ *  1. Projeto urgente nunca mostra prazo normal (a urgência tem prioridade e é
+ *     exibida pelo UrgenteBadge com base em urgentDeadline) — evita mostrar os
+ *     dois prazos ao mesmo tempo.
+ *  2. Caso contrário, só mostra prazo nos status com SLA operacional ativo
+ *     (ELABORAR ANTE-PROJETO = 45d; REVISAO DE ESTUDO / PROJETO FINAL = 20d).
+ *  3. Demais status não exibem nenhum texto de prazo.
+ */
+export function shouldShowOperationalDeadline(project: Project): boolean {
+  if (project.urgente) return false;
+  return OPERATIONAL_DEADLINE_STATUSES.includes(project.status_atual);
+}
+
 /**
  * Retorna o sufixo ordenável do código do projeto (último bloco após hífen).
  * Se numérico, retorna como número. Caso contrário, retorna string em minúsculas.

@@ -1,5 +1,5 @@
 ﻿import { getStatusTheme } from "@/features/projects/domain/status-theme";
-import { getCurrentStatusDeadline } from "@/features/projects/domain/project-rules";
+import { getCurrentStatusDeadline, shouldShowOperationalDeadline } from "@/features/projects/domain/project-rules";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
 import { differenceInCalendarDays, format, isValid, parseISO } from "date-fns";
 
@@ -68,6 +68,11 @@ function formatDateLabel(isoDate: string | null): string {
 void formatDateLabel;
 
 export function DeadlineBadge({ project }: { project: Project }) {
+  // Prazo operacional só aparece nos status com SLA ativo e quando o projeto
+  // não é urgente (urgência tem prioridade visual via UrgenteBadge). Fora disso
+  // não renderiza nada — evita "Sem prazo"/"0 dias" em etapas sem SLA.
+  if (!shouldShowOperationalDeadline(project)) return null;
+
   const deadline = getCurrentStatusDeadline(project);
   const { label, isOverdue, daysRemaining, hasDeadline, dueDate } = deadline;
 

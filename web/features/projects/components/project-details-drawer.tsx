@@ -755,19 +755,8 @@ export function ProjectDetailsDrawer({
                     className="mt-0.5 h-4 w-4 rounded accent-[#9e0b0f]"
                     checked={Boolean(editForm.urgente)}
                     onChange={(e) => {
-                      console.log("[URGENT_CHECKBOX_RAW_EVENT]", {
-                        checked: e.currentTarget.checked,
-                        source: "drawer",
-                        projectId: project?.id,
-                      });
                       if (e.target.checked) {
-                        console.log("[BEFORE_OPEN_URGENCY_DIALOG_DRAWER]");
                         setUrgencyDialogOpen(true);
-                        console.log("[AFTER_OPEN_URGENCY_DIALOG_DRAWER]");
-                        setTimeout(() => {
-                          const exists = Boolean(document.querySelector('[data-testid="urgency-deadline-dialog"]'));
-                          console.log("[DIALOG_DOM_EXISTS_DRAWER]", exists, new Date().toISOString());
-                        }, 150);
                       } else {
                         patchEdit({ urgente: false, urgentDeadline: null, urgentReason: null });
                       }
