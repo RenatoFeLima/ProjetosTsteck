@@ -24,7 +24,7 @@ import {
   validateStatusTransition,
 } from "@/features/projects/domain/project-rules";
 import { getStatusTheme } from "@/features/projects/domain/status-theme";
-import { PrazoBadge, UrgenteBadge } from "./pill-badges";
+import { PrazoBadge, UrgenteBadge, formatUrgentDeadline } from "./pill-badges";
 import { KanbanStatusChangeDialog } from "./kanban-status-change-dialog";
 import { FinalCodeDialog } from "./final-code-dialog";
 
@@ -122,6 +122,13 @@ function CardContent({ project }: { project: Project }) {
         <p className="pl-[19px] mt-0.5 truncate text-[11px] leading-snug text-zinc-500 dark:text-muted" title={project.obra}>
           {project.obra}
         </p>
+
+        {/* Row 3b: prazo de urgência (data discreta, só para projetos urgentes com deadline) */}
+        {project.urgente && project.urgentDeadline && (
+          <p className="pl-[19px] mt-0.5 text-right text-[10px] leading-snug text-red-500 dark:text-red-400">
+            {formatUrgentDeadline(project.urgentDeadline)}
+          </p>
+        )}
 
         {/* Row 4: deadline badge + review badges */}
         <div className="mt-2 flex flex-wrap items-center gap-1">

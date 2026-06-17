@@ -161,8 +161,7 @@ describe("projects table urgency flow", () => {
   });
 });
 
-// Modal de urgência (renderizado pelo shell). Exige prazo + motivo antes de
-// confirmar e devolve urgentDeadline/urgentReason no payload de confirmação.
+// Modal de urgência (renderizado pelo shell). Prazo é obrigatório; motivo é opcional.
 describe("urgency justification dialog", () => {
   const project = {
     id: "p1",
@@ -171,7 +170,7 @@ describe("urgency justification dialog", () => {
     obra: "ARTHUR DE AZEVEDO",
   };
 
-  it("usa o título 'Definir prazo de urgência' e exige prazo + motivo", async () => {
+  it("usa o título 'Definir prazo de urgência' e exige apenas prazo", async () => {
     const user = userEvent.setup();
     const onConfirm = vi.fn();
 
@@ -182,10 +181,7 @@ describe("urgency justification dialog", () => {
     const confirmButton = screen.getByRole("button", { name: /Confirmar urgência/i });
     expect(confirmButton).toBeDisabled();
 
-    // Só o motivo não habilita: o prazo também é obrigatório.
-    await user.type(screen.getByLabelText(/Motivo da urgência/i), "Cliente solicitou prioridade imediata.");
-    expect(confirmButton).toBeDisabled();
-
+    // Confirma com prazo e sem motivo — deve funcionar.
     fireEvent.change(screen.getByLabelText(/Novo prazo de entrega/i), { target: { value: "2026-12-31" } });
     expect(confirmButton).toBeEnabled();
 
@@ -194,8 +190,30 @@ describe("urgency justification dialog", () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onConfirm.mock.calls[0][0]).toMatchObject({
       projectId: "p1",
-      urgencyReason: "Cliente solicitou prioridade imediata.",
       urgentDeadline: "2026-12-31",
     });
+  });
+
+  it("confirma com prazo + motivo quando motivo for preenchido", async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+
+    render(<UrgencyJustificationDialog open project={project} onCancel={vi.fn()} onConfirm={onConfirm} />);
+
+    fireEvent.change(screen.getByLabelText(/Novo prazo de entrega/i), { target: { value: "2026-12-31" } });
+    await user.type(screen.getByLabelText(/Motivo da urgência/i), "Cliente solicitou prioridade.");
+
+    await user.click(screen.getByRole("button", { name: /Confirmar urgência/i }));
+
+    expect(onConfirm.mock.calls[0][0]).toMatchObject({
+      urgencyReason: "Cliente solicitou prioridade.",
+      urgentDeadline: "2026-12-31",
+    });
+  });
+
+  it("sem prazo mantém o botão desabilitado", () => {
+    const onConfirm = vi.fn();
+    render(<UrgencyJustificationDialog open project={project} onCancel={vi.fn()} onConfirm={onConfirm} />);
+    expect(screen.getByRole("button", { name: /Confirmar urgência/i })).toBeDisabled();
   });
 });

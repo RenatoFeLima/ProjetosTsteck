@@ -15,6 +15,14 @@ export function StatusBadge({ status }: { status: ProjectStatus }) {
   );
 }
 
+/** Formata ISO → dd/MM/yyyy para exibição de prazos. */
+export function formatUrgentDeadline(isoDate: string | null | undefined): string {
+  if (!isoDate) return "";
+  const parsed = parseISO(isoDate.slice(0, 10));
+  if (!isValid(parsed)) return "";
+  return format(parsed, "dd/MM/yyyy");
+}
+
 export function UrgenteBadge({ urgente, urgentDeadline }: { urgente: boolean; urgentDeadline?: string | null }) {
   if (!urgente) return null;
 
@@ -28,18 +36,18 @@ export function UrgenteBadge({ urgente, urgentDeadline }: { urgente: boolean; ur
     today.setHours(0, 0, 0, 0);
     const calDiff = differenceInCalendarDays(due, today);
     const bizDiff = countBusinessDays(today, due);
-    const dateLabel = format(due, "dd/MM/yyyy");
+    const dateLabel = formatUrgentDeadline(urgentDeadline);
 
     if (calDiff < 0) {
       isOverdue = true;
       const absBiz = Math.abs(bizDiff);
-      label = `Urgente · ${absBiz}d ${absBiz === 1 ? "útil" : "úteis"} atrasado · ${dateLabel}`;
+      label = `Urgente · ${absBiz}d ${absBiz === 1 ? "útil" : "úteis"} atrasado`;
       tooltip = `Prazo de urgência vencido há ${absBiz} dia(s) útil(eis): ${dateLabel}`;
     } else if (calDiff === 0) {
-      label = `Urgente · vence hoje · ${dateLabel}`;
+      label = "Urgente · vence hoje";
       tooltip = `Prazo de urgência vence hoje: ${dateLabel}`;
     } else {
-      label = `Urgente · ${bizDiff}d ${bizDiff === 1 ? "útil" : "úteis"} restantes · ${dateLabel}`;
+      label = `Urgente · ${bizDiff}d ${bizDiff === 1 ? "útil" : "úteis"} restantes`;
       tooltip = `Prazo de urgência: ${dateLabel} (${bizDiff} dia(s) útil(eis) restantes)`;
     }
   }
@@ -58,16 +66,6 @@ export function UrgenteBadge({ urgente, urgentDeadline }: { urgente: boolean; ur
     </span>
   );
 }
-
-function formatDateLabel(isoDate: string | null): string {
-  if (!isoDate) return "";
-  const parsed = parseISO(isoDate);
-  if (!isValid(parsed)) return "";
-  return format(parsed, "dd/MM/yyyy");
-}
-
-// Keep for future use
-void formatDateLabel;
 
 export function DeadlineBadge({ project }: { project: Project }) {
   // Prazo operacional só aparece nos status com SLA ativo e quando o projeto

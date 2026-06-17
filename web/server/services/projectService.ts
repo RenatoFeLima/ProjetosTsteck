@@ -180,7 +180,6 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
 
   if (data.urgente) {
     if (!data.urgentDeadline) throw new HttpError(400, "Prazo de urgência é obrigatório ao marcar o projeto como urgente.");
-    if (!data.urgentReason?.trim()) throw new HttpError(400, "Motivo da urgência é obrigatório ao marcar o projeto como urgente.");
   }
 
   const tRefs = startTimer();
@@ -264,7 +263,6 @@ export async function updateProject(actor: SessionUser, id: string, data: Projec
 
   if (data.urgente === true) {
     if (!data.urgentDeadline) throw new HttpError(400, "Prazo de urgência é obrigatório ao marcar o projeto como urgente.");
-    if (!data.urgentReason?.trim()) throw new HttpError(400, "Motivo da urgência é obrigatório ao marcar o projeto como urgente.");
   }
 
   // Reaproveita resolução de cadastros (edição mantém os relacionamentos por nome).

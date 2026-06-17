@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AlertTriangle } from "lucide-react";
 import type { Project } from "@/features/projects/domain/project-types";
@@ -22,8 +22,6 @@ type UrgencyJustificationDialogProps = {
   onConfirm: (payload: UrgencyPayload) => void;
   isSaving?: boolean;
 };
-
-const MIN_REASON = 10;
 
 export function UrgencyJustificationDialog({
   open,
@@ -90,18 +88,11 @@ export function UrgencyJustificationDialog({
   }, [open, onCancel]);
 
   const trimmedReason = reason.trim();
-  const validReason = trimmedReason.length >= MIN_REASON;
   const validDeadline = Boolean(deadline);
-  const isValid = validReason && validDeadline;
-
-  const reasonError = useMemo(() => {
-    if (!touched) return "";
-    if (!trimmedReason) return "Informe o motivo da urgência.";
-    if (!validReason) return `O motivo deve ter no mínimo ${MIN_REASON} caracteres.`;
-    return "";
-  }, [touched, trimmedReason, validReason]);
+  const isValid = validDeadline;
 
   const deadlineError = touched && !validDeadline ? "Informe o prazo de urgência." : "";
+  const reasonError = "";
 
   if (!open || !project) return null;
 
@@ -153,7 +144,7 @@ export function UrgencyJustificationDialog({
         {/* Motivo */}
         <div className="mt-3">
           <label htmlFor="urgency-reason" className="mb-1 block text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-            Motivo da urgência <span className="text-brand">*</span>
+            Motivo da urgência <span className="text-zinc-400 dark:text-zinc-500 text-xs font-normal">(opcional)</span>
           </label>
           <textarea
             id="urgency-reason"
