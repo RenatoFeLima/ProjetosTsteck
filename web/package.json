@@ -9,6 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "check:production-root": "node scripts/check-production-root.mjs",
+    "verify": "npm run check:production-root && npm test && npm run build",
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:validate": "dotenv -e .env.local -- prisma validate",
