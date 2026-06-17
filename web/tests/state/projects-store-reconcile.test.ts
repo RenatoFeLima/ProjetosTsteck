@@ -338,4 +338,49 @@ describe("mudança de status para revisão", () => {
       expect.objectContaining({ finalCode: "CRE-POÇ-0007" }),
     );
   });
+
+  it("mover para ANTE-PROJETO APROVADO envia o código final e atualiza otimisticamente", () => {
+    useProjectsStore.setState({
+      projects: [{ ...realProject("ap1", "CRE-POÇ-0000"), status_atual: "ANTE-PROJETO ENVIADO" }],
+    });
+    vi.mocked(api.apiChangeStatus).mockResolvedValue({
+      ...realProject("ap1", "CRE-POÇ-0003"),
+      status_atual: "ANTE-PROJETO APROVADO",
+    });
+
+    const res = useProjectsStore
+      .getState()
+      .moveStatus("ap1", "ANTE-PROJETO APROVADO", "acao-rapida", undefined, "CRE-POÇ-0003");
+
+    expect(res.ok).toBe(true);
+    expect(useProjectsStore.getState().projects.find((p) => p.id === "ap1")?.codigo_projeto).toBe(
+      "CRE-POÇ-0003",
+    );
+    expect(api.apiChangeStatus).toHaveBeenCalledWith(
+      "ap1",
+      "ANTE-PROJETO APROVADO",
+      expect.objectContaining({ finalCode: "CRE-POÇ-0003" }),
+    );
+  });
+
+  it("mover para ANTE-PROJETO ENVIADO não envia finalCode obrigatório", () => {
+    useProjectsStore.setState({
+      projects: [{ ...realProject("env1", "CRE-POÇ-0000"), status_atual: "ELABORAR ANTE-PROJETO" }],
+    });
+    vi.mocked(api.apiChangeStatus).mockResolvedValue({
+      ...realProject("env1", "CRE-POÇ-0000"),
+      status_atual: "ANTE-PROJETO ENVIADO",
+    });
+
+    const res = useProjectsStore
+      .getState()
+      .moveStatus("env1", "ANTE-PROJETO ENVIADO", "kanban");
+
+    expect(res.ok).toBe(true);
+    expect(api.apiChangeStatus).toHaveBeenCalledWith(
+      "env1",
+      "ANTE-PROJETO ENVIADO",
+      expect.not.objectContaining({ finalCode: expect.anything() }),
+    );
+  });
 });

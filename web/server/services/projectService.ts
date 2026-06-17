@@ -350,10 +350,10 @@ export async function changeStatus(
     throw new HttpError(400, "Informe o motivo da revisão.");
   }
 
-  // Código: ao entrar em "Ante-Projeto Enviado" ou "Projeto Aprovado" pode-se
-  // confirmar/atualizar o código. Valida formato e duplicidade ANTES da transação.
+  // Código: ao entrar em "Ante-Projeto Aprovado" pode-se confirmar/atualizar o código.
+  // Valida formato e duplicidade ANTES da transação.
   let finalCodeToApply: string | null = null;
-  if ((to === "ANTE_PROJETO_ENVIADO" || to === "PROJETO_APROVADO") && opts.finalCode?.trim()) {
+  if (to === "ANTE_PROJETO_APROVADO" && opts.finalCode?.trim()) {
     const code = opts.finalCode.trim();
     if (!hasValidFinalCode(code)) {
       throw new HttpError(400, "Código final inválido: deve terminar com 4 dígitos numéricos.");
@@ -648,16 +648,16 @@ export async function nextCodeSuggestion(
   const allRows = await prisma.project.findMany({ select: { code: true } });
   const globalMax = maxCodeSuffix(allRows.map((r) => r.code));
 
-  // Projetos que já chegaram em ANTE_PROJETO_ENVIADO ou PROJETO_APROVADO — status
+  // Projetos que já chegaram em ANTE_PROJETO_APROVADO ou PROJETO_APROVADO — status
   // atual OU histórico (um projeto pode sair e voltar para esses status).
   const ids = new Set<string>();
   const [historyHits, currentFinal] = await Promise.all([
     prisma.projectStatusHistory.findMany({
-      where: { toStatus: { in: ["ANTE_PROJETO_ENVIADO", "PROJETO_APROVADO"] } },
+      where: { toStatus: { in: ["ANTE_PROJETO_APROVADO", "PROJETO_APROVADO"] } },
       select: { projectId: true },
     }),
     prisma.project.findMany({
-      where: { status: { in: ["ANTE_PROJETO_ENVIADO", "PROJETO_APROVADO"] } },
+      where: { status: { in: ["ANTE_PROJETO_APROVADO", "PROJETO_APROVADO"] } },
       select: { id: true },
     }),
   ]);
