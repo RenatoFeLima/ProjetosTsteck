@@ -6,6 +6,7 @@ import {
   computePrazoEntrega,
   countBusinessDays,
   shouldShowOperationalDeadline,
+  sortProjectsForKanban,
   toDateInputValue,
   transitionStatus,
 } from "@/features/projects/domain/project-rules";
@@ -166,6 +167,55 @@ describe("project rules", () => {
     expect(kpis.slaTargetDias).toBe(4);
     expect(kpis.slaRestanteDias).toBe(-6);
     expect(kpis.slaState).toBe("estourado");
+  });
+});
+
+describe("sortProjectsForKanban", () => {
+  function p(id: string, urgente: boolean, urgentDeadline?: string | null): Parameters<typeof makeProject>[0] & { id: string } {
+    return { id, urgente, urgentDeadline: urgentDeadline ?? null } as never;
+  }
+
+  it("urgentes sempre vêm antes dos não-urgentes", () => {
+    const projects = [makeProject(p("a", false)), makeProject(p("b", true, "2026-12-31"))];
+    const sorted = sortProjectsForKanban(projects);
+    expect(sorted[0].id).toBe("b");
+    expect(sorted[1].id).toBe("a");
+  });
+
+  it("urgentes com deadline ordenados por data crescente (vencido primeiro)", () => {
+    const projects = [
+      makeProject(p("futuro", true, "2026-12-31")),
+      makeProject(p("vencido", true, "2026-01-01")),
+      makeProject(p("hoje", true, "2026-06-17")),
+    ];
+    const sorted = sortProjectsForKanban(projects);
+    expect(sorted.map((proj) => proj.id)).toEqual(["vencido", "hoje", "futuro"]);
+  });
+
+  it("urgentes sem deadline vêm depois dos urgentes com deadline", () => {
+    const projects = [
+      makeProject(p("sem-dl", true, null)),
+      makeProject(p("com-dl", true, "2026-07-01")),
+    ];
+    const sorted = sortProjectsForKanban(projects);
+    expect(sorted[0].id).toBe("com-dl");
+    expect(sorted[1].id).toBe("sem-dl");
+  });
+
+  it("não-urgentes mantêm ordem estável entre si", () => {
+    const projects = [makeProject(p("x", false)), makeProject(p("y", false)), makeProject(p("z", false))];
+    const sorted = sortProjectsForKanban(projects);
+    expect(sorted.map((proj) => proj.id)).toEqual(["x", "y", "z"]);
+  });
+
+  it("ordem completa: urgente+deadline < urgente+sem-deadline < não-urgente", () => {
+    const projects = [
+      makeProject(p("normal", false)),
+      makeProject(p("urg-sem", true, null)),
+      makeProject(p("urg-com", true, "2026-08-15")),
+    ];
+    const sorted = sortProjectsForKanban(projects);
+    expect(sorted.map((proj) => proj.id)).toEqual(["urg-com", "urg-sem", "normal"]);
   });
 });
 

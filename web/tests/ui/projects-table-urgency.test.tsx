@@ -201,10 +201,11 @@ describe("urgency justification dialog", () => {
     render(<UrgencyJustificationDialog open project={project} onCancel={vi.fn()} onConfirm={onConfirm} />);
 
     fireEvent.change(screen.getByLabelText(/Novo prazo de entrega/i), { target: { value: "2026-12-31" } });
-    await user.type(screen.getByLabelText(/Motivo da urgência/i), "Cliente solicitou prioridade.");
+    fireEvent.change(screen.getByLabelText(/Motivo da urgência/i), { target: { value: "Cliente solicitou prioridade." } });
 
     await user.click(screen.getByRole("button", { name: /Confirmar urgência/i }));
 
+    expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onConfirm.mock.calls[0][0]).toMatchObject({
       urgencyReason: "Cliente solicitou prioridade.",
       urgentDeadline: "2026-12-31",

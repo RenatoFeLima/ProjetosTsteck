@@ -21,6 +21,7 @@ import type { Project, ProjectStatus } from "@/features/projects/domain/project-
 import {
   computeNextAction,
   getCurrentStatusDeadline,
+  sortProjectsForKanban,
   validateStatusTransition,
 } from "@/features/projects/domain/project-rules";
 import { getStatusTheme } from "@/features/projects/domain/status-theme";
@@ -395,6 +396,7 @@ function KanbanColumn({
   const nearDeadlineCount = useMemo(
     () =>
       projects.filter((p) => {
+        if (p.status_atual !== "ELABORAR ANTE-PROJETO") return false;
         const dl = getCurrentStatusDeadline(p);
         return dl.isOverdue || (dl.hasDeadline && (dl.daysRemaining ?? 999) <= 15);
       }).length,
@@ -487,11 +489,12 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
     () =>
       COLUMNS.map((status) => {
         const list = projects.filter((p) => p.status_atual === status);
-        // Coluna terminal (Projeto Aprovado): do mais recente para o mais antigo.
         if (status === FINAL_STATUS) {
+          // Coluna terminal: mais recente primeiro.
           list.sort((a, b) => (b.status_entered_at ?? "").localeCompare(a.status_entered_at ?? ""));
+          return { status, projects: list };
         }
-        return { status, projects: list };
+        return { status, projects: sortProjectsForKanban(list) };
       }),
     [projects],
   );

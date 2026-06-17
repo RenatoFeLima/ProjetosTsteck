@@ -310,6 +310,32 @@ export function transitionStatus(input: {
   };
 }
 
+/**
+ * Ordena projetos para exibição no Kanban:
+ *   1. Urgentes com deadline — ordem crescente de urgentDeadline (vencidos primeiro)
+ *   2. Urgentes sem deadline
+ *   3. Não-urgentes (ordem de entrada: estável)
+ */
+export function sortProjectsForKanban(projects: Project[]): Project[] {
+  return [...projects].sort((a, b) => {
+    const aUrgent = a.urgente;
+    const bUrgent = b.urgente;
+
+    if (aUrgent !== bUrgent) return aUrgent ? -1 : 1;
+
+    if (aUrgent && bUrgent) {
+      const aHas = Boolean(a.urgentDeadline);
+      const bHas = Boolean(b.urgentDeadline);
+      if (aHas !== bHas) return aHas ? -1 : 1;
+      if (aHas && bHas) {
+        return (a.urgentDeadline as string).slice(0, 10).localeCompare((b.urgentDeadline as string).slice(0, 10));
+      }
+    }
+
+    return 0;
+  });
+}
+
 export function statusOrder(status: ProjectStatus): number {
   const order: Record<ProjectStatus, number> = {
     "CADASTRO INICIAL": 0,
