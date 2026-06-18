@@ -182,6 +182,7 @@ export async function exportProjectsCsv(actor: SessionUser): Promise<{ fileName:
   const exportRows: ProjectExportRow[] = rows.map((p: any) => {
     const obs: { text: string }[] = p.observations ?? [];
     return {
+      id: p.id,
       code: p.code,
       status: p.status,
       construtora: p.builder?.name ?? null,

@@ -60,6 +60,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Importar Legado", href: "/administracao/importar", icon: DatabaseBackup, permission: (p) => p.users.view },
       { label: "Importar Ante-Projeto", href: "/administracao/importar-ante-projeto", icon: DatabaseBackup, permission: (p) => p.users.view },
       { label: "Enriquecer Finais", href: "/administracao/importar-finais", icon: DatabaseBackup, permission: (p) => p.users.view },
+      { label: "Importar Projetos (Excel)", href: "/administracao/importar-projetos-excel", icon: DatabaseBackup, permission: (p) => p.users.view },
     ],
   },
 ];

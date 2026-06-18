@@ -13,6 +13,7 @@ import {
 
 function makeRow(over: Partial<ProjectExportRow> = {}): ProjectExportRow {
   return {
+    id: "uuid-1",
     code: "CRE-RES-2051",
     status: "PROJETO_APROVADO",
     construtora: "EZTEC",
@@ -84,13 +85,14 @@ describe("project-export — linha e CSV completo", () => {
   it("mapeia a linha na ordem das colunas, com formatação", () => {
     const cells = projectRowToCells(makeRow());
     expect(cells).toHaveLength(EXPORT_HEADERS.length);
-    expect(cells[0]).toBe("CRE-RES-2051"); // Código
-    expect(cells[1]).toBe("PROJETO APROVADO"); // Status (label)
-    expect(cells[9]).toBe("15/01/2026"); // Data de Lançamento
-    expect(cells[10]).toBe("Sim"); // Projeto de Obra Recebido
-    expect(cells[11]).toBe("Não"); // Local da Cabine Definido
-    expect(cells[14]).toBe("Não"); // Urgente
-    expect(cells[20]).toBe("2"); // Qtd. Observações
+    expect(cells[0]).toBe("uuid-1"); // ID do Projeto
+    expect(cells[1]).toBe("CRE-RES-2051"); // Código
+    expect(cells[2]).toBe("PROJETO APROVADO"); // Status (label)
+    expect(cells[10]).toBe("15/01/2026"); // Data de Lançamento
+    expect(cells[11]).toBe("Sim"); // Projeto de Obra Recebido
+    expect(cells[12]).toBe("Não"); // Local da Cabine Definido
+    expect(cells[15]).toBe("Não"); // Urgente
+    expect(cells[21]).toBe("2"); // Qtd. Observações
   });
 
   it("7. campos vazios não quebram a exportação (linha completa, células vazias)", () => {
@@ -102,15 +104,15 @@ describe("project-export — linha e CSV completo", () => {
       }),
     );
     expect(cells).toHaveLength(EXPORT_HEADERS.length);
-    expect(cells[2]).toBe(""); // Construtora vazia
-    expect(cells[9]).toBe(""); // Data vazia
+    expect(cells[3]).toBe(""); // Construtora vazia
+    expect(cells[10]).toBe(""); // Data vazia
   });
 
   it("3. exporta projetos de qualquer status e gera CSV com cabeçalho + BOM", () => {
     const rows = [
-      makeRow({ code: "A-1", status: "CADASTRO_INICIAL" }),
-      makeRow({ code: "B-2", status: "REVISAO_DE_ESTUDO" }),
-      makeRow({ code: "C-3", status: "PROJETO_FINAL_ENVIADO" }),
+      makeRow({ id: "id-a", code: "A-1", status: "CADASTRO_INICIAL" }),
+      makeRow({ id: "id-b", code: "B-2", status: "REVISAO_DE_ESTUDO" }),
+      makeRow({ id: "id-c", code: "C-3", status: "PROJETO_FINAL_ENVIADO" }),
     ];
     const csv = buildProjectsCsv(rows);
     // BOM no início
@@ -119,9 +121,10 @@ describe("project-export — linha e CSV completo", () => {
     // cabeçalho + 3 linhas
     expect(lines).toHaveLength(4);
     expect(lines[0]).toBe(EXPORT_HEADERS.join(";"));
-    expect(lines[1].startsWith("A-1;CADASTRO INICIAL;")).toBe(true);
-    expect(lines[2].startsWith("B-2;REVISAO DE ESTUDO;")).toBe(true);
-    expect(lines[3].startsWith("C-3;PROJETO FINAL ENVIADO;")).toBe(true);
+    // ID do Projeto é a primeira coluna, antes do código.
+    expect(lines[1].startsWith("id-a;A-1;CADASTRO INICIAL;")).toBe(true);
+    expect(lines[2].startsWith("id-b;B-2;REVISAO DE ESTUDO;")).toBe(true);
+    expect(lines[3].startsWith("id-c;C-3;PROJETO FINAL ENVIADO;")).toBe(true);
   });
 
   it("CSV vazio (sem projetos) ainda traz o cabeçalho", () => {

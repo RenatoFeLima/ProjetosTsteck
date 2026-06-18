@@ -51,3 +51,22 @@ describe("toolbar — botão Exportar Excel", () => {
     expect(screen.queryByRole("button", { name: /Exportar todos os projetos para Excel/i })).not.toBeInTheDocument();
   });
 });
+
+describe("toolbar — botão Importar Excel", () => {
+  it("renderiza o botão e dispara onImport ao clicar", async () => {
+    const user = userEvent.setup();
+    const onImport = vi.fn();
+    render(<ProjectsToolbar {...baseProps} onImport={onImport} />);
+
+    const btn = screen.getByRole("button", { name: /Importar atualizações de projetos via Excel\/CSV/i });
+    expect(btn).toHaveTextContent(/Importar Excel/i);
+
+    await user.click(btn);
+    expect(onImport).toHaveBeenCalledTimes(1);
+  });
+
+  it("não renderiza o botão de import quando onImport não é fornecido", () => {
+    render(<ProjectsToolbar {...baseProps} />);
+    expect(screen.queryByRole("button", { name: /Importar atualizações de projetos/i })).not.toBeInTheDocument();
+  });
+});

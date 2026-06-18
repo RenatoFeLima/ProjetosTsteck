@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, BarChart3, Building2, ChevronDown, Download, Filter, Kanban, Loader2, Search, Table2, UserRound, Wrench, X } from "lucide-react";
+import { AlertTriangle, BarChart3, Building2, ChevronDown, Download, Filter, Kanban, Loader2, Search, Table2, Upload, UserRound, Wrench, X } from "lucide-react";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import type { ProjectStatus } from "@/features/projects/domain/project-types";
 import type { ProjectsView } from "@/features/projects/state/projects-store";
@@ -26,6 +26,8 @@ type ToolbarProps = {
   /** Exporta TODOS os projetos do sistema (não os filtrados). Opcional. */
   onExport?: () => void;
   exporting?: boolean;
+  /** Abre a tela de importação de atualizações via CSV. Opcional. */
+  onImport?: () => void;
 };
 
 const STATUS_OPTIONS: Array<{ label: string; value: "all" | ProjectStatus }> = [
@@ -48,6 +50,7 @@ export function ProjectsToolbar({
   onFiltersChange,
   onExport,
   exporting = false,
+  onImport,
 }: ToolbarProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -217,6 +220,18 @@ export function ProjectsToolbar({
             >
               {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
               {exporting ? "Gerando exportação..." : "Exportar Excel"}
+            </button>
+          )}
+
+          {onImport && (
+            <button
+              type="button"
+              onClick={onImport}
+              aria-label="Importar atualizações de projetos via Excel/CSV"
+              className={`${onExport ? "" : "ml-auto "}inline-flex h-9 items-center gap-1.5 rounded-xl border border-sky-200 dark:border-sky-700/40 bg-sky-50 dark:bg-sky-900/20 px-3 text-[13px] font-medium text-sky-700 dark:text-sky-300 transition hover:bg-sky-100 dark:hover:bg-sky-900/30`}
+            >
+              <Upload size={13} />
+              Importar Excel
             </button>
           )}
         </div>

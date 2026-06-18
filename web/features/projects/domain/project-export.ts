@@ -9,6 +9,8 @@ import { DB_TO_UI_STATUS, type DbStatus } from "./project-status-map";
 
 /** Linha de origem (campos crus do banco, já com relações resolvidas). */
 export type ProjectExportRow = {
+  /** ID técnico do projeto — chave segura para reimportação. */
+  id: string;
   code: string;
   status: string; // DB enum
   construtora: string | null;
@@ -33,8 +35,13 @@ export type ProjectExportRow = {
   ultimaObservacao: string | null;
 };
 
+// Cabeçalho da coluna técnica de ID (chave de reimportação). Constante
+// compartilhada com o importador.
+export const ID_HEADER = "ID do Projeto";
+
 // Cabeçalho amigável (ordem fixa = ordem das colunas).
 export const EXPORT_HEADERS = [
+  ID_HEADER,
   "Código",
   "Status",
   "Construtora",
@@ -93,6 +100,7 @@ export function escapeCsvField(value: string): string {
 /** Converte uma linha de projeto na ordem das colunas (strings já formatadas). */
 export function projectRowToCells(row: ProjectExportRow): string[] {
   return [
+    row.id ?? "",
     row.code ?? "",
     statusLabel(row.status),
     row.construtora ?? "",

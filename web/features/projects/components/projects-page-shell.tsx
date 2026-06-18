@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, ChevronDown, ClipboardList, Plus, Zap } from "lucide-react";
 import { ProjectsAlerts } from "./projects-alerts";
 import { ProjectFormModal } from "./project-form-modal";
@@ -89,6 +90,7 @@ export function ProjectsPageShell() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string>("");
   const [newProjectDropOpen, setNewProjectDropOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const router = useRouter();
 
   const baseProjects = filteredProjects();
   const detailsProject = useMemo(
@@ -424,6 +426,7 @@ export function ProjectsPageShell() {
           onFiltersChange={handleFiltersChange}
           onExport={handleExport}
           exporting={exporting}
+          onImport={() => router.push("/administracao/importar-projetos-excel")}
         />
 
         <section className="mt-4">
