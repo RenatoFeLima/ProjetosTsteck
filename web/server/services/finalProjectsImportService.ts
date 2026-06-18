@@ -33,6 +33,7 @@ import {
 import type {
   FinalProjectsReport,
   FinalProjectsBackup,
+  FinalProjectsBatchResult,
 } from "@/features/import/domain/final-projects-import-types";
 
 // ─── Snapshot do banco ─────────────────────────────────────────────────────────
@@ -188,99 +189,149 @@ async function buildBackup(
   };
 }
 
-// ─── Commit ────────────────────────────────────────────────────────────────────
+// ─── Commit em LOTES ───────────────────────────────────────────────────────────
+//
+// O commit não cabe em uma única request serverless (363 updates → 504). Cada
+// chamada processa um fatia [offset, offset+chunkSize) do plano e devolve o
+// próximo offset. O cliente reenvia o CSV + offset até `done`.
+//
+// Determinismo + idempotência:
+//  - O matching é determinístico: reanalisar o CSV produz a MESMA ordem de
+//    updates a cada lote (fatiamos por offset).
+//  - Sobrescrever o código NÃO muda a chave construtora+obra → o projeto segue
+//    casável; reanalisar vê o código já aplicado (csvCode === project.code) e
+//    não o reaplica nem vira falso "duplicado" (owner é o próprio projeto).
+//  - Observações: loadSnapshot recarrega os textos existentes; reanalisar/
+//    reexecutar não duplica observação idêntica.
+//
+// Backup: gerado SOMENTE no primeiro lote (offset 0), ANTES de qualquer escrita,
+// cobrindo TODOS os projetos do plano. Se falhar, nenhum lote roda.
 
-export async function commitFinalProjectsImport(actor: SessionUser, csvText: string): Promise<FinalProjectsReport> {
+const DEFAULT_CHUNK = 50;
+const MAX_CHUNK = 100;
+
+export async function commitFinalProjectsBatch(
+  actor: SessionUser,
+  csvText: string,
+  offset: number,
+  chunkSize: number,
+): Promise<FinalProjectsBatchResult> {
   requireAdmin(actor);
   ensureContent(csvText);
-  const snap = await loadSnapshot();
-  const { plan, report } = buildReport(csvText, snap);
-  report.dryRun = false;
 
-  if (plan.updates.length === 0) {
+  const size = Math.min(Math.max(1, Math.floor(chunkSize) || DEFAULT_CHUNK), MAX_CHUNK);
+  const start = Math.max(0, Math.floor(offset) || 0);
+
+  const snap = await loadSnapshot();
+  const { plan } = buildReport(csvText, snap);
+  const total = plan.updates.length;
+
+  if (total === 0) {
     throw new HttpError(400, "Nenhuma atualização segura encontrada. Revise o dry-run antes de confirmar.");
+  }
+  if (start >= total) {
+    // Já terminou — resposta idempotente.
+    return {
+      total, offset: start, processed: 0, nextOffset: null,
+      projectsUpdated: 0, codesUpdated: 0, observationsAdded: 0, errors: [], done: true,
+    };
   }
 
   const now = new Date();
-  const projectsBefore = await prisma.project.count();
-
-  // 1) BACKUP OBRIGATÓRIO antes de qualquer escrita. Se falhar, aborta o commit.
-  let backup: FinalProjectsBackup;
-  try {
-    backup = await buildBackup(actor, plan, projectsBefore, now);
-  } catch (e) {
-    throw new HttpError(
-      500,
-      `Falha ao gerar o backup obrigatório — commit abortado, nada foi alterado. (${e instanceof Error ? e.message : "erro"})`,
-    );
-  }
-
-  let codesUpdated = 0;
-  let observationsAdded = 0;
-
-  // 2) Aplica em transação. Atualização campo-a-campo (Prisma ignora undefined).
-  await prisma.$transaction(
-    async (tx) => {
-      for (const u of plan.updates) {
-        if (Object.keys(u.data).length > 0) {
-          await tx.project.update({
-            where: { id: u.projectId },
-            data: { ...u.data, updatedById: actor.id },
-          });
-          if (u.data.code) codesUpdated += 1;
-        }
-        if (u.observationToAdd) {
-          await tx.projectObservation.create({
-            data: {
-              id: randomUUID(),
-              projectId: u.projectId,
-              author: `Importação Finais (${actor.name})`,
-              text: u.observationToAdd,
-              createdAt: now,
-            },
-          });
-          observationsAdded += 1;
-        }
-      }
-    },
-    { timeout: 60_000 },
-  );
-
-  report.backup = backup;
-  report.committed = {
-    projectsUpdated: plan.updates.length,
-    codesUpdated,
-    observationsAdded,
-    backupFile: backup.fileName,
-    projectsBefore,
+  const result: FinalProjectsBatchResult = {
+    total,
+    offset: start,
+    processed: 0,
+    nextOffset: null,
+    projectsUpdated: 0,
+    codesUpdated: 0,
+    observationsAdded: 0,
+    errors: [],
+    done: false,
   };
 
-  // 3) Audit com o backup completo (persistente — base do rollback).
-  await writeAudit({
-    action: "FINAL_PROJECTS_ENRICHED",
-    actorUserId: actor.id,
-    actorName: actor.name,
-    entityType: "import",
-    message:
-      `${actor.name} enriqueceu ${plan.updates.length} projeto(s) finais/aprovados via CSV ` +
-      `(${codesUpdated} código(s) atualizado(s), ${observationsAdded} observação(ões)). ` +
-      `Backup: ${backup.fileName}.`,
-    metadata: {
-      backupFile: backup.fileName,
-      projectsBefore,
-      projectsUpdated: plan.updates.length,
-      codesUpdated,
-      observationsAdded,
-      rowsRead: report.rowsRead,
-      notFound: report.notFound.length,
-      conflicts: report.conflicts.length,
-      outOfScope: report.outOfScope.length,
-      duplicateCodes: report.duplicateCodes.length,
-      backup: backup.projects,
-    } as unknown as Prisma.InputJsonValue,
-  });
+  // 1) BACKUP OBRIGATÓRIO no primeiro lote, antes de qualquer escrita.
+  if (start === 0) {
+    const projectsBefore = await prisma.project.count();
+    let backup: FinalProjectsBackup;
+    try {
+      backup = await buildBackup(actor, plan, projectsBefore, now);
+    } catch (e) {
+      throw new HttpError(
+        500,
+        `Falha ao gerar o backup obrigatório — commit abortado, nada foi alterado. (${e instanceof Error ? e.message : "erro"})`,
+      );
+    }
+    result.backup = backup;
+  }
 
-  return report;
+  const slice = plan.updates.slice(start, start + size);
+
+  // 2) Aplica o lote em transação. Erro de UM item é registrado e não derruba o
+  //    lote inteiro (Prisma update fora da tx por item para isolar falhas).
+  for (const u of slice) {
+    try {
+      await prisma.$transaction(
+        async (tx) => {
+          if (Object.keys(u.data).length > 0) {
+            await tx.project.update({
+              where: { id: u.projectId },
+              data: { ...u.data, updatedById: actor.id },
+            });
+          }
+          if (u.observationToAdd) {
+            // Idempotência extra: não cria se já existe observação idêntica.
+            const existing = await tx.projectObservation.findFirst({
+              where: { projectId: u.projectId, text: u.observationToAdd },
+              select: { id: true },
+            });
+            if (!existing) {
+              await tx.projectObservation.create({
+                data: {
+                  id: randomUUID(),
+                  projectId: u.projectId,
+                  author: `Importação Finais (${actor.name})`,
+                  text: u.observationToAdd,
+                  createdAt: now,
+                },
+              });
+              result.observationsAdded += 1;
+            }
+          }
+        },
+        { timeout: 30_000 },
+      );
+      result.processed += 1;
+      if (Object.keys(u.data).length > 0) result.projectsUpdated += 1;
+      if (u.data.code) result.codesUpdated += 1;
+    } catch (e) {
+      result.errors.push({ projectId: u.projectId, detail: e instanceof Error ? e.message : "erro ao aplicar" });
+    }
+  }
+
+  const next = start + size;
+  result.nextOffset = next < total ? next : null;
+  result.done = result.nextOffset === null;
+
+  // 3) Audit apenas no lote final (resumo). O backup completo já foi devolvido
+  //    no lote 0; aqui registramos só o fechamento da operação.
+  if (result.done) {
+    await writeAudit({
+      action: "FINAL_PROJECTS_ENRICHED",
+      actorUserId: actor.id,
+      actorName: actor.name,
+      entityType: "import",
+      message:
+        `${actor.name} concluiu o enriquecimento de projetos finais/aprovados via CSV ` +
+        `(${total} projeto(s) no plano, processados em lotes de ${size}).`,
+      metadata: {
+        total,
+        chunkSize: size,
+      } as unknown as Prisma.InputJsonValue,
+    });
+  }
+
+  return result;
 }
 
 // ─── Guards ────────────────────────────────────────────────────────────────────

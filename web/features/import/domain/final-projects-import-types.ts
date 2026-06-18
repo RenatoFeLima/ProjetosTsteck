@@ -93,3 +93,35 @@ export type FinalProjectsBackup = {
   /** Estado anterior dos projetos que serão tocados (apenas os afetados). */
   projects: Array<Record<string, unknown>>;
 };
+
+// ─── Commit em lotes (chunked) ─────────────────────────────────────────────────
+
+/** Erro de um item dentro de um lote (não interrompe o lote inteiro). */
+export type FinalProjectsBatchError = {
+  projectId: string;
+  detail: string;
+};
+
+/**
+ * Resposta de UM lote do commit. O cliente reenvia o CSV + offset a cada lote.
+ * O backup só vem no primeiro lote (offset 0), antes de qualquer escrita.
+ */
+export type FinalProjectsBatchResult = {
+  /** Total de updates seguros no plano (igual em todos os lotes — determinístico). */
+  total: number;
+  /** Offset solicitado (início deste lote). */
+  offset: number;
+  /** Quantos itens foram processados neste lote. */
+  processed: number;
+  /** Próximo offset, ou null se acabou. */
+  nextOffset: number | null;
+  /** Acumuladores deste lote. */
+  projectsUpdated: number;
+  codesUpdated: number;
+  observationsAdded: number;
+  errors: FinalProjectsBatchError[];
+  /** Backup — presente SOMENTE no primeiro lote (offset 0). */
+  backup?: FinalProjectsBackup;
+  /** true quando este foi o último lote. */
+  done: boolean;
+};

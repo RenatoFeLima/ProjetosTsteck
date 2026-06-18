@@ -247,3 +247,63 @@ describe("enriquecimento de projetos finais — matching por construtora + obra"
     expect(report.conflicts[0].detail).toContain("mesmo projeto");
   });
 });
+
+// ─── Determinismo + idempotência (base do commit em lotes) ─────────────────────
+
+describe("commit em lotes — determinismo e idempotência da reanálise", () => {
+  const rows: Record<string, string>[] = [
+    { CONSTRUTORA: "CURY", OBRA: "OBRA A", "PROJETOS BASE": "CRE-AAA-1", VENDEDOR: "ERICA" },
+    { CONSTRUTORA: "EZTEC", OBRA: "OBRA B", "PROJETOS BASE": "CRE-BBB-2" },
+    { CONSTRUTORA: "BILD", OBRA: "OBRA C", "PROJETOS BASE": "CRE-CCC-3" },
+  ];
+
+  function makeSnap(projects: SnapshotProject[], sellers: { id: string; name: string }[] = []) {
+    return buildSnapshot({ projects, sellers });
+  }
+
+  it("a ordem dos updates é estável entre reanálises (fatiável por offset)", () => {
+    const projects = [
+      makeProject({ id: "pa", constructorName: "CURY", workName: "OBRA A", code: "CRE-TMP-1" }),
+      makeProject({ id: "pb", constructorName: "EZTEC", workName: "OBRA B", code: "CRE-TMP-2" }),
+      makeProject({ id: "pc", constructorName: "BILD", workName: "OBRA C", code: "CRE-TMP-3" }),
+    ];
+    const first = run(rows, makeSnap(projects)).plan.updates.map((u) => u.projectId);
+    const second = run(rows, makeSnap(projects)).plan.updates.map((u) => u.projectId);
+    expect(first).toEqual(second);
+    expect(first).toEqual(["pa", "pb", "pc"]);
+  });
+
+  it("após aplicar o código, reanalisar NÃO reemite o code nem vira falso duplicado", () => {
+    // Estado pós-lote: o projeto já tem o código final aplicado (codeOwner = ele mesmo).
+    const projectsAfter = [
+      makeProject({ id: "pa", constructorName: "CURY", workName: "OBRA A", code: "CRE-AAA-1" }),
+      makeProject({ id: "pb", constructorName: "EZTEC", workName: "OBRA B", code: "CRE-BBB-2" }),
+      makeProject({ id: "pc", constructorName: "BILD", workName: "OBRA C", code: "CRE-CCC-3" }),
+    ];
+    const { plan, report } = run(rows, makeSnap(projectsAfter, [{ id: "s1", name: "ERICA" }]));
+    expect(report.duplicateCodes).toHaveLength(0);
+    // O único update restante é o vendedor da linha 1 (código já igual → não reemite).
+    const aUpdate = plan.updates.find((u) => u.projectId === "pa");
+    expect(aUpdate?.data.code).toBeUndefined();
+    expect(aUpdate?.data.sellerId).toBe("s1");
+    // pb/pc já estão completos (só código, que agora bate) → sem update.
+    expect(plan.updates.find((u) => u.projectId === "pb")).toBeUndefined();
+    expect(plan.updates.find((u) => u.projectId === "pc")).toBeUndefined();
+  });
+
+  it("após observação já existir, reanalisar não reemite a observação (idempotente)", () => {
+    const obs = "posição na pasta do cliente";
+    const projects = [
+      makeProject({
+        id: "pa", constructorName: "CURY", workName: "OBRA A", code: "CRE-AAA-1",
+        observationTexts: [normalizeName(obs)],
+      }),
+    ];
+    const { plan } = run(
+      [{ CONSTRUTORA: "CURY", OBRA: "OBRA A", "PROJETOS BASE": "CRE-AAA-1", "OBSERVAÇÕES": obs }],
+      makeSnap(projects),
+    );
+    // código igual + observação já existe → nada a fazer.
+    expect(plan.updates).toHaveLength(0);
+  });
+});

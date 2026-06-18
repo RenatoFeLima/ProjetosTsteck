@@ -2,18 +2,39 @@
 
 import { useRef, useState } from "react";
 import { AlertCircle, AlertTriangle, ArrowRight, CheckCircle2, Download, FileUp, Loader2, UploadCloud } from "lucide-react";
-import type { FinalProjectsReport, FinalProjectMatch, FinalProjectSkipped } from "@/features/import/domain/final-projects-import-types";
+import type {
+  FinalProjectsReport,
+  FinalProjectMatch,
+  FinalProjectSkipped,
+  FinalProjectsBackup,
+  FinalProjectsBatchResult,
+  FinalProjectsBatchError,
+} from "@/features/import/domain/final-projects-import-types";
 
 type Phase = "idle" | "dry-running" | "dry-done" | "committing" | "committed";
 
 const MAX_BYTES = 4 * 1024 * 1024;
+const CHUNK_SIZE = 50;
+
+type CommitProgress = {
+  total: number;
+  processed: number;
+  projectsUpdated: number;
+  codesUpdated: number;
+  observationsAdded: number;
+  errors: FinalProjectsBatchError[];
+};
 
 export function ImportFinalProjectsPage() {
   const [file, setFile] = useState<File | null>(null);
   const [report, setReport] = useState<FinalProjectsReport | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState<CommitProgress | null>(null);
+  const [backup, setBackup] = useState<FinalProjectsBackup | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Guard contra duplo-clique / commits concorrentes (síncrono, não espera render).
+  const committingRef = useRef(false);
 
   const busy = phase === "dry-running" || phase === "committing";
 
@@ -51,8 +72,19 @@ export function ImportFinalProjectsPage() {
     return null;
   }
 
+  async function postBatch(csv: string, offset: number): Promise<FinalProjectsBatchResult> {
+    const res = await fetch("/api/admin/import-final-projects/commit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csv, offset, chunkSize: CHUNK_SIZE }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message ?? data.error ?? "Falha no commit.");
+    return data as FinalProjectsBatchResult;
+  }
+
   async function runCommit() {
-    if (!report) return;
+    if (!report || committingRef.current) return;
     const block = commitBlockReason(report);
     if (block) {
       setError(block);
@@ -63,37 +95,65 @@ export function ImportFinalProjectsPage() {
       `Esta operação vai ATUALIZAR ${updatable} projeto(s) existente(s) em\n` +
       `Projeto Final Enviado / Projeto Aprovado.\n\n` +
       `Um backup do estado anterior será gerado automaticamente antes de alterar.\n` +
+      `O processamento é feito em lotes de ${CHUNK_SIZE}. Não feche a página.\n` +
       `Conflitos, não encontrados e fora do escopo são ignorados.\n\n` +
       `Confirmar o enriquecimento?`,
     );
     if (!confirmed) return;
 
+    committingRef.current = true;
     setError("");
+    setBackup(null);
     setPhase("committing");
+
+    const acc: CommitProgress = {
+      total: 0,
+      processed: 0,
+      projectsUpdated: 0,
+      codesUpdated: 0,
+      observationsAdded: 0,
+      errors: [],
+    };
+
     try {
       const csv = await readCsv();
-      const res = await fetch("/api/admin/import-final-projects/commit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ csv }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.message ?? data.error ?? "Falha no commit.");
-      setReport(data as FinalProjectsReport);
+      let offset = 0;
+      let done = false;
+      while (!done) {
+        const batch = await postBatch(csv, offset);
+        // Backup vem só no primeiro lote — guarda e disponibiliza para download.
+        if (batch.backup) setBackup(batch.backup);
+        acc.total = batch.total;
+        acc.processed += batch.processed;
+        acc.projectsUpdated += batch.projectsUpdated;
+        acc.codesUpdated += batch.codesUpdated;
+        acc.observationsAdded += batch.observationsAdded;
+        if (batch.errors.length) acc.errors = [...acc.errors, ...batch.errors];
+        setProgress({ ...acc });
+
+        if (batch.nextOffset === null) {
+          done = true;
+        } else {
+          offset = batch.nextOffset;
+        }
+      }
       setPhase("committed");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro inesperado.");
+      // Mantém o progresso parcial visível; permite retomar com novo clique.
       setPhase("dry-done");
+    } finally {
+      committingRef.current = false;
     }
   }
 
   function downloadBackup() {
-    if (!report?.backup) return;
-    const blob = new Blob([JSON.stringify(report.backup, null, 2)], { type: "application/json" });
+    if (!backup) return;
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = report.backup.fileName;
+    a.download = backup.fileName;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -103,6 +163,9 @@ export function ImportFinalProjectsPage() {
     setReport(null);
     setPhase("idle");
     setError("");
+    setProgress(null);
+    setBackup(null);
+    committingRef.current = false;
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -169,10 +232,10 @@ export function ImportFinalProjectsPage() {
           {phase === "committing" && (
             <button disabled className="inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground opacity-50">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Aplicando…
+              {progress ? `Processando ${progress.processed}/${progress.total}…` : "Gerando backup…"}
             </button>
           )}
-          {report?.backup && phase === "committed" && (
+          {backup && (phase === "committed" || phase === "dry-done") && progress && (
             <button
               onClick={downloadBackup}
               className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted"
@@ -182,11 +245,16 @@ export function ImportFinalProjectsPage() {
             </button>
           )}
           {(phase === "dry-done" || phase === "committed") && (
-            <button onClick={reset} className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted">
+            <button onClick={reset} disabled={busy} className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50">
               Recomeçar
             </button>
           )}
         </div>
+
+        {/* Barra de progresso do commit em lotes */}
+        {progress && (phase === "committing" || phase === "committed") && (
+          <ProgressBar progress={progress} done={phase === "committed"} backupName={backup?.fileName} />
+        )}
       </div>
 
       {error && (
@@ -196,7 +264,44 @@ export function ImportFinalProjectsPage() {
         </div>
       )}
 
-      {report && (phase === "dry-done" || phase === "committed") && <ReportView report={report} />}
+      {/* Dry-run mostra o relatório completo; após commit mostramos só o resumo de lotes. */}
+      {report && phase === "dry-done" && !progress && <ReportView report={report} />}
+    </div>
+  );
+}
+
+// ─── Progresso do commit em lotes ──────────────────────────────────────────────
+
+function ProgressBar({ progress, done, backupName }: { progress: CommitProgress; done: boolean; backupName?: string }) {
+  const pct = progress.total > 0 ? Math.round((progress.processed / progress.total) * 100) : 0;
+  return (
+    <div className={`rounded-lg border px-4 py-3 space-y-2 ${done ? "border-green-300 bg-green-50" : "border-blue-300 bg-blue-50"}`}>
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-medium flex items-center gap-2">
+          {done ? <CheckCircle2 className="h-4 w-4 text-green-700" /> : <Loader2 className="h-4 w-4 animate-spin text-blue-700" />}
+          {done ? "Enriquecimento concluído" : "Processando em lotes…"}
+        </span>
+        <span className="font-mono">{progress.processed}/{progress.total} ({pct}%)</span>
+      </div>
+      <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+        <div className={`h-full rounded-full transition-all ${done ? "bg-green-600" : "bg-blue-600"}`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <span><span className="text-muted-foreground">Atualizados:</span> <strong>{progress.projectsUpdated}</strong></span>
+        <span><span className="text-muted-foreground">Códigos:</span> <strong>{progress.codesUpdated}</strong></span>
+        <span><span className="text-muted-foreground">Observações:</span> <strong>{progress.observationsAdded}</strong></span>
+        <span><span className="text-muted-foreground">Erros:</span> <strong className={progress.errors.length ? "text-red-700" : ""}>{progress.errors.length}</strong></span>
+      </div>
+      {backupName && (
+        <p className="text-xs text-muted-foreground">Backup: <span className="font-mono">{backupName}</span></p>
+      )}
+      {progress.errors.length > 0 && (
+        <ul className="text-xs text-red-700 space-y-0.5 max-h-32 overflow-y-auto">
+          {progress.errors.map((e, i) => (
+            <li key={i}><span className="font-mono">{e.projectId.slice(0, 8)}</span>: {e.detail}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -204,25 +309,15 @@ export function ImportFinalProjectsPage() {
 // ─── Relatório ──────────────────────────────────────────────────────────────────
 
 function ReportView({ report }: { report: FinalProjectsReport }) {
-  const committed = !report.dryRun && report.committed;
   const updatable = report.matched.filter((m) => m.changes.length > 0 || m.observationToAdd);
   const unchanged = report.matched.length - updatable.length;
 
   return (
     <div className="space-y-5">
-      <div className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${committed ? "border-green-300 bg-green-50 text-green-800" : "border-blue-300 bg-blue-50 text-blue-800"}`}>
-        {committed ? <CheckCircle2 className="h-5 w-5 shrink-0" /> : <FileUp className="h-5 w-5 shrink-0" />}
+      <div className="flex items-center gap-3 rounded-lg border px-4 py-3 border-blue-300 bg-blue-50 text-blue-800">
+        <FileUp className="h-5 w-5 shrink-0" />
         <div>
-          <p className="font-semibold text-sm">
-            {committed ? "Enriquecimento concluído" : "Resultado do dry-run (simulação — nada gravado)"}
-          </p>
-          {committed && report.committed && (
-            <p className="text-sm mt-0.5">
-              {report.committed.projectsUpdated} projeto(s) atualizado(s) · {report.committed.codesUpdated} código(s) ·{" "}
-              {report.committed.observationsAdded} observação(ões) · backup{" "}
-              <span className="font-mono">{report.committed.backupFile}</span>
-            </p>
-          )}
+          <p className="font-semibold text-sm">Resultado do dry-run (simulação — nada gravado)</p>
         </div>
       </div>
 
