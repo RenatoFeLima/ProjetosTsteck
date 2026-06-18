@@ -20,6 +20,8 @@ export type SessionUser = {
   mustChangePassword: boolean;
   permissions: UserPermissions;
   lastLoginAt: string | null;
+  /** Vendedor vinculado (quando role=SELLER) — base do filtro de visibilidade. */
+  sellerId: string | null;
 };
 
 /** Converte o registro do banco para o objeto de sessão (sem passwordHash). */
@@ -34,6 +36,7 @@ export function toSessionUser(u: DbUser): SessionUser {
     mustChangePassword: u.mustChangePassword,
     permissions: u.permissionsJson as unknown as UserPermissions,
     lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
+    sellerId: (u as DbUser & { sellerId: string | null }).sellerId ?? null,
   };
 }
 

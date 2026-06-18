@@ -32,6 +32,17 @@ import {
   exportFileName,
   type ProjectExportRow,
 } from "@/features/projects/domain/project-export";
+import { resolveProjectScope, canViewKpis } from "@/features/auth/lib/project-scope";
+
+// Cláusula Prisma `where` derivada do escopo de visibilidade do usuário.
+// SELLER vê só os projetos do seu vendedor; demais veem tudo. Vendedor sem
+// vínculo é bloqueado (403) — defesa em profundidade, no backend.
+function scopeWhere(actor: SessionUser): Prisma.ProjectWhereInput {
+  const scope = resolveProjectScope(actor);
+  if (scope.kind === "blocked") throw new HttpError(403, scope.reason);
+  if (scope.kind === "own") return { sellerId: scope.sellerId };
+  return {};
+}
 
 /** Extrai relações (vendedor/construtora/obra) do row Prisma para a notificação. */
 function relProject(row: unknown): {
@@ -162,7 +173,11 @@ function toDbStatus(input: string): DbStatus {
 
 export async function listProjects(actor: SessionUser): Promise<SerializedProject[]> {
   assertPermission(actor, (p) => p.projects.view);
-  const rows = await prisma.project.findMany({ include: PROJECT_INCLUDE, orderBy: { createdAt: "desc" } });
+  const rows = await prisma.project.findMany({
+    where: scopeWhere(actor),
+    include: PROJECT_INCLUDE,
+    orderBy: { createdAt: "desc" },
+  });
   return rows.map(serializeProject);
 }
 
@@ -170,8 +185,13 @@ export async function listProjects(actor: SessionUser): Promise<SerializedProjec
  *  Somente leitura: não altera dados, não envia e-mail. */
 export async function exportProjectsCsv(actor: SessionUser): Promise<{ fileName: string; content: string }> {
   assertPermission(actor, (p) => p.projects.view);
+  // Vendedor não exporta a base (mesmo tendo view do próprio Kanban).
+  if (actor.role === "SELLER") {
+    throw new HttpError(403, "Vendedores não podem exportar a base de projetos.");
+  }
 
   const rows = await prisma.project.findMany({
+    where: scopeWhere(actor),
     include: {
       ...PROJECT_INCLUDE,
       observations: { orderBy: { createdAt: "desc" }, select: { text: true } },
@@ -225,7 +245,25 @@ export async function getProject(actor: SessionUser, id: string): Promise<Serial
   assertPermission(actor, (p) => p.projects.view);
   const row = await prisma.project.findUnique({ where: { id }, include: PROJECT_INCLUDE });
   if (!row) throw new HttpError(404, "Projeto não encontrado.");
+  assertProjectInScope(actor, row.sellerId);
   return serializeProject(row);
+}
+
+/** Garante que o projeto está no escopo do usuário (404 para projeto de outro
+ *  vendedor — não revela existência). Defesa em profundidade no detalhe/histórico. */
+function assertProjectInScope(actor: SessionUser, projectSellerId: string | null): void {
+  const scope = resolveProjectScope(actor);
+  if (scope.kind === "blocked") throw new HttpError(403, scope.reason);
+  if (scope.kind === "own" && projectSellerId !== scope.sellerId) {
+    throw new HttpError(404, "Projeto não encontrado.");
+  }
+}
+
+/** Exige acesso a KPIs/analytics (vendedor nunca acessa; requer kpis.view). */
+function requireKpiAccess(actor: SessionUser): void {
+  if (!canViewKpis(actor)) {
+    throw new HttpError(403, "Você não tem permissão para visualizar os indicadores.");
+  }
 }
 
 export async function createProject(actor: SessionUser, data: ProjectInput): Promise<SerializedProject> {
@@ -614,6 +652,7 @@ export async function getHistory(actor: SessionUser, id: string) {
   assertPermission(actor, (p) => p.projects.viewHistory || p.projects.view);
   const project = await prisma.project.findUnique({ where: { id } });
   if (!project) throw new HttpError(404, "Projeto não encontrado.");
+  assertProjectInScope(actor, project.sellerId);
 
   const [status, observations, reviewStudy, reviewFinal] = await Promise.all([
     prisma.projectStatusHistory.findMany({ where: { projectId: id }, orderBy: { enteredAt: "asc" } }),
@@ -660,7 +699,7 @@ export async function getHistory(actor: SessionUser, id: string) {
 // (tempo médio por status, fluxo completo, SLA, gargalos). Sem isso o dashboard
 // só teria o histórico carregado pontualmente na sessão.
 export async function listAllStatusHistory(actor: SessionUser) {
-  assertPermission(actor, (p) => p.projects.view);
+  requireKpiAccess(actor);
   const rows = await prisma.projectStatusHistory.findMany({
     orderBy: { enteredAt: "asc" },
     select: { id: true, projectId: true, fromStatus: true, toStatus: true, enteredAt: true, source: true, note: true },
@@ -680,7 +719,7 @@ export async function listAllStatusHistory(actor: SessionUser) {
 // revisão (20 dias). O cálculo de prazo e o respeito aos filtros são feitos no
 // cliente, cruzando projectId com os projetos filtrados.
 export async function listAllReviews(actor: SessionUser) {
-  assertPermission(actor, (p) => p.projects.view);
+  requireKpiAccess(actor);
   const [study, finalRev] = await Promise.all([
     prisma.projectReviewStudyHistory.findMany({ select: { projectId: true, enteredAt: true, exitedAt: true } }),
     prisma.projectFinalReviewHistory.findMany({ select: { projectId: true, enteredAt: true, exitedAt: true } }),

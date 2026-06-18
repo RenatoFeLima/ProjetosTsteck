@@ -18,6 +18,8 @@ export type CreateUserInput = {
   active: boolean;
   mustChangePassword: boolean;
   permissions?: UserPermissions;
+  /** Vendedor vinculado (obrigatório na prática para role=SELLER). */
+  sellerId?: string | null;
 };
 
 export type UpdateUserPatch = {
@@ -27,7 +29,17 @@ export type UpdateUserPatch = {
   active?: boolean;
   mustChangePassword?: boolean;
   permissions?: UserPermissions;
+  sellerId?: string | null;
 };
+
+/** Valida o vínculo com vendedor: existe e está ativo. Vazio é permitido aqui
+ *  (o guard de visibilidade exibe a mensagem amigável se faltar para um SELLER). */
+async function validateSellerLink(sellerId: string | null | undefined): Promise<void> {
+  if (!sellerId) return;
+  const seller = await prisma.seller.findUnique({ where: { id: sellerId }, select: { id: true, active: true } });
+  if (!seller) throw new HttpError(400, "Vendedor vinculado não encontrado.");
+  if (!seller.active) throw new HttpError(400, "Vendedor vinculado está inativo.");
+}
 
 function countActiveAdmins(): Promise<number> {
   return prisma.user.count({ where: { role: "ADMIN", active: true } });
@@ -62,6 +74,10 @@ export async function createUser(actor: SessionUser, input: CreateUserInput): Pr
     throw new HttpError(409, "E-mail já está cadastrado.");
   }
 
+  // Vínculo com vendedor só faz sentido para o perfil Vendedor.
+  const sellerId = input.role === "SELLER" ? (input.sellerId ?? null) : null;
+  await validateSellerLink(sellerId);
+
   const passwordHash = await hashPassword(input.password);
   const created = await prisma.user.create({
     data: {
@@ -73,8 +89,9 @@ export async function createUser(actor: SessionUser, input: CreateUserInput): Pr
       active: input.active,
       mustChangePassword: input.mustChangePassword,
       permissionsJson: (input.permissions ?? getDefaultPermissions(input.role)) as object,
+      sellerId,
       createdById: actor.id,
-    },
+    } as any,
   });
 
   await writeAudit({
@@ -115,6 +132,17 @@ export async function updateUser(
     if (clash) throw new HttpError(409, "E-mail já está cadastrado.");
   }
 
+  // Vínculo com vendedor: o papel resultante (patch.role ou o atual) define se
+  // o vínculo é mantido. Se deixar de ser SELLER, o vínculo é limpo.
+  const resultingRole = (patch.role ?? target.role) as UserRole;
+  let sellerIdUpdate: string | null | undefined;
+  if (resultingRole !== "SELLER") {
+    sellerIdUpdate = null; // limpa vínculo em qualquer papel não-vendedor
+  } else if (patch.sellerId !== undefined) {
+    sellerIdUpdate = patch.sellerId ?? null;
+  }
+  if (sellerIdUpdate) await validateSellerLink(sellerIdUpdate);
+
   const updated = await prisma.user.update({
     where: { id },
     data: {
@@ -124,8 +152,9 @@ export async function updateUser(
       active: patch.active,
       mustChangePassword: patch.mustChangePassword,
       permissionsJson: patch.permissions as object | undefined,
+      sellerId: sellerIdUpdate,
       updatedById: actor.id,
-    },
+    } as any,
   });
 
   await writeAudit({

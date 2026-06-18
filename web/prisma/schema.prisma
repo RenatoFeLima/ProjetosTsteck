@@ -23,6 +23,7 @@ enum UserRole {
   MANAGER
   PROJECTS
   COMMERCIAL
+  SELLER
   VIEWER
   CUSTOM
 }
@@ -72,11 +73,17 @@ model User {
   createdById        String?
   updatedById        String?
 
+  // Vínculo opcional com um Vendedor (cadastro mestre). Usado quando role=SELLER
+  // para restringir a visibilidade aos projetos desse vendedor.
+  sellerId           String?
+
   projectsCreated Project[] @relation("ProjectCreatedBy")
   projectsUpdated Project[] @relation("ProjectUpdatedBy")
+  seller          Seller?   @relation(fields: [sellerId], references: [id])
 
   @@index([role])
   @@index([active])
+  @@index([sellerId])
 }
 
 // ─── Cadastros mestres ──────────────────────────────────────────────────────
@@ -161,6 +168,7 @@ model Seller {
   updatedAt DateTime @updatedAt
 
   projects Project[]
+  users    User[]
 
   @@index([active])
   @@index([name])

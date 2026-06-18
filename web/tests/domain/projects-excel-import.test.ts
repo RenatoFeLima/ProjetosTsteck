@@ -207,7 +207,7 @@ describe("reimportação Excel — matching e regras", () => {
 
   it("determinismo: reanalisar produz a mesma ordem (base do commit em lotes)", () => {
     const projects = [makeProject({ id: "a", code: "C-1" }), makeProject({ id: "b", code: "C-2", workName: "OBRA Y" })];
-    const rows = [{ [ID_HEADER]: "a", "Vendedor": "L" }, { [ID_HEADER]: "b", "Telefone": "11" }];
+    const rows: Record<string, string>[] = [{ [ID_HEADER]: "a", "Vendedor": "L" }, { [ID_HEADER]: "b", "Telefone": "11" }];
     const snap1 = buildSnapshot({ projects });
     const snap2 = buildSnapshot({ projects });
     const o1 = run(rows, snap1).report.matched.map((m) => m.projectId);

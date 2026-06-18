@@ -1,7 +1,7 @@
 // Tipos centrais de autenticação, autorização e auditoria.
 // Este arquivo não deve importar nada externo ao auth feature.
 
-export type UserRole = "ADMIN" | "MANAGER" | "PROJECTS" | "COMMERCIAL" | "VIEWER" | "CUSTOM";
+export type UserRole = "ADMIN" | "MANAGER" | "PROJECTS" | "COMMERCIAL" | "SELLER" | "VIEWER" | "CUSTOM";
 
 export type UserPermissions = {
   projects: {
@@ -59,6 +59,8 @@ export type User = {
   active: boolean;
   mustChangePassword: boolean;
   permissions: UserPermissions;
+  /** Vendedor vinculado (quando role=SELLER). */
+  sellerId?: string | null;
   createdAt: string;
   updatedAt: string;
   lastLoginAt?: string;

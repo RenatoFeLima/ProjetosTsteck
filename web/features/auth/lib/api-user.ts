@@ -13,6 +13,7 @@ export type ApiUser = {
   mustChangePassword: boolean;
   permissions: UserPermissions;
   lastLoginAt: string | null;
+  sellerId?: string | null;
 };
 
 export function mapApiUser(u: ApiUser): User {
@@ -26,6 +27,7 @@ export function mapApiUser(u: ApiUser): User {
     active: u.active,
     mustChangePassword: u.mustChangePassword,
     permissions: u.permissions,
+    sellerId: u.sellerId ?? null,
     createdAt: "",
     updatedAt: "",
     lastLoginAt: u.lastLoginAt ?? undefined,

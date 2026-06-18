@@ -5,6 +5,7 @@ import { AlertCircle, Eye, EyeOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getDefaultPermissions, ROLE_LABELS } from "@/features/auth/lib/permissions";
 import * as usersApi from "@/features/admin/lib/users-api";
+import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import { PermissionsEditor } from "./permissions-editor";
 import type { User, UserPermissions, UserRole } from "@/features/auth/lib/auth-types";
 
@@ -22,7 +23,7 @@ type UserFormDialogProps = {
   onSaved?: () => void | Promise<void>;
 };
 
-const ROLES: UserRole[] = ["ADMIN", "MANAGER", "PROJECTS", "COMMERCIAL", "VIEWER", "CUSTOM"];
+const ROLES: UserRole[] = ["ADMIN", "MANAGER", "PROJECTS", "COMMERCIAL", "SELLER", "VIEWER", "CUSTOM"];
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
@@ -38,12 +39,14 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
   const [active, setActive] = useState(true);
   const [mustChange, setMustChange] = useState(true);
   const [permissions, setPermissions] = useState<UserPermissions>(getDefaultPermissions("VIEWER"));
+  const [sellerId, setSellerId] = useState<string>("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const nameRef = useRef<HTMLInputElement>(null);
+  const activeSellers = useMasterDataStore((s) => s.vendedores.filter((v) => v.active));
 
   // Reset form when dialog opens/changes
   useEffect(() => {
@@ -56,6 +59,7 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
       setActive(user.active);
       setMustChange(user.mustChangePassword);
       setPermissions(user.permissions);
+      setSellerId(user.sellerId ?? "");
     } else {
       setName("");
       setUsername("");
@@ -66,6 +70,7 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
       setActive(true);
       setMustChange(true);
       setPermissions(getDefaultPermissions("VIEWER"));
+      setSellerId("");
     }
     setError(null);
     setSubmitting(false);
@@ -95,6 +100,14 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
       if (password !== confirmPassword) { setError("As senhas não coincidem."); return; }
     }
 
+    if (role === "SELLER" && !sellerId) {
+      setError("Selecione o vendedor vinculado para o perfil Vendedor.");
+      return;
+    }
+
+    // Vínculo só vale para SELLER; demais papéis enviam null (limpa vínculo).
+    const sellerLink = role === "SELLER" ? sellerId : null;
+
     setSubmitting(true);
     try {
       if (mode === "create") {
@@ -107,6 +120,7 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
           active,
           mustChangePassword: mustChange,
           permissions,
+          sellerId: sellerLink,
         });
       } else if (user) {
         await usersApi.updateUser(user.id, {
@@ -116,6 +130,7 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
           active,
           mustChangePassword: mustChange,
           permissions,
+          sellerId: sellerLink,
         });
       }
       await onSaved?.();
@@ -285,6 +300,29 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
                 />
               </div>
             </div>
+
+            {/* Vínculo com vendedor (apenas perfil Vendedor) */}
+            {role === "SELLER" && (
+              <div>
+                <label className="mb-1.5 block text-[13px] font-medium text-zinc-700 dark:text-zinc-300">
+                  Vendedor vinculado
+                </label>
+                <select
+                  value={sellerId}
+                  onChange={(e) => setSellerId(e.target.value)}
+                  disabled={submitting}
+                  className={cn(inputCls, "cursor-pointer")}
+                >
+                  <option value="">Selecione o vendedor…</option>
+                  {activeSellers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-[12px] text-zinc-500 dark:text-zinc-400">
+                  O vendedor enxergará apenas os projetos vinculados a este cadastro.
+                </p>
+              </div>
+            )}
 
             {/* Permissões personalizadas */}
             {role === "CUSTOM" && (

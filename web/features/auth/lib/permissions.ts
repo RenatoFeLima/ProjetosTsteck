@@ -55,12 +55,27 @@ export const COMMERCIAL_PERMISSIONS: UserPermissions = {
   audit: { view: false },
 };
 
+// Vendedor: acesso restrito ao Kanban dos PRÓPRIOS projetos (escopo aplicado
+// no backend a partir do role/sellerId). Sem KPI, sem cadastros, sem admin,
+// somente leitura (não move status, não edita, não marca urgência).
+export const SELLER_PERMISSIONS: UserPermissions = {
+  projects: { view: true, create: false, edit: false, delete: false, changeStatus: false, markUrgent: false, viewHistory: true },
+  kanban: { view: true, dragAndDrop: false },
+  kpis: { view: false, export: false },
+  alerts: { view: false, manage: false },
+  masterData: { view: false, create: false, edit: false, delete: false },
+  users: { view: false, create: false, edit: false, delete: false, resetPassword: false, managePermissions: false, promoteAdmin: false },
+  settings: { view: false, edit: false },
+  audit: { view: false },
+};
+
 export function getDefaultPermissions(role: UserRole): UserPermissions {
   switch (role) {
     case "ADMIN":      return FULL_PERMISSIONS;
     case "MANAGER":    return MANAGER_PERMISSIONS;
     case "PROJECTS":   return PROJECTS_PERMISSIONS;
     case "COMMERCIAL": return COMMERCIAL_PERMISSIONS;
+    case "SELLER":     return SELLER_PERMISSIONS;
     case "VIEWER":     return VIEWER_PERMISSIONS;
     case "CUSTOM":     return VIEWER_PERMISSIONS; // começa com viewer, admin personaliza
     default:           return VIEWER_PERMISSIONS;
@@ -71,7 +86,8 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN:      "Administrador",
   MANAGER:    "Gerente",
   PROJECTS:   "Projetos",
-  COMMERCIAL: "Comercial",
+  COMMERCIAL: "Gerente Comercial",
+  SELLER:     "Vendedor",
   VIEWER:     "Visualizador",
   CUSTOM:     "Personalizado",
 };
@@ -81,6 +97,7 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   MANAGER:    "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300 border-blue-200 dark:border-blue-800/40",
   PROJECTS:   "bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300 border-violet-200 dark:border-violet-800/40",
   COMMERCIAL: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300 border-amber-200 dark:border-amber-800/40",
+  SELLER:     "bg-teal-50 text-teal-700 dark:bg-teal-900/20 dark:text-teal-300 border-teal-200 dark:border-teal-800/40",
   VIEWER:     "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700",
   CUSTOM:     "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40",
 };

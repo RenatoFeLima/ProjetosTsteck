@@ -28,6 +28,8 @@ type ToolbarProps = {
   exporting?: boolean;
   /** Abre a tela de importação de atualizações via CSV. Opcional. */
   onImport?: () => void;
+  /** Views que o usuário pode ver (gating por permissão). Default: todas. */
+  visibleViews?: ProjectsView[];
 };
 
 const STATUS_OPTIONS: Array<{ label: string; value: "all" | ProjectStatus }> = [
@@ -51,6 +53,7 @@ export function ProjectsToolbar({
   onExport,
   exporting = false,
   onImport,
+  visibleViews,
 }: ToolbarProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -66,12 +69,15 @@ export function ProjectsToolbar({
     return count;
   }, [filters]);
 
-  const viewButtons: Array<{ value: ProjectsView; label: string; icon: typeof Table2 }> = [
+  const allViewButtons: Array<{ value: ProjectsView; label: string; icon: typeof Table2 }> = [
     { value: "table", label: "Tabela", icon: Table2 },
     { value: "kanban", label: "Kanban", icon: Kanban },
     { value: "kpis", label: "KPIs", icon: BarChart3 },
     { value: "alerts", label: "Alertas", icon: AlertTriangle },
   ];
+  const viewButtons = visibleViews
+    ? allViewButtons.filter((b) => visibleViews.includes(b.value))
+    : allViewButtons;
 
   const statusPlaceholder = "Filtrar por status";
 

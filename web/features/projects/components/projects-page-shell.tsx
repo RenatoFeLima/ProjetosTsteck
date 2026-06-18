@@ -16,7 +16,7 @@ import { UrgencyJustificationDialog } from "./urgency-justification-dialog";
 import { FinalCodeDialog } from "./final-code-dialog";
 import { KpiDashboardErrorBoundary } from "./kpi-dashboard-error-boundary";
 import { PageContainer } from "./page-container";
-import { useProjectsStore, setProjectsErrorSink } from "@/features/projects/state/projects-store";
+import { useProjectsStore, setProjectsErrorSink, type ProjectsView } from "@/features/projects/state/projects-store";
 import { apiExportProjects } from "@/features/projects/lib/projects-api";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import { hydrateMasterDataFromApi } from "@/features/master-data/lib/master-data-hydrate";
@@ -53,6 +53,21 @@ export function ProjectsPageShell() {
   const { session } = useAuth();
   const currentUserName =
     session?.user?.name?.trim() || session?.user?.username?.trim() || "Usuário do sistema";
+
+  // Escopo de acesso por permissão (defesa em profundidade — o backend também filtra).
+  const perms = session?.user?.permissions;
+  const role = session?.user?.role;
+  const isSeller = role === "SELLER";
+  const canViewKpis = Boolean(perms?.kpis.view) && !isSeller;
+  const canViewAlerts = Boolean(perms?.alerts.view) && !isSeller;
+  const canExport = Boolean(perms?.projects.view) && !isSeller;
+  const canImport = role === "ADMIN";
+  const visibleViews = useMemo<ProjectsView[]>(() => {
+    const views: ProjectsView[] = ["table", "kanban"];
+    if (canViewKpis) views.push("kpis");
+    if (canViewAlerts) views.push("alerts");
+    return views;
+  }, [canViewKpis, canViewAlerts]);
 
   /** Retorna e-mail do vendedor pelo nome cadastrado. */
   function getVendorEmail(vendedorName: string): string | undefined {
@@ -143,6 +158,11 @@ export function ProjectsPageShell() {
     () => ({ table: projects.length, kanban: projects.length, kpis: allProjects.length, alerts: alertCount }),
     [projects.length, allProjects.length, alertCount],
   );
+
+  // Sem permissão para a view atual (ex.: vendedor em KPIs) → volta ao Kanban.
+  useEffect(() => {
+    if (!visibleViews.includes(activeView)) setActiveView("kanban");
+  }, [visibleViews, activeView, setActiveView]);
 
   useEffect(() => {
     setLastUpdatedAt(new Date().toLocaleString());
@@ -417,6 +437,12 @@ export function ProjectsPageShell() {
           </div>
         </div>
 
+        {isSeller && !session?.user?.sellerId && (
+          <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50 dark:border-amber-700/40 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+            Usuário vendedor sem cadastro de vendedor vinculado. Contate o administrador.
+          </div>
+        )}
+
         <ProjectsToolbar
           view={activeView}
           onViewChange={setActiveView}
@@ -424,25 +450,29 @@ export function ProjectsPageShell() {
           tabCounts={tabCounts}
           filters={filters}
           onFiltersChange={handleFiltersChange}
-          onExport={handleExport}
+          visibleViews={visibleViews}
+          onExport={canExport ? handleExport : undefined}
           exporting={exporting}
-          onImport={() => router.push("/administracao/importar-projetos-excel")}
+          onImport={canImport ? () => router.push("/administracao/importar-projetos-excel") : undefined}
         />
 
-        <section className="mt-4">
-          <ProjectsKpiCards
-            total={kpis.total}
-            andamento={kpis.andamento}
-            atrasados={kpis.atrasados}
-            urgentes={kpis.urgentes}
-            finalizados={kpis.finalizados}
-            active={kpiFilter}
-            onSelect={(key) => {
-              setKpiFilter(key === "total" ? "all" : key);
-              touchLastUpdated();
-            }}
-          />
-        </section>
+        {/* Cards de KPI: ocultos para quem não tem KPI (ex.: vendedor). */}
+        {canViewKpis && (
+          <section className="mt-4">
+            <ProjectsKpiCards
+              total={kpis.total}
+              andamento={kpis.andamento}
+              atrasados={kpis.atrasados}
+              urgentes={kpis.urgentes}
+              finalizados={kpis.finalizados}
+              active={kpiFilter}
+              onSelect={(key) => {
+                setKpiFilter(key === "total" ? "all" : key);
+                touchLastUpdated();
+              }}
+            />
+          </section>
+        )}
 
         <section className="mt-4">
           {activeView === "table" && (
@@ -504,7 +534,7 @@ export function ProjectsPageShell() {
             }}
           />
         )}
-          {activeView === "kpis" && (
+          {activeView === "kpis" && canViewKpis && (
             <KpiDashboardErrorBoundary>
               <ProjectsKpiDashboard
                 projects={allProjects}
@@ -512,7 +542,7 @@ export function ProjectsPageShell() {
               />
             </KpiDashboardErrorBoundary>
           )}
-          {activeView === "alerts" && (
+          {activeView === "alerts" && canViewAlerts && (
             <ProjectsAlerts
               projects={projects}
               onOpen={openDetails}
