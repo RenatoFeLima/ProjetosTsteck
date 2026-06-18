@@ -390,18 +390,18 @@ describe("mudança de status para revisão", () => {
     );
   });
 
-  it("mover para ANTE-PROJETO APROVADO envia o código final e atualiza otimisticamente", () => {
+  it("mover para PROJETO FINAL ENVIADO envia o código final e atualiza otimisticamente", () => {
     useProjectsStore.setState({
-      projects: [{ ...realProject("ap1", "CRE-POÇ-0000"), status_atual: "ANTE-PROJETO ENVIADO" }],
+      projects: [{ ...realProject("ap1", "CRE-POÇ-0000"), status_atual: "ANTE-PROJETO APROVADO" }],
     });
     vi.mocked(api.apiChangeStatus).mockResolvedValue({
       ...realProject("ap1", "CRE-POÇ-0003"),
-      status_atual: "ANTE-PROJETO APROVADO",
+      status_atual: "PROJETO FINAL ENVIADO",
     });
 
     const res = useProjectsStore
       .getState()
-      .moveStatus("ap1", "ANTE-PROJETO APROVADO", "acao-rapida", undefined, "CRE-POÇ-0003");
+      .moveStatus("ap1", "PROJETO FINAL ENVIADO", "acao-rapida", undefined, "CRE-POÇ-0003");
 
     expect(res.ok).toBe(true);
     expect(useProjectsStore.getState().projects.find((p) => p.id === "ap1")?.codigo_projeto).toBe(
@@ -409,8 +409,27 @@ describe("mudança de status para revisão", () => {
     );
     expect(api.apiChangeStatus).toHaveBeenCalledWith(
       "ap1",
-      "ANTE-PROJETO APROVADO",
+      "PROJETO FINAL ENVIADO",
       expect.objectContaining({ finalCode: "CRE-POÇ-0003" }),
+    );
+  });
+
+  it("mover para ANTE-PROJETO APROVADO não exige finalCode (modal de código não abre mais nesse status)", () => {
+    useProjectsStore.setState({
+      projects: [{ ...realProject("ap2", "CRE-POÇ-0000"), status_atual: "ANTE-PROJETO ENVIADO" }],
+    });
+    vi.mocked(api.apiChangeStatus).mockResolvedValue({
+      ...realProject("ap2", "CRE-POÇ-0000"),
+      status_atual: "ANTE-PROJETO APROVADO",
+    });
+
+    const res = useProjectsStore.getState().moveStatus("ap2", "ANTE-PROJETO APROVADO", "kanban");
+
+    expect(res.ok).toBe(true);
+    expect(api.apiChangeStatus).toHaveBeenCalledWith(
+      "ap2",
+      "ANTE-PROJETO APROVADO",
+      expect.not.objectContaining({ finalCode: expect.anything() }),
     );
   });
 

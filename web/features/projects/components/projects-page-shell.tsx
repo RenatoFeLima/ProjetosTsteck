@@ -202,9 +202,9 @@ export function ProjectsPageShell() {
     const project = statusChangeProject;
     if (!project) return;
 
-    // Mover para ANTE-PROJETO APROVADO abre o modal de confirmação/edição de código
+    // Mover para PROJETO FINAL ENVIADO abre o modal de confirmação/edição de código
     // antes de efetivar a troca de status (cancelar no modal não muda o status).
-    const shouldOpenCodeDialog = nextStatus === "ANTE-PROJETO APROVADO";
+    const shouldOpenCodeDialog = nextStatus === "PROJETO FINAL ENVIADO";
 
     if (shouldOpenCodeDialog) {
       setStatusChangeProject(undefined);
@@ -581,19 +581,19 @@ export function ProjectsPageShell() {
             if (!pending) return;
             const { project, observation } = pending;
             const oldStatus = project.status_atual;
-            const result = moveStatus(project.id, "ANTE-PROJETO APROVADO", "acao-rapida", observation, finalCode);
+            const result = moveStatus(project.id, "PROJETO FINAL ENVIADO", "acao-rapida", observation, finalCode);
             if (!result.ok) {
               notify(result.error ?? "Falha ao atualizar status.");
             } else {
               if (observation?.trim()) {
                 addObservation(
                   project.id,
-                  `Mudanca de status via menu de acoes: ${oldStatus} -> ANTE-PROJETO APROVADO. Observacao: ${observation.trim()}`,
+                  `Mudanca de status via menu de acoes: ${oldStatus} -> PROJETO FINAL ENVIADO. Observacao: ${observation.trim()}`,
                   currentUserName,
                 );
               }
               touchLastUpdated();
-              notify(`Ante-projeto aprovado com o codigo ${finalCode}.`);
+              notify(`Projeto final enviado com o codigo ${finalCode}.`);
             }
             setAnteProjFinalCodePending(null);
           }}

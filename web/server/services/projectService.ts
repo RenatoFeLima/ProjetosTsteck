@@ -361,10 +361,10 @@ export async function changeStatus(
     throw new HttpError(400, "Informe o motivo da revisão.");
   }
 
-  // Código: ao entrar em "Ante-Projeto Aprovado" pode-se confirmar/atualizar o código.
+  // Código: ao entrar em "Projeto Final Enviado" pode-se confirmar/atualizar o código.
   // Valida formato e duplicidade ANTES da transação.
   let finalCodeToApply: string | null = null;
-  if (to === "ANTE_PROJETO_APROVADO" && opts.finalCode?.trim()) {
+  if (to === "PROJETO_FINAL_ENVIADO" && opts.finalCode?.trim()) {
     const code = opts.finalCode.trim();
     if (!hasValidFinalCode(code)) {
       throw new HttpError(400, "Código final inválido: deve terminar com 4 dígitos numéricos.");

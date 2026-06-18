@@ -544,8 +544,8 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
       fromStatus: current.status_atual,
       nextStatus: targetStatus,
     };
-    // Ante-Projeto Aprovado: confirma/atualiza o código antes de mover.
-    if (targetStatus === "ANTE-PROJETO APROVADO") {
+    // Projeto Final Enviado: confirma/atualiza o código antes de mover.
+    if (targetStatus === "PROJETO FINAL ENVIADO") {
       setFinalCodeMove(move);
       return;
     }
@@ -594,9 +594,9 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
     if (!finalCodeMove) return;
     const result = onMoveStatus(finalCodeMove.projectId, finalCodeMove.nextStatus, undefined, finalCode);
     if (!result.ok) {
-      notify(result.error ?? "Falha ao concluir o projeto.");
+      notify(result.error ?? "Falha ao enviar o projeto final.");
     } else {
-      notify(`Projeto concluido com o codigo ${finalCode}.`);
+      notify(`Projeto final enviado com o codigo ${finalCode}.`);
       const movedId = finalCodeMove.projectId;
       setRecentlyMovedProjectId(movedId);
       setTimeout(() => setRecentlyMovedProjectId((cur) => (cur === movedId ? null : cur)), 1800);
