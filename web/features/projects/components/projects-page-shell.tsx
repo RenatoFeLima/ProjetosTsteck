@@ -16,6 +16,7 @@ import { FinalCodeDialog } from "./final-code-dialog";
 import { KpiDashboardErrorBoundary } from "./kpi-dashboard-error-boundary";
 import { PageContainer } from "./page-container";
 import { useProjectsStore, setProjectsErrorSink } from "@/features/projects/state/projects-store";
+import { apiExportProjects } from "@/features/projects/lib/projects-api";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import { hydrateMasterDataFromApi } from "@/features/master-data/lib/master-data-hydrate";
 import { computePrazoBadge, computePrazoEntrega, todayIsoDate } from "@/features/projects/domain/project-rules";
@@ -87,6 +88,7 @@ export function ProjectsPageShell() {
   const [kpiFilter, setKpiFilter] = useState<"all" | "total" | "andamento" | "atrasados" | "urgentes" | "finalizados">("all");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string>("");
   const [newProjectDropOpen, setNewProjectDropOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const baseProjects = filteredProjects();
   const detailsProject = useMemo(
@@ -257,6 +259,19 @@ export function ProjectsPageShell() {
     window.setTimeout(() => setToast(""), 3000);
   }
 
+  async function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      await apiExportProjects();
+      notify("Exportação gerada com sucesso.");
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Falha ao exportar projetos.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   function markUrgentWithReason(payload: { projectId: string; urgencyReason: string; urgentDeadline: string; updatedAt: string; updatedBy: string }) {
     const target = baseProjects.find((project) => project.id === payload.projectId);
     if (!target || target.urgente) return;
@@ -407,6 +422,8 @@ export function ProjectsPageShell() {
           tabCounts={tabCounts}
           filters={filters}
           onFiltersChange={handleFiltersChange}
+          onExport={handleExport}
+          exporting={exporting}
         />
 
         <section className="mt-4">

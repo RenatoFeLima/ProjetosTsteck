@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, BarChart3, Building2, ChevronDown, Filter, Kanban, Search, Table2, UserRound, Wrench, X } from "lucide-react";
+import { AlertTriangle, BarChart3, Building2, ChevronDown, Download, Filter, Kanban, Loader2, Search, Table2, UserRound, Wrench, X } from "lucide-react";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import type { ProjectStatus } from "@/features/projects/domain/project-types";
 import type { ProjectsView } from "@/features/projects/state/projects-store";
@@ -23,6 +23,9 @@ type ToolbarProps = {
     urgenteOnly: boolean;
   };
   onFiltersChange: (patch: Partial<ToolbarProps["filters"]>) => void;
+  /** Exporta TODOS os projetos do sistema (não os filtrados). Opcional. */
+  onExport?: () => void;
+  exporting?: boolean;
 };
 
 const STATUS_OPTIONS: Array<{ label: string; value: "all" | ProjectStatus }> = [
@@ -43,6 +46,8 @@ export function ProjectsToolbar({
   tabCounts,
   filters,
   onFiltersChange,
+  onExport,
+  exporting = false,
 }: ToolbarProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -199,6 +204,19 @@ export function ProjectsToolbar({
             >
               <X size={13} />
               Limpar filtros
+            </button>
+          )}
+
+          {onExport && (
+            <button
+              type="button"
+              onClick={onExport}
+              disabled={exporting}
+              aria-label="Exportar todos os projetos para Excel"
+              className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-200 dark:border-emerald-700/40 bg-emerald-50 dark:bg-emerald-900/20 px-3 text-[13px] font-medium text-emerald-700 dark:text-emerald-300 transition hover:bg-emerald-100 dark:hover:bg-emerald-900/30 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+              {exporting ? "Gerando exportação..." : "Exportar Excel"}
             </button>
           )}
         </div>

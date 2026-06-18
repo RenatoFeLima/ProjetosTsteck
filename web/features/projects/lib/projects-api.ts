@@ -74,6 +74,29 @@ export async function apiSetUrgency(id: string, urgent: boolean, reason?: string
   return data.project;
 }
 
+/** Baixa o CSV de TODOS os projetos. Dispara o download no navegador. */
+export async function apiExportProjects(): Promise<void> {
+  const res = await fetch("/api/projects/export", { method: "GET" });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+    throw new Error(data.message ?? data.error ?? "Falha ao exportar projetos.");
+  }
+  // Nome do arquivo vem do Content-Disposition; fallback com timestamp.
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const match = disposition.match(/filename="?([^"]+)"?/);
+  const fileName = match?.[1] ?? `projetos-tsteck-${new Date().toISOString().slice(0, 10)}.csv`;
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function apiAddObservation(id: string, text: string): Promise<void> {
   await request(`/api/projects/${id}/observations`, { method: "POST", body: JSON.stringify({ text }) });
 }

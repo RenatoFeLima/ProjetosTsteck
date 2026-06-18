@@ -27,6 +27,11 @@ import {
   extractCodeSuffix,
   suggestNextCode,
 } from "@/features/projects/domain/project-code";
+import {
+  buildProjectsCsv,
+  exportFileName,
+  type ProjectExportRow,
+} from "@/features/projects/domain/project-export";
 
 /** Extrai relações (vendedor/construtora/obra) do row Prisma para a notificação. */
 function relProject(row: unknown): {
@@ -159,6 +164,60 @@ export async function listProjects(actor: SessionUser): Promise<SerializedProjec
   assertPermission(actor, (p) => p.projects.view);
   const rows = await prisma.project.findMany({ include: PROJECT_INCLUDE, orderBy: { createdAt: "desc" } });
   return rows.map(serializeProject);
+}
+
+/** Exporta TODOS os projetos do sistema como CSV (compatível com Excel pt-BR).
+ *  Somente leitura: não altera dados, não envia e-mail. */
+export async function exportProjectsCsv(actor: SessionUser): Promise<{ fileName: string; content: string }> {
+  assertPermission(actor, (p) => p.projects.view);
+
+  const rows = await prisma.project.findMany({
+    include: {
+      ...PROJECT_INCLUDE,
+      observations: { orderBy: { createdAt: "desc" }, select: { text: true } },
+    } as unknown as Prisma.ProjectInclude,
+    orderBy: { createdAt: "desc" },
+  });
+
+  const exportRows: ProjectExportRow[] = rows.map((p: any) => {
+    const obs: { text: string }[] = p.observations ?? [];
+    return {
+      code: p.code,
+      status: p.status,
+      construtora: p.builder?.name ?? null,
+      obra: p.work?.name ?? null,
+      vendedor: p.seller?.name ?? null,
+      equipamento: p.equipment?.code ?? null,
+      tipoCabine: p.cabinType?.name ?? null,
+      engenheiro: p.engineerName ?? p.engineer?.name ?? null,
+      telefone: p.engineerPhone ?? p.engineer?.phone ?? null,
+      dataLancamento: p.createdAt ?? null,
+      projetoObraRecebido: !!p.projectReceived,
+      localCabineDefinido: !!p.cabinLocationDefined,
+      alinhamentoConcluido: !!p.alignmentCompleted,
+      dataAlinhamento: p.alignmentDate ?? null,
+      urgente: p.priority === "URGENTE",
+      prazoUrgencia: p.urgentDeadline ?? null,
+      motivoUrgencia: p.urgentReason ?? null,
+      prazoOperacional: p.deadline ?? null,
+      createdAt: p.createdAt ?? null,
+      updatedAt: p.updatedAt ?? null,
+      qtdObservacoes: obs.length,
+      ultimaObservacao: obs[0]?.text ?? null,
+    };
+  });
+
+  const now = new Date();
+  await writeAudit({
+    action: "PROJECTS_EXPORTED",
+    actorUserId: actor.id,
+    actorName: actor.name,
+    entityType: "export",
+    message: `${actor.name} exportou ${exportRows.length} projeto(s) para CSV.`,
+    metadata: { count: exportRows.length },
+  });
+
+  return { fileName: exportFileName(now, "csv"), content: buildProjectsCsv(exportRows) };
 }
 
 export async function getProject(actor: SessionUser, id: string): Promise<SerializedProject> {
