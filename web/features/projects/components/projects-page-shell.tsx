@@ -58,9 +58,13 @@ export function ProjectsPageShell() {
   const perms = session?.user?.permissions;
   const role = session?.user?.role;
   const isSeller = role === "SELLER";
+  // Perfis comerciais (Vendedor/Gerente Comercial) são read-only por ROLE.
+  const readOnly = role === "SELLER" || role === "COMMERCIAL";
+  const canMutate = !readOnly;
+  const canMove = canMutate && Boolean(perms?.projects.changeStatus);
   const canViewKpis = Boolean(perms?.kpis.view) && !isSeller;
-  const canViewAlerts = Boolean(perms?.alerts.view) && !isSeller;
-  const canExport = Boolean(perms?.projects.view) && !isSeller;
+  const canViewAlerts = Boolean(perms?.alerts.view) && !isSeller && !readOnly;
+  const canExport = Boolean(perms?.projects.view) && !readOnly;
   const canImport = role === "ADMIN";
   const visibleViews = useMemo<ProjectsView[]>(() => {
     const views: ProjectsView[] = ["table", "kanban"];
@@ -383,7 +387,8 @@ export function ProjectsPageShell() {
                 Atualizado: {lastUpdatedAt}
               </span>
             )}
-            {/* Dropdown Novo Projeto */}
+            {/* Dropdown Novo Projeto — oculto para perfis somente-leitura. */}
+            {canMutate && (
             <div
               className="relative"
               onBlur={(e) => {
@@ -434,6 +439,7 @@ export function ProjectsPageShell() {
                 </div>
               )}
             </div>
+            )}
           </div>
         </div>
 
@@ -479,11 +485,11 @@ export function ProjectsPageShell() {
           <ProjectsTable
             projects={projects}
             onViewDetails={openDetails}
-            onEditProject={openEdit}
-            onChangeStatus={openStatusDialog}
+            onEditProject={canMutate ? openEdit : undefined}
+            onChangeStatus={canMove ? openStatusDialog : undefined}
             onViewHistory={openHistory}
-            onMarkUrgente={(project) => setSelectedUrgencyProject(project)}
-            onRemoveUrgente={removeUrgent}
+            onMarkUrgente={canMutate ? (project) => setSelectedUrgencyProject(project) : undefined}
+            onRemoveUrgente={canMutate ? removeUrgent : () => {}}
             onClearFilters={clearAllFilters}
             state={tableState}
             onRetry={retryTableLoad}
@@ -495,6 +501,7 @@ export function ProjectsPageShell() {
             onOpen={openDetails}
             notify={notify}
             isCodigoDuplicado={isCodigoProjetoDuplicado}
+            canDrag={canMove}
             onMoveStatus={(projectId, status, observation, finalCode) => {
               const current = projects.find((item) => item.id === projectId);
               const oldStatus = current?.status_atual;
@@ -604,6 +611,7 @@ export function ProjectsPageShell() {
             onAddObservation={(id, text) => addObservation(id, text, currentUserName)}
             isCodigoDuplicado={isCodigoProjetoDuplicado}
             notify={notify}
+            canEdit={canMutate}
           />
         )}
 

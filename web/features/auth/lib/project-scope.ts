@@ -40,3 +40,25 @@ export function canViewKpis(user: ScopeUser): boolean {
   if (user.role === "SELLER") return false;
   return Boolean(user.permissions.kpis.view);
 }
+
+// Perfis comerciais são estritamente READ-ONLY (visualização), por ROLE — vale
+// mesmo para usuários antigos cujo permissionsJson no banco ainda tenha flags de
+// escrita marcadas. Defesa em profundidade independente do que está persistido.
+export const READ_ONLY_ROLES: ReadonlySet<UserRole> = new Set<UserRole>(["SELLER", "COMMERCIAL"]);
+
+/** Perfil estritamente de visualização (não muta nada de projeto)? */
+export function isReadOnlyRole(role: UserRole): boolean {
+  return READ_ONLY_ROLES.has(role);
+}
+
+/** true se o usuário pode MUTAR projetos (editar/criar/status/urgência/código).
+ *  Perfis comerciais nunca podem, independentemente do permissionsJson. */
+export function canMutateProjects(user: Pick<ScopeUser, "role">): boolean {
+  return !isReadOnlyRole(user.role);
+}
+
+/** true se o usuário pode MOVER cards no Kanban (drag-and-drop / mudar status). */
+export function canMoveProjects(user: ScopeUser): boolean {
+  if (isReadOnlyRole(user.role)) return false;
+  return Boolean(user.permissions.projects.changeStatus);
+}

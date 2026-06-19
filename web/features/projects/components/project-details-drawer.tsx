@@ -32,6 +32,8 @@ type ProjectDetailsDrawerProps = {
   onAddObservation: (projectId: string, text: string) => void;
   isCodigoDuplicado: (codigo: string, ignoreId?: string) => boolean;
   notify: (message: string) => void;
+  /** Quando false, o painel é somente leitura (sem editar/observar). Default true. */
+  canEdit?: boolean;
 };
 
 type DrawerMode = "view" | "edit";
@@ -145,7 +147,10 @@ export function ProjectDetailsDrawer({
   onAddObservation,
   isCodigoDuplicado,
   notify,
+  canEdit = true,
 }: ProjectDetailsDrawerProps) {
+  // Perfil somente-leitura nunca entra em modo de edição, mesmo se solicitado.
+  const safeInitialMode: DrawerMode = canEdit ? initialMode : "view";
   // view-mode state
   const [note, setNote] = useState("");
   // Carrega histórico + observações reais do MySQL ao abrir (projetos antigos não
@@ -153,10 +158,10 @@ export function ProjectDetailsDrawer({
   const [detailLoading, setDetailLoading] = useState(false);
 
   // edit-mode state
-  const [mode, setMode] = useState<DrawerMode>(initialMode);
+  const [mode, setMode] = useState<DrawerMode>(safeInitialMode);
   const [viewSection, setViewSection] = useState<ViewSection>(initialSection);
   const [editForm, setEditForm] = useState<Partial<Project>>(() => {
-    if (!project || initialMode !== "edit") return {};
+    if (!project || safeInitialMode !== "edit") return {};
     return {
       ...project,
       codigo_projeto: formatProjectCode(project.codigo_projeto ?? ""),
@@ -480,16 +485,18 @@ export function ProjectDetailsDrawer({
                 <UrgenteBadge urgente={project.urgente} urgentDeadline={project.urgentDeadline} />
                 <PrazoBadge project={project} />
               </div>
-              <div className="mt-3">
-                <button
-                  type="button"
-                  onClick={enterEditMode}
-                  className="inline-flex items-center gap-2 rounded-lg bg-[#9e0b0f] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#7f090c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9e0b0f]/50"
-                >
-                  <PencilLine size={14} />
-                  Editar projeto
-                </button>
-              </div>
+              {canEdit && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={enterEditMode}
+                    className="inline-flex items-center gap-2 rounded-lg bg-[#9e0b0f] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#7f090c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9e0b0f]/50"
+                  >
+                    <PencilLine size={14} />
+                    Editar projeto
+                  </button>
+                </div>
+              )}
               <div className="mt-3 inline-flex rounded-lg border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-1">
                 <button
                   type="button"
@@ -849,25 +856,27 @@ export function ProjectDetailsDrawer({
                 <p><span className="font-semibold">Lançamento:</span> {new Date(project.data_lancamento).toLocaleDateString()}</p>
               </section>
 
-              <section className="rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3">
-                <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Adicionar observação rápida</h3>
-                <textarea
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                  placeholder="Registrar contexto, bloqueios ou próxima tratativa..."
-                  className="min-h-24 w-full rounded-xl border border-zinc-300 dark:border-white/8 bg-white dark:bg-panel-soft dark:text-foreground dark:placeholder:text-zinc-600 p-3 text-sm outline-none transition focus:border-[#9e0b0f]"
-                />
-                <div className="mt-2 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={saveObservation}
-                    className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700"
-                  >
-                    <MessageSquare size={14} />
-                    Salvar observacao
-                  </button>
-                </div>
-              </section>
+              {canEdit && (
+                <section className="rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3">
+                  <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Adicionar observação rápida</h3>
+                  <textarea
+                    value={note}
+                    onChange={(event) => setNote(event.target.value)}
+                    placeholder="Registrar contexto, bloqueios ou próxima tratativa..."
+                    className="min-h-24 w-full rounded-xl border border-zinc-300 dark:border-white/8 bg-white dark:bg-panel-soft dark:text-foreground dark:placeholder:text-zinc-600 p-3 text-sm outline-none transition focus:border-[#9e0b0f]"
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={saveObservation}
+                      className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-zinc-700"
+                    >
+                      <MessageSquare size={14} />
+                      Salvar observacao
+                    </button>
+                  </div>
+                </section>
+              )}
 
               <section className="rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3">
                 <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Timeline operacional</h3>

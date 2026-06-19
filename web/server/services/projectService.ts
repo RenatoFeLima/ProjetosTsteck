@@ -32,7 +32,7 @@ import {
   exportFileName,
   type ProjectExportRow,
 } from "@/features/projects/domain/project-export";
-import { resolveProjectScope, canViewKpis } from "@/features/auth/lib/project-scope";
+import { resolveProjectScope, canViewKpis, canMutateProjects, isReadOnlyRole } from "@/features/auth/lib/project-scope";
 
 // Cláusula Prisma `where` derivada do escopo de visibilidade do usuário.
 // SELLER vê só os projetos do seu vendedor; demais veem tudo. Vendedor sem
@@ -185,9 +185,9 @@ export async function listProjects(actor: SessionUser): Promise<SerializedProjec
  *  Somente leitura: não altera dados, não envia e-mail. */
 export async function exportProjectsCsv(actor: SessionUser): Promise<{ fileName: string; content: string }> {
   assertPermission(actor, (p) => p.projects.view);
-  // Vendedor não exporta a base (mesmo tendo view do próprio Kanban).
-  if (actor.role === "SELLER") {
-    throw new HttpError(403, "Vendedores não podem exportar a base de projetos.");
+  // Perfis comerciais (Vendedor/Gerente Comercial) não exportam a base.
+  if (isReadOnlyRole(actor.role)) {
+    throw new HttpError(403, "Seu perfil não pode exportar a base de projetos.");
   }
 
   const rows = await prisma.project.findMany({
@@ -266,7 +266,17 @@ function requireKpiAccess(actor: SessionUser): void {
   }
 }
 
+/** Bloqueia mutações de projeto para perfis comerciais (SELLER/COMMERCIAL),
+ *  por ROLE — vale mesmo para usuários antigos com permissionsJson permissivo.
+ *  Defesa em profundidade: roda antes de qualquer escrita. */
+function assertCanMutate(actor: SessionUser): void {
+  if (!canMutateProjects(actor)) {
+    throw new HttpError(403, "Seu perfil é somente de visualização e não pode alterar projetos.");
+  }
+}
+
 export async function createProject(actor: SessionUser, data: ProjectInput): Promise<SerializedProject> {
+  assertCanMutate(actor);
   assertPermission(actor, (p) => p.projects.create);
 
   const stop = startTimer();
@@ -355,6 +365,7 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
 }
 
 export async function updateProject(actor: SessionUser, id: string, data: ProjectInput): Promise<SerializedProject> {
+  assertCanMutate(actor);
   assertPermission(actor, (p) => p.projects.edit);
   const existing = await prisma.project.findUnique({ where: { id } });
   if (!existing) throw new HttpError(404, "Projeto não encontrado.");
@@ -435,6 +446,7 @@ export async function changeStatus(
   toStatusInput: string,
   opts: { reason?: string; source?: string; note?: string; finalCode?: string } = {},
 ): Promise<SerializedProject> {
+  assertCanMutate(actor);
   assertPermission(actor, (p) => p.projects.changeStatus);
 
   const stop = startTimer();
@@ -584,6 +596,7 @@ export async function setUrgency(
   reason?: string,
   deadline?: string,
 ): Promise<SerializedProject> {
+  assertCanMutate(actor);
   assertPermission(actor, (p) => p.projects.markUrgent);
   const project = await prisma.project.findUnique({ where: { id } });
   if (!project) throw new HttpError(404, "Projeto não encontrado.");
@@ -627,6 +640,7 @@ export async function setUrgency(
 }
 
 export async function addObservation(actor: SessionUser, id: string, text: string) {
+  assertCanMutate(actor);
   assertPermission(actor, (p) => p.projects.edit);
   if (!text?.trim()) throw new HttpError(400, "A observação não pode ser vazia.");
   const project = await prisma.project.findUnique({ where: { id } });

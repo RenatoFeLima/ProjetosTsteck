@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { resolveProjectScope, canViewKpis, SELLER_WITHOUT_LINK_MESSAGE, type ScopeUser } from "@/features/auth/lib/project-scope";
+import {
+  resolveProjectScope,
+  canViewKpis,
+  canMutateProjects,
+  canMoveProjects,
+  isReadOnlyRole,
+  SELLER_WITHOUT_LINK_MESSAGE,
+  type ScopeUser,
+} from "@/features/auth/lib/project-scope";
 import { getDefaultPermissions } from "@/features/auth/lib/permissions";
 import type { UserRole } from "@/features/auth/lib/auth-types";
 
@@ -63,11 +71,47 @@ describe("permissões padrão do perfil Vendedor (SELLER)", () => {
     expect(p.kanban.dragAndDrop).toBe(false);
   });
 
-  it("gerente comercial (COMMERCIAL) tem KPI e vê projetos, sem admin", () => {
+  it("gerente comercial (COMMERCIAL) é read-only: vê projetos + KPI, sem admin/cadastros/edição", () => {
     const p = getDefaultPermissions("COMMERCIAL");
     expect(p.projects.view).toBe(true);
     expect(p.kpis.view).toBe(true);
     expect(p.users.view).toBe(false);
-    expect(p.masterData.create).toBe(false);
+    // Read-only: nada de criar/editar/status/urgência, sem drag, sem cadastros/alertas.
+    expect(p.projects.create).toBe(false);
+    expect(p.projects.edit).toBe(false);
+    expect(p.projects.changeStatus).toBe(false);
+    expect(p.projects.markUrgent).toBe(false);
+    expect(p.kanban.dragAndDrop).toBe(false);
+    expect(p.masterData.view).toBe(false);
+    expect(p.alerts.view).toBe(false);
+    expect(p.settings.view).toBe(false);
+  });
+});
+
+describe("project-scope — mutação e movimentação (read-only por role)", () => {
+  it("SELLER e COMMERCIAL são read-only; nunca mutam nem movem cards", () => {
+    for (const role of ["SELLER", "COMMERCIAL"] as UserRole[]) {
+      expect(isReadOnlyRole(role)).toBe(true);
+      // Mesmo com permissionsJson adulterado, não pode mutar/mover.
+      const tampered: ScopeUser = {
+        role,
+        sellerId: "s1",
+        permissions: {
+          ...getDefaultPermissions(role),
+          projects: { ...getDefaultPermissions(role).projects, edit: true, create: true, changeStatus: true, markUrgent: true },
+          kanban: { view: true, dragAndDrop: true },
+        },
+      };
+      expect(canMutateProjects(tampered)).toBe(false);
+      expect(canMoveProjects(tampered)).toBe(false);
+    }
+  });
+
+  it("ADMIN e PROJECTS podem mutar e mover cards", () => {
+    for (const role of ["ADMIN", "PROJECTS"] as UserRole[]) {
+      expect(isReadOnlyRole(role)).toBe(false);
+      expect(canMutateProjects(user(role))).toBe(true);
+      expect(canMoveProjects(user(role))).toBe(true);
+    }
   });
 });

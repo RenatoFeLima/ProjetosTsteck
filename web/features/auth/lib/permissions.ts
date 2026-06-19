@@ -44,12 +44,15 @@ export const PROJECTS_PERMISSIONS: UserPermissions = {
   audit: { view: false },
 };
 
+// Gerente Comercial: SOMENTE visualização de Projetos/Kanban + KPIs. Read-only —
+// não cria, edita, move status, marca urgência nem arrasta no Kanban. Sem
+// cadastros, admin, importação/exportação, alertas, configurações ou auditoria.
 export const COMMERCIAL_PERMISSIONS: UserPermissions = {
-  projects: { view: true, create: true, edit: true, delete: false, changeStatus: false, markUrgent: false, viewHistory: true },
+  projects: { view: true, create: false, edit: false, delete: false, changeStatus: false, markUrgent: false, viewHistory: true },
   kanban: { view: true, dragAndDrop: false },
   kpis: { view: true, export: false },
-  alerts: { view: true, manage: false },
-  masterData: { view: true, create: false, edit: false, delete: false },
+  alerts: { view: false, manage: false },
+  masterData: { view: false, create: false, edit: false, delete: false },
   users: { view: false, create: false, edit: false, delete: false, resetPassword: false, managePermissions: false, promoteAdmin: false },
   settings: { view: false, edit: false },
   audit: { view: false },

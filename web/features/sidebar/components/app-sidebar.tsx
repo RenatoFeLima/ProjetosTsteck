@@ -4,6 +4,8 @@ import { Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CurrentUser } from "@/features/user/hooks/use-current-user";
 import { useAuth } from "@/features/auth/hooks/use-auth";
+import { getDefaultPermissions } from "@/features/auth/lib/permissions";
+import { isReadOnlyRole } from "@/features/auth/lib/project-scope";
 import { NAV_GROUPS } from "../nav-config";
 import { SidebarBrand } from "./sidebar-brand";
 import { SidebarNavGroup } from "./sidebar-nav-group";
@@ -21,7 +23,11 @@ type Props = {
 
 export function AppSidebar({ collapsed, onToggle, user, onIdentify, onLogout }: Props) {
   const { session } = useAuth();
-  const perms = session?.user.permissions;
+  const role = session?.user.role;
+  // Perfis comerciais (SELLER/COMMERCIAL) usam as permissões CANÔNICAS do role
+  // para o menu — protege contra permissionsJson antigo/permissivo no banco.
+  const perms =
+    role && isReadOnlyRole(role) ? getDefaultPermissions(role) : session?.user.permissions;
   const canManageUsers = perms?.users.view ?? false;
 
   const adminGroup: NavGroup = {

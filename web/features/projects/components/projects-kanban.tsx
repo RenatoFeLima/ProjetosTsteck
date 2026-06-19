@@ -188,28 +188,33 @@ function KanbanCard({
   project,
   onOpen,
   recentlyMoved,
+  canDrag,
 }: {
   project: Project;
   onOpen: (project: Project) => void;
   recentlyMoved: boolean;
+  canDrag: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: project.id,
     data: { projectId: project.id },
+    disabled: !canDrag,
   });
   const ready = isReadyForAlignment(project);
 
   return (
     <article
       ref={setNodeRef}
-      {...listeners}
+      {...(canDrag ? listeners : {})}
       {...attributes}
       onDoubleClick={() => {
         if (!isDragging) onOpen(project);
       }}
       className={[
         "relative rounded-xl border overflow-hidden select-none",
-        isDragging
+        !canDrag
+          ? "cursor-pointer transition-all duration-150 shadow-[0_1px_4px_-1px_rgba(0,0,0,0.06),0_4px_16px_-6px_rgba(0,0,0,0.10)] hover:shadow-[0_2px_8px_-2px_rgba(0,0,0,0.10),0_8px_24px_-6px_rgba(0,0,0,0.16)] " + (ready ? "border-emerald-300 bg-emerald-50/60 dark:border-emerald-700/50 dark:bg-emerald-900/[0.12]" : "border-zinc-200 bg-white dark:border-white/8 dark:bg-panel-soft")
+          : isDragging
           ? "cursor-grabbing border-dashed border-zinc-200 dark:border-white/8 bg-zinc-50/60 dark:bg-white/[0.03] opacity-35 shadow-none"
           : [
               "cursor-grab transition-all duration-150",
@@ -374,6 +379,7 @@ function KanbanColumn({
   isDragActive,
   isDropTarget,
   recentlyMovedProjectId,
+  canDrag,
 }: {
   status: ProjectStatus;
   projects: Project[];
@@ -381,6 +387,7 @@ function KanbanColumn({
   isDragActive: boolean;
   isDropTarget: boolean;
   recentlyMovedProjectId: string | null;
+  canDrag: boolean;
 }) {
   const { setNodeRef } = useDroppable({ id: status });
   const [scrollTop, setScrollTop] = useState(0);
@@ -456,6 +463,7 @@ function KanbanColumn({
               project={project}
               onOpen={onOpen}
               recentlyMoved={recentlyMovedProjectId === project.id}
+              canDrag={canDrag}
             />
           ))}
         </div>
@@ -653,6 +661,7 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
             isDragActive={activeId !== null}
             isDropTarget={overStatus === column.status && activeId !== null}
             recentlyMovedProjectId={recentlyMovedProjectId}
+            canDrag={canDrag}
           />
         ))}
       </div>
