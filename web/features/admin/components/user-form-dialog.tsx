@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Eye, EyeOff, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getDefaultPermissions, ROLE_LABELS } from "@/features/auth/lib/permissions";
 import * as usersApi from "@/features/admin/lib/users-api";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
+import { hydrateMasterDataFromApi } from "@/features/master-data/lib/master-data-hydrate";
 import { PermissionsEditor } from "./permissions-editor";
 import type { User, UserPermissions, UserRole } from "@/features/auth/lib/auth-types";
 
@@ -46,7 +47,11 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
   const [error, setError] = useState<string | null>(null);
 
   const nameRef = useRef<HTMLInputElement>(null);
-  const activeSellers = useMasterDataStore((s) => s.vendedores.filter((v) => v.active));
+  // Seleciona a referência ESTÁVEL do store; filtra com useMemo. Um seletor que
+  // retorna `.filter(...)` cria um array novo a cada render → loop infinito de
+  // re-render no Zustand (React #185).
+  const vendedores = useMasterDataStore((s) => s.vendedores);
+  const activeSellers = useMemo(() => vendedores.filter((v) => v.active), [vendedores]);
 
   // Reset form when dialog opens/changes
   useEffect(() => {
@@ -76,6 +81,17 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
     setSubmitting(false);
     setTimeout(() => nameRef.current?.focus(), 50);
   }, [open, mode, user]);
+
+  // Hidrata os vendedores ao abrir (a tela de usuários não hidrata o store de
+  // cadastros mestres). Só busca se ainda não há lista carregada — sem loop.
+  useEffect(() => {
+    if (open && vendedores.length === 0) {
+      void hydrateMasterDataFromApi();
+    }
+    // Depende só de `open`: a checagem de `vendedores.length` é uma guarda
+    // pontual; reagir a `vendedores` reexecutaria após o fetch sem necessidade.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Reset permissions when role changes (except CUSTOM where user may customize)
   function handleRoleChange(r: UserRole) {
