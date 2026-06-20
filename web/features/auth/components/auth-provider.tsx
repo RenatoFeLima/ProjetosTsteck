@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { AuthContext } from "../state/auth-context";
 import { mapApiUser, type ApiUser } from "../lib/api-user";
 import type { AuthSession, LoginResult } from "../lib/auth-types";
+import { apiFetch } from "@/lib/api-client";
 
 /**
  * Provedor de autenticação — agora 100% integrado ao backend MySQL.
@@ -22,7 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── Restaura sessão do cookie ao montar ──────────────────────────────────
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/auth/me", { cache: "no-store" });
+      const res = await apiFetch("/api/auth/me", { cache: "no-store" });
       const data = (await res.json().catch(() => ({}))) as { user?: ApiUser | null };
       applyUser(data.user ?? null);
     } catch {
@@ -41,9 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (username: string, password: string): Promise<LoginResult> => {
       try {
-        const res = await fetch("/api/auth/login", {
+        const res = await apiFetch("/api/auth/login", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username, password }),
         });
         const data = (await res.json().catch(() => ({}))) as {
@@ -65,16 +65,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Logout ────────────────────────────────────────────────────────────────
   const logout = useCallback(() => {
-    void fetch("/api/auth/logout", { method: "POST" }).finally(() => setSession(null));
+    void apiFetch("/api/auth/logout", { method: "POST" }).finally(() => setSession(null));
   }, []);
 
   // ── Trocar senha ──────────────────────────────────────────────────────────
   const changePassword = useCallback(
     async (newPassword: string): Promise<{ ok: boolean; error?: string }> => {
       try {
-        const res = await fetch("/api/auth/change-password", {
+        const res = await apiFetch("/api/auth/change-password", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ newPassword }),
         });
         const data = (await res.json().catch(() => ({}))) as { error?: string };

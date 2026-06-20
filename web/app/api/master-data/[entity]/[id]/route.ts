@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { requireUser } from "@/server/auth/guards";
+import { requireSameOrigin } from "@/server/auth/csrf";
 import { updateEntity } from "@/server/services/masterDataService";
 import { ok, fail } from "@/server/http";
 import { startTimer, logPerf } from "@/server/perf";
@@ -11,6 +12,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ entity: s
   const stop = startTimer();
   let entity = "[entity]";
   try {
+    requireSameOrigin(req);
     const actor = await requireUser();
     let id: string;
     ({ entity, id } = await ctx.params);

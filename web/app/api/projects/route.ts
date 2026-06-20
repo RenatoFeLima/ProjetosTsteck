@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { requireUser } from "@/server/auth/guards";
+import { requireSameOrigin } from "@/server/auth/csrf";
 import { listProjects, createProject, type ProjectInput } from "@/server/services/projectService";
 import { ok, fail } from "@/server/http";
 import { startTimer, logPerf } from "@/server/perf";
@@ -23,6 +24,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const stop = startTimer();
   try {
+    requireSameOrigin(req);
     const actor = await requireUser();
     const body = (await req.json().catch(() => ({}))) as ProjectInput;
     const project = await createProject(actor, body);

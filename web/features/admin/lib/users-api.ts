@@ -3,19 +3,7 @@
 
 import type { User, UserPermissions, UserRole } from "@/features/auth/lib/auth-types";
 import { mapApiUser, type ApiUser } from "@/features/auth/lib/api-user";
-
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const d = data as { error?: string; message?: string };
-    throw new Error(d.message ?? d.error ?? "Erro na requisição.");
-  }
-  return data as T;
-}
+import { apiRequest as request } from "@/lib/api-client";
 
 export async function fetchUsers(): Promise<User[]> {
   const data = await request<{ users: ApiUser[] }>("/api/users");

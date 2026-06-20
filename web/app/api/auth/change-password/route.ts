@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/server/auth/guards";
+import { requireSameOrigin } from "@/server/auth/csrf";
 import { changeOwnPassword } from "@/server/services/authService";
 import { ok, fail } from "@/server/http";
 
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
+    requireSameOrigin(req);
     const user = await requireUser();
     const body = await req.json().catch(() => ({}));
     const { newPassword } = body as { newPassword?: unknown };

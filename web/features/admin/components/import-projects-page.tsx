@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, FileUp, Loader2, UploadCloud } from "lucide-react";
 import type { ImportReport } from "@/features/import/domain/import-types";
+import { apiFetch } from "@/lib/api-client";
 
 type Phase = "idle" | "dry-running" | "dry-done" | "committing" | "committed";
 
@@ -42,9 +43,8 @@ export function ImportProjectsPage() {
     setPhase(running);
     try {
       const body = await buildBody();
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));

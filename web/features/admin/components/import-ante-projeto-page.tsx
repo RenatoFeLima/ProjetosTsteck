@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { AlertCircle, AlertTriangle, CheckCircle2, FileUp, Loader2, Trash2, UploadCloud } from "lucide-react";
 import type { AnteProjetoReport } from "@/features/import/domain/ante-projeto-import-types";
+import { apiFetch } from "@/lib/api-client";
 
 type Phase = "idle" | "dry-running" | "dry-done" | "committing" | "committed";
 
@@ -30,9 +31,8 @@ export function ImportAnteProjetoPage() {
     setPhase("dry-running");
     try {
       const csv = await readCsv();
-      const res = await fetch("/api/admin/import-ante-projeto/dry-run", {
+      const res = await apiFetch("/api/admin/import-ante-projeto/dry-run", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ csv }),
       });
       const data = await res.json().catch(() => ({}));
@@ -80,9 +80,8 @@ export function ImportAnteProjetoPage() {
     setPhase("committing");
     try {
       const csv = await readCsv();
-      const res = await fetch("/api/admin/import-ante-projeto/commit", {
+      const res = await apiFetch("/api/admin/import-ante-projeto/commit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ csv }),
       });
       const data = await res.json().catch(() => ({}));

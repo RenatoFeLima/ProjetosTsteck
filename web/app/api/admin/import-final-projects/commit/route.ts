@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { requireUser } from "@/server/auth/guards";
+import { requireSameOrigin } from "@/server/auth/csrf";
 import { commitFinalProjectsBatch } from "@/server/services/finalProjectsImportService";
 import { ok, fail } from "@/server/http";
 
@@ -14,6 +15,7 @@ export const maxDuration = 60;
 // qualquer escrita. Não cria/deleta projeto, não altera status, não envia e-mail.
 export async function POST(req: NextRequest) {
   try {
+    requireSameOrigin(req);
     const actor = await requireUser();
     const { csv, offset, chunkSize } = await req.json();
     const result = await commitFinalProjectsBatch(

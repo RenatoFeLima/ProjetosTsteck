@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { requireUser } from "@/server/auth/guards";
+import { requireSameOrigin } from "@/server/auth/csrf";
 import { commitAnteProjetoImport } from "@/server/services/anteProjetoImportService";
 import { ok, fail } from "@/server/http";
 
@@ -15,6 +16,7 @@ export const maxDuration = 60;
 // Sem e-mail, sem notificação.
 export async function POST(req: NextRequest) {
   try {
+    requireSameOrigin(req);
     const actor = await requireUser();
     const { csv } = await req.json();
     const report = await commitAnteProjetoImport(actor, csv ?? "");

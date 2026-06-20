@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireSameOrigin } from "@/server/auth/csrf";
+import { HttpError } from "@/server/auth/guards";
 import { sendProjectCreatedEmail } from "@/lib/mail/mail-service";
 import {
   getProjectNotificationRecipients,
@@ -27,6 +29,13 @@ function escapeHtml(str: unknown): string {
 }
 
 export async function POST(request: NextRequest) {
+  try {
+    requireSameOrigin(request);
+  } catch (e) {
+    if (e instanceof HttpError) return NextResponse.json({ error: e.code, message: e.message }, { status: e.status });
+    throw e;
+  }
+
   let body: ProjectNotificationPayload;
 
   try {

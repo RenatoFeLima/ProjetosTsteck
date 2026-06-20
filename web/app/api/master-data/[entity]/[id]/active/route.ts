@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/server/auth/guards";
+import { requireSameOrigin } from "@/server/auth/csrf";
 import { setEntityActive } from "@/server/services/masterDataService";
 import { ok, fail } from "@/server/http";
 
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ entity: string; id: string }> }) {
   try {
+    requireSameOrigin(req);
     const actor = await requireUser();
     const { entity, id } = await ctx.params;
     const body = await req.json().catch(() => ({}));

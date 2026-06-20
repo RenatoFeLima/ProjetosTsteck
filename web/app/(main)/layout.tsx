@@ -10,6 +10,7 @@ import { ROLE_LABELS } from "@/features/auth/lib/permissions";
 import { resolveRouteRule } from "@/features/auth/lib/route-permissions";
 import { AccessDenied } from "@/features/auth/components/access-denied";
 import type { CurrentUser } from "@/features/user/hooks/use-current-user";
+import { apiFetch } from "@/lib/api-client";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const { collapsed, toggle } = useSidebar();
@@ -33,9 +34,8 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     if (!accessDenied || !rule) return;
     if (loggedPathRef.current === pathname) return;
     loggedPathRef.current = pathname;
-    void fetch("/api/audit/access-denied", {
+    void apiFetch("/api/audit/access-denied", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ area: rule.label, path: pathname }),
     }).catch(() => {});
   }, [accessDenied, pathname, rule]);

@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { requireUser } from "@/server/auth/guards";
+import { requireSameOrigin } from "@/server/auth/csrf";
 import { listEntities, createEntity } from "@/server/services/masterDataService";
 import { ok, fail } from "@/server/http";
 import { startTimer, logPerf } from "@/server/perf";
@@ -26,6 +27,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ entity: st
   const stop = startTimer();
   let entity = "[entity]";
   try {
+    requireSameOrigin(req);
     const actor = await requireUser();
     ({ entity } = await ctx.params);
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;

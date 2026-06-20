@@ -10,6 +10,7 @@ import type {
   ProjectsExcelBatchResult,
   ExcelBatchError,
 } from "@/features/import/domain/projects-excel-import-types";
+import { apiFetch } from "@/lib/api-client";
 
 type Phase = "idle" | "dry-running" | "dry-done" | "committing" | "committed";
 
@@ -52,9 +53,8 @@ export function ImportProjectsExcelPage() {
     setPhase("dry-running");
     try {
       const csv = await readCsv();
-      const res = await fetch("/api/projects/import/dry-run", {
+      const res = await apiFetch("/api/projects/import/dry-run", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ csv }),
       });
       const data = await res.json().catch(() => ({}));
@@ -72,9 +72,8 @@ export function ImportProjectsExcelPage() {
   }
 
   async function postBatch(csv: string, offset: number): Promise<ProjectsExcelBatchResult> {
-    const res = await fetch("/api/projects/import/commit", {
+    const res = await apiFetch("/api/projects/import/commit", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ csv, offset, chunkSize: CHUNK_SIZE }),
     });
     const data = await res.json().catch(() => ({}));

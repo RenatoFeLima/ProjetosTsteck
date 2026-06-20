@@ -25,7 +25,7 @@ const rajdhani = Rajdhani({
 
 export const metadata: Metadata = {
   title: "TSTECK Projetos",
-  description: "Controle de projetos de cabines - fase local",
+  description: "Controle operacional dos projetos de engenharia TSTECK.",
 };
 
 export default function RootLayout({

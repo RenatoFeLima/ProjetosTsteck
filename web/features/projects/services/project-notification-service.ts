@@ -2,6 +2,8 @@
 // Este arquivo é importado tanto pelo client quanto pelo server (rota API).
 // Não importar aqui nada que seja server-only.
 
+import { apiFetch } from "@/lib/api-client";
+
 export type ProjectNotificationEventType =
   | "STATUS_CHANGED"
   | "MARKED_URGENT"
@@ -90,9 +92,8 @@ export async function sendProjectNotification(
   payload: ProjectNotificationPayload,
 ): Promise<ProjectNotificationResult> {
   try {
-    const response = await fetch("/api/notifications/project-movement", {
+    const response = await apiFetch("/api/notifications/project-movement", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
@@ -111,9 +112,8 @@ export async function sendProjectCreatedNotification(
   payload: ProjectNotificationPayload,
 ): Promise<ProjectNotificationResult> {
   try {
-    const response = await fetch("/api/notifications/project-created", {
+    const response = await apiFetch("/api/notifications/project-created", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
@@ -132,9 +132,8 @@ export async function sendDeadlineNotification(
   payload: ProjectNotificationPayload,
 ): Promise<ProjectNotificationResult> {
   try {
-    const response = await fetch("/api/notifications/deadline-warning", {
+    const response = await apiFetch("/api/notifications/deadline-warning", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 

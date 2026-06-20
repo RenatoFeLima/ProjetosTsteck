@@ -10,6 +10,7 @@ import type {
   FinalProjectsBatchResult,
   FinalProjectsBatchError,
 } from "@/features/import/domain/final-projects-import-types";
+import { apiFetch } from "@/lib/api-client";
 
 type Phase = "idle" | "dry-running" | "dry-done" | "committing" | "committed";
 
@@ -51,9 +52,8 @@ export function ImportFinalProjectsPage() {
     setPhase("dry-running");
     try {
       const csv = await readCsv();
-      const res = await fetch("/api/admin/import-final-projects/dry-run", {
+      const res = await apiFetch("/api/admin/import-final-projects/dry-run", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ csv }),
       });
       const data = await res.json().catch(() => ({}));
@@ -73,9 +73,8 @@ export function ImportFinalProjectsPage() {
   }
 
   async function postBatch(csv: string, offset: number): Promise<FinalProjectsBatchResult> {
-    const res = await fetch("/api/admin/import-final-projects/commit", {
+    const res = await apiFetch("/api/admin/import-final-projects/commit", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ csv, offset, chunkSize: CHUNK_SIZE }),
     });
     const data = await res.json().catch(() => ({}));

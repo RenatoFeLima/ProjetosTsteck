@@ -300,11 +300,6 @@ export function LoginPage() {
               Ambiente interno TSTECK. O acesso é monitorado.
             </p>
           </div>
-
-          {/* Version tag */}
-          <p className="mt-4 text-center text-[11px] text-white/40">
-            v1.0.0 — Pipeline de Projetos
-          </p>
         </div>
       </div>
     </div>

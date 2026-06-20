@@ -1,4 +1,4 @@
-import { requireUser } from "@/server/auth/guards";
+import { requireUser, HttpError } from "@/server/auth/guards";
 import { listAllStatusHistory, listAllReviews } from "@/server/services/projectService";
 import { ok, fail } from "@/server/http";
 import { startTimer, logPerf } from "@/server/perf";
@@ -13,6 +13,14 @@ export async function GET() {
   const stop = startTimer();
   try {
     const actor = await requireUser();
+    // Analytics alimenta os KPIs/histórico de status de TODOS os projetos.
+    // Gate = kpis.view (NÃO projects.viewHistory): viewHistory é true também para
+    // SELLER, então usá-lo deixaria o vendedor passar. kpis.view é true para
+    // COMMERCIAL (liberado) e false para SELLER (bloqueado) — regra comercial
+    // correta. ADMIN sempre permitido.
+    if (actor.role !== "ADMIN" && !actor.permissions.kpis.view) {
+      throw new HttpError(403, "Você não tem permissão para ver os indicadores históricos.");
+    }
     const [statusHistory, reviews] = await Promise.all([
       listAllStatusHistory(actor),
       listAllReviews(actor),

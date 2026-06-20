@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireUser } from "@/server/auth/guards";
+import { requireSameOrigin } from "@/server/auth/csrf";
 import { promoteToAdmin, revokeAdmin } from "@/server/services/userService";
 import { ok, fail } from "@/server/http";
 
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 // body: { action: "promote" | "revoke" }
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
+    requireSameOrigin(req);
     const actor = await requireUser();
     const { id } = await ctx.params;
     const body = await req.json().catch(() => ({}));

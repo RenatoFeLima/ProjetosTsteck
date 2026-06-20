@@ -1,19 +1,7 @@
 // Cliente HTTP de Projetos — /api/projects/* (MySQL via Prisma).
 // A API serializa no formato da UI (Project), então o consumo é direto.
 import type { Project, StatusHistoryItem, ProjectObservation } from "@/features/projects/domain/project-types";
-
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const d = data as { error?: string; message?: string };
-    throw new Error(d.message ?? d.error ?? "Erro na requisição.");
-  }
-  return data as T;
-}
+import { apiRequest as request, apiFetch } from "@/lib/api-client";
 
 export async function apiListProjects(): Promise<Project[]> {
   const data = await request<{ projects: Project[] }>("/api/projects");
@@ -76,7 +64,7 @@ export async function apiSetUrgency(id: string, urgent: boolean, reason?: string
 
 /** Baixa o CSV de TODOS os projetos. Dispara o download no navegador. */
 export async function apiExportProjects(): Promise<void> {
-  const res = await fetch("/api/projects/export", { method: "GET" });
+  const res = await apiFetch("/api/projects/export", { method: "GET" });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
     throw new Error(data.message ?? data.error ?? "Falha ao exportar projetos.");

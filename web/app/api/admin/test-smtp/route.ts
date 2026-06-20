@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { requireUser, HttpError } from "@/server/auth/guards";
+import { requireSameOrigin } from "@/server/auth/csrf";
 import { isValidEmail } from "@/features/projects/services/project-notification-service";
 import { sendTestEmail, verifySmtp, smtpConfigSummary } from "@/lib/mail/mail-service";
 import { ok, fail } from "@/server/http";
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
 // senha. Não depende de projeto/status — isola "é SMTP ou é fluxo de projetos?".
 export async function POST(req: NextRequest) {
   try {
+    requireSameOrigin(req);
     const actor = await requireUser();
     if (actor.role !== "ADMIN") {
       throw new HttpError(403, "Apenas administradores podem testar o SMTP.");
