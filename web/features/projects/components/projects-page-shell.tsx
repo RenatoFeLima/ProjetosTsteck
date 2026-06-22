@@ -14,6 +14,7 @@ import { ProjectsKpiDashboard } from "./projects-kpi-dashboard";
 import { ProjectStatusChangeDialog } from "./project-status-change-dialog";
 import { UrgencyJustificationDialog } from "./urgency-justification-dialog";
 import { FinalCodeDialog } from "./final-code-dialog";
+import { ExportConfirmDialog } from "./export-confirm-dialog";
 import { KpiDashboardErrorBoundary } from "./kpi-dashboard-error-boundary";
 import { PageContainer } from "./page-container";
 import { useProjectsStore, setProjectsErrorSink, type ProjectsView } from "@/features/projects/state/projects-store";
@@ -64,7 +65,9 @@ export function ProjectsPageShell() {
   const canMove = canMutate && Boolean(perms?.projects.changeStatus);
   const canViewKpis = Boolean(perms?.kpis.view) && !isSeller;
   const canViewAlerts = Boolean(perms?.alerts.view) && !isSeller && !readOnly;
-  const canExport = Boolean(perms?.projects.view) && !readOnly;
+  // Exportação: alinhado ao backend (kpis.export; ADMIN sempre). SELLER/COMMERCIAL
+  // têm kpis.export=false → botão oculto e backend retorna 403 se forçarem direto.
+  const canExport = role === "ADMIN" || Boolean(perms?.kpis.export);
   const canImport = role === "ADMIN";
   const visibleViews = useMemo<ProjectsView[]>(() => {
     const views: ProjectsView[] = ["table", "kanban"];
@@ -109,6 +112,7 @@ export function ProjectsPageShell() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string>("");
   const [newProjectDropOpen, setNewProjectDropOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportConfirmOpen, setExportConfirmOpen] = useState(false);
   const router = useRouter();
 
   const baseProjects = filteredProjects();
@@ -285,13 +289,22 @@ export function ProjectsPageShell() {
     window.setTimeout(() => setToast(""), 3000);
   }
 
-  async function handleExport() {
+  // Abre o modal de confirmação (não exporta direto). A exportação real só ocorre
+  // ao confirmar em `confirmExport`.
+  function requestExport() {
     if (exporting) return;
+    setExportConfirmOpen(true);
+  }
+
+  async function confirmExport() {
+    if (exporting) return; // trava duplo clique
     setExporting(true);
     try {
       await apiExportProjects();
+      setExportConfirmOpen(false);
       notify("Exportação gerada com sucesso.");
     } catch (e) {
+      // Mantém o modal aberto em caso de erro para o usuário poder tentar de novo.
       notify(e instanceof Error ? e.message : "Falha ao exportar projetos.");
     } finally {
       setExporting(false);
@@ -457,7 +470,7 @@ export function ProjectsPageShell() {
           filters={filters}
           onFiltersChange={handleFiltersChange}
           visibleViews={visibleViews}
-          onExport={canExport ? handleExport : undefined}
+          onExport={canExport ? requestExport : undefined}
           exporting={exporting}
           onImport={canImport ? () => router.push("/administracao/importar-projetos-excel") : undefined}
         />
@@ -655,6 +668,16 @@ export function ProjectsPageShell() {
             }
             setAnteProjFinalCodePending(null);
           }}
+        />
+
+        <ExportConfirmDialog
+          open={exportConfirmOpen}
+          exporting={exporting}
+          onCancel={() => {
+            if (exporting) return;
+            setExportConfirmOpen(false);
+          }}
+          onConfirm={confirmExport}
         />
 
         {toast && (
