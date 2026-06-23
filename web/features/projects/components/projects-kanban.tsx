@@ -14,15 +14,17 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, CheckCircle2, GripVertical } from "lucide-react";
+import { AlertCircle, ArrowDownUp, Check, CheckCircle2, ChevronDown, GripVertical } from "lucide-react";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
 import {
   computeNextAction,
   getCurrentStatusDeadline,
   sortProjectsForKanban,
   validateStatusTransition,
+  DEFAULT_KANBAN_SORT_MODE,
+  type KanbanSortMode,
 } from "@/features/projects/domain/project-rules";
 import { getStatusTheme } from "@/features/projects/domain/status-theme";
 import { PrazoBadge, UrgenteBadge, formatUrgentDeadline } from "./pill-badges";
@@ -50,6 +52,34 @@ const COLUMNS: ProjectStatus[] = [
   "REVISAO DE ESTUDO",
   "REVISAO DE PROJETO FINAL",
 ];
+
+// Colunas que exibem o controle de ordenação. Foco inicial em ELABORAR
+// ANTE-PROJETO; preparado para ampliar sem quebrar (a coluna terminal PROJETO
+// APROVADO mantém sua própria ordem fixa e não recebe o controle).
+const SORTABLE_COLUMNS: ProjectStatus[] = ["ELABORAR ANTE-PROJETO"];
+
+const SORT_MODE_STORAGE_KEY = "tsteck:kanban:sortModes";
+const SORT_MODE_VALUES: KanbanSortMode[] = ["deadline", "oldest", "newest"];
+
+/** Lê os modos de ordenação persistidos (por status) do localStorage. Seguro em
+ *  SSR/erros: retorna {} se indisponível. */
+function readPersistedSortModes(): Partial<Record<ProjectStatus, KanbanSortMode>> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(SORT_MODE_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const result: Partial<Record<ProjectStatus, KanbanSortMode>> = {};
+    for (const [status, mode] of Object.entries(parsed)) {
+      if (SORT_MODE_VALUES.includes(mode as KanbanSortMode)) {
+        result[status as ProjectStatus] = mode as KanbanSortMode;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
 
 const COLUMN_VIEWPORT_HEIGHT = 520;
 const CARD_HEIGHT = 120;
@@ -370,6 +400,91 @@ function useVirtualSlice(total: number, scrollTop: number) {
   };
 }
 
+// ─── Sort control (column header) ─────────────────────────────────────────────
+
+const SORT_OPTIONS: Array<{ value: KanbanSortMode; label: string }> = [
+  { value: "deadline", label: "Por vencimento" },
+  { value: "oldest", label: "Mais antigo primeiro" },
+  { value: "newest", label: "Mais novo primeiro" },
+];
+
+/** Dropdown discreto de ordenação no cabeçalho da coluna. Estado é controlado
+ *  pelo Board (value/onChange); este componente só lida com abrir/fechar o menu. */
+function ColumnSortMenu({
+  value,
+  onChange,
+  columnLabel,
+}: {
+  value: KanbanSortMode;
+  onChange: (mode: KanbanSortMode) => void;
+  columnLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocPointerDown(e: PointerEvent) {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", onDocPointerDown, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onDocPointerDown, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Ordenar coluna ${columnLabel}`}
+        title="Ordenar coluna"
+        className="inline-flex items-center gap-1 rounded-lg border border-zinc-200/70 dark:border-white/10 bg-white/70 dark:bg-panel-soft/70 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 transition hover:text-zinc-800 dark:hover:text-zinc-200 hover:border-zinc-300 dark:hover:border-white/20"
+      >
+        <ArrowDownUp size={11} />
+        Ordenar
+        <ChevronDown size={10} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden rounded-xl border border-zinc-200/70 dark:border-white/10 bg-white dark:bg-panel shadow-[0_8px_24px_-6px_rgba(0,0,0,0.18)]"
+        >
+          {SORT_OPTIONS.map((opt) => {
+            const active = opt.value === value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="menuitemradio"
+                aria-checked={active}
+                onClick={() => {
+                  onChange(opt.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition hover:bg-zinc-50 dark:hover:bg-white/5 ${
+                  active ? "font-semibold text-zinc-900 dark:text-foreground" : "text-zinc-600 dark:text-zinc-400"
+                }`}
+              >
+                <Check size={12} className={active ? "text-brand" : "opacity-0"} />
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Column ───────────────────────────────────────────────────────────────────
 
 function KanbanColumn({
@@ -380,6 +495,9 @@ function KanbanColumn({
   isDropTarget,
   recentlyMovedProjectId,
   canDrag,
+  sortMode,
+  onSortModeChange,
+  showSortControl,
 }: {
   status: ProjectStatus;
   projects: Project[];
@@ -388,6 +506,10 @@ function KanbanColumn({
   isDropTarget: boolean;
   recentlyMovedProjectId: string | null;
   canDrag: boolean;
+  sortMode: KanbanSortMode;
+  onSortModeChange: (mode: KanbanSortMode) => void;
+  /** Controla se o botão de ordenação aparece nesta coluna. */
+  showSortControl: boolean;
 }) {
   const { setNodeRef } = useDroppable({ id: status });
   const [scrollTop, setScrollTop] = useState(0);
@@ -426,12 +548,17 @@ function KanbanColumn({
 
       {/* Column header */}
       <header className="flex-none px-3 pt-2.5 pb-2.5 border-b border-zinc-200/60 dark:border-white/[0.07]">
-        <h3
-          className="text-[11px] font-bold uppercase tracking-widest text-zinc-600 dark:text-zinc-400 truncate"
-          title={theme.label}
-        >
-          {theme.label}
-        </h3>
+        <div className="flex items-start justify-between gap-2">
+          <h3
+            className="min-w-0 flex-1 text-[11px] font-bold uppercase tracking-widest text-zinc-600 dark:text-zinc-400 truncate"
+            title={theme.label}
+          >
+            {theme.label}
+          </h3>
+          {showSortControl && (
+            <ColumnSortMenu value={sortMode} onChange={onSortModeChange} columnLabel={theme.label} />
+          )}
+        </div>
         <div className="mt-1.5 flex flex-wrap gap-1">
           <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${theme.countPill}`}>
             {projects.length} {projects.length === 1 ? "projeto" : "projetos"}
@@ -485,6 +612,31 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
   // Bug #4: capture the dragged card's measured width for the overlay
   const [dragCardWidth, setDragCardWidth] = useState<number | undefined>(undefined);
 
+  // Modo de ordenação POR coluna (estado local da tela). Inicializador preguiçoso
+  // lê o localStorage (readPersistedSortModes é SSR-safe: retorna {} sem window).
+  // Só afeta a exibição — nenhuma chamada a backend.
+  const [sortModes, setSortModes] = useState<Partial<Record<ProjectStatus, KanbanSortMode>>>(
+    () => readPersistedSortModes(),
+  );
+
+  function getSortMode(status: ProjectStatus): KanbanSortMode {
+    return sortModes[status] ?? DEFAULT_KANBAN_SORT_MODE;
+  }
+
+  function handleSortModeChange(status: ProjectStatus, mode: KanbanSortMode) {
+    setSortModes((prev) => {
+      const next = { ...prev, [status]: mode };
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(SORT_MODE_STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          /* persistência é best-effort; ignora cota/privacidade */
+        }
+      }
+      return next;
+    });
+  }
+
   const allSensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
@@ -498,13 +650,14 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
       COLUMNS.map((status) => {
         const list = projects.filter((p) => p.status_atual === status);
         if (status === FINAL_STATUS) {
-          // Coluna terminal: mais recente primeiro.
+          // Coluna terminal: mais recente primeiro (ordem fixa, sem controle).
           list.sort((a, b) => (b.status_entered_at ?? "").localeCompare(a.status_entered_at ?? ""));
           return { status, projects: list };
         }
-        return { status, projects: sortProjectsForKanban(list) };
+        const mode = sortModes[status] ?? DEFAULT_KANBAN_SORT_MODE;
+        return { status, projects: sortProjectsForKanban(list, mode) };
       }),
-    [projects],
+    [projects, sortModes],
   );
 
   const activeProject = useMemo(
@@ -662,6 +815,9 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
             isDropTarget={overStatus === column.status && activeId !== null}
             recentlyMovedProjectId={recentlyMovedProjectId}
             canDrag={canDrag}
+            sortMode={getSortMode(column.status)}
+            onSortModeChange={(mode) => handleSortModeChange(column.status, mode)}
+            showSortControl={SORTABLE_COLUMNS.includes(column.status)}
           />
         ))}
       </div>

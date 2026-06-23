@@ -311,22 +311,40 @@ export function transitionStatus(input: {
 }
 
 /**
- * Ordena projetos para exibição no Kanban, por prioridade de vencimento:
+ * Modos de ordenação do Kanban (apenas dos NÃO-urgentes; urgentes ficam sempre
+ * no topo independentemente do modo):
+ *  - "deadline": pela data de vencimento do prazo normal do status (padrão).
+ *  - "oldest":   pela data base do projeto (data_lancamento/created_at), mais antigo primeiro.
+ *  - "newest":   inverso de "oldest", mais novo primeiro.
+ */
+export type KanbanSortMode = "deadline" | "oldest" | "newest";
+
+export const DEFAULT_KANBAN_SORT_MODE: KanbanSortMode = "deadline";
+
+/** Data base do projeto p/ ordenação por antiguidade: data de lançamento/cadastro
+ *  (que o sistema deriva de createdAt), com fallback para created_at. yyyy-MM-dd. */
+function baseDateKey(project: Project): string | null {
+  return deadlineKey(project.data_lancamento) ?? deadlineKey(project.created_at);
+}
+
+/**
+ * Ordena projetos para exibição no Kanban. Em TODOS os modos:
  *   1. Urgentes sempre no topo.
  *   2. Entre urgentes: por urgentDeadline crescente (vencidos primeiro; sem
- *      deadline por último). Urgência usa o próprio prazo (dias úteis na exibição,
- *      mas a ORDEM é pela data absoluta urgentDeadline).
- *   3. Depois, os não-urgentes.
- *   4. Entre não-urgentes: pela data de vencimento do prazo normal do status
- *      (getCurrentStatusDeadline.dueDate — ex.: ELABORAR ANTE-PROJETO = 45d
- *      corridos), crescente; vencidos antes; sem prazo calculável por último.
+ *      deadline por último).
+ *   3. Depois, os não-urgentes — ordenados conforme `mode`:
+ *      - "deadline": pela data de vencimento do prazo normal (vencidos antes;
+ *        sem prazo calculável no final).
+ *      - "oldest": pela data base (mais antigo primeiro; sem data no final).
+ *      - "newest": pela data base (mais novo primeiro; sem data no final).
  *
- * Ordenar por dueDate (data absoluta) resolve "vencido antes de no prazo" de forma
- * natural: datas menores (passado) vêm primeiro. Comparar strings yyyy-MM-dd é
- * equivalente a comparar as datas. Sort estável do JS preserva a ordem original
- * quando o critério empata (ex.: dois projetos sem prazo calculável).
+ * Comparar strings yyyy-MM-dd equivale a comparar as datas. Sort estável do JS
+ * preserva a ordem original em empates (ex.: dois projetos sem prazo/data).
  */
-export function sortProjectsForKanban(projects: Project[]): Project[] {
+export function sortProjectsForKanban(
+  projects: Project[],
+  mode: KanbanSortMode = DEFAULT_KANBAN_SORT_MODE,
+): Project[] {
   return [...projects].sort((a, b) => {
     const aUrgent = a.urgente;
     const bUrgent = b.urgente;
@@ -334,12 +352,22 @@ export function sortProjectsForKanban(projects: Project[]): Project[] {
     // 1. Urgentes no topo.
     if (aUrgent !== bUrgent) return aUrgent ? -1 : 1;
 
-    // 2. Entre urgentes: por urgentDeadline (data absoluta) crescente.
+    // 2. Entre urgentes: por urgentDeadline (data absoluta) crescente (todos os modos).
     if (aUrgent && bUrgent) {
       return compareDueDates(deadlineKey(a.urgentDeadline), deadlineKey(b.urgentDeadline));
     }
 
-    // 4. Entre não-urgentes: pela data de vencimento do prazo normal do status.
+    // 3. Entre não-urgentes: conforme o modo selecionado.
+    if (mode === "oldest" || mode === "newest") {
+      const cmp = compareDueDates(baseDateKey(a), baseDateKey(b)); // crescente = mais antigo primeiro; null por último
+      // "newest" inverte apenas a ORDEM por data; null permanece no final (não invertido).
+      if (mode === "newest" && cmp !== 0 && baseDateKey(a) !== null && baseDateKey(b) !== null) {
+        return -cmp;
+      }
+      return cmp;
+    }
+
+    // "deadline" (padrão): pela data de vencimento do prazo normal do status.
     return compareDueDates(
       deadlineKey(getCurrentStatusDeadline(a).dueDate),
       deadlineKey(getCurrentStatusDeadline(b).dueDate),
