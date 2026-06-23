@@ -311,35 +311,31 @@ export function transitionStatus(input: {
 }
 
 /**
- * Modos de ordenação do Kanban (apenas dos NÃO-urgentes; urgentes ficam sempre
- * no topo independentemente do modo):
- *  - "deadline": pela data de vencimento do prazo normal do status (padrão).
- *  - "oldest":   pela data base do projeto (data_lancamento/created_at), mais antigo primeiro.
- *  - "newest":   inverso de "oldest", mais novo primeiro.
+ * Modos de ordenação do Kanban. TODOS ordenam os NÃO-urgentes pela DATA DE
+ * VENCIMENTO exibida no card — getCurrentStatusDeadline(project).dueDate —, nunca
+ * pela data de cadastro/lançamento. Urgentes ficam sempre no topo (por urgentDeadline).
+ *  - "deadline": vencimento crescente (mais próximo/vencido primeiro). Padrão.
+ *  - "oldest":   vencimento crescente — data mais antiga primeiro (= "deadline").
+ *  - "newest":   vencimento decrescente — data mais nova primeiro.
+ * Em todos, projetos sem dueDate calculável ficam no final.
  */
 export type KanbanSortMode = "deadline" | "oldest" | "newest";
 
 export const DEFAULT_KANBAN_SORT_MODE: KanbanSortMode = "deadline";
-
-/** Data base do projeto p/ ordenação por antiguidade: data de lançamento/cadastro
- *  (que o sistema deriva de createdAt), com fallback para created_at. yyyy-MM-dd. */
-function baseDateKey(project: Project): string | null {
-  return deadlineKey(project.data_lancamento) ?? deadlineKey(project.created_at);
-}
 
 /**
  * Ordena projetos para exibição no Kanban. Em TODOS os modos:
  *   1. Urgentes sempre no topo.
  *   2. Entre urgentes: por urgentDeadline crescente (vencidos primeiro; sem
  *      deadline por último).
- *   3. Depois, os não-urgentes — ordenados conforme `mode`:
- *      - "deadline": pela data de vencimento do prazo normal (vencidos antes;
- *        sem prazo calculável no final).
- *      - "oldest": pela data base (mais antigo primeiro; sem data no final).
- *      - "newest": pela data base (mais novo primeiro; sem data no final).
+ *   3. Depois, os não-urgentes, ordenados pela DATA DO PRAZO DO CARD
+ *      (getCurrentStatusDeadline.dueDate) conforme `mode`:
+ *      - "deadline"/"oldest": crescente (mais antiga primeiro);
+ *      - "newest": decrescente (mais nova primeiro);
+ *      - sem dueDate calculável sempre no final (em todos os modos).
  *
  * Comparar strings yyyy-MM-dd equivale a comparar as datas. Sort estável do JS
- * preserva a ordem original em empates (ex.: dois projetos sem prazo/data).
+ * preserva a ordem original em empates (ex.: dois projetos sem prazo).
  */
 export function sortProjectsForKanban(
   projects: Project[],
@@ -357,21 +353,17 @@ export function sortProjectsForKanban(
       return compareDueDates(deadlineKey(a.urgentDeadline), deadlineKey(b.urgentDeadline));
     }
 
-    // 3. Entre não-urgentes: conforme o modo selecionado.
-    if (mode === "oldest" || mode === "newest") {
-      const cmp = compareDueDates(baseDateKey(a), baseDateKey(b)); // crescente = mais antigo primeiro; null por último
-      // "newest" inverte apenas a ORDEM por data; null permanece no final (não invertido).
-      if (mode === "newest" && cmp !== 0 && baseDateKey(a) !== null && baseDateKey(b) !== null) {
-        return -cmp;
-      }
-      return cmp;
-    }
+    // 3. Entre não-urgentes: sempre pela data do prazo do card (dueDate).
+    const aDue = deadlineKey(getCurrentStatusDeadline(a).dueDate);
+    const bDue = deadlineKey(getCurrentStatusDeadline(b).dueDate);
+    const cmp = compareDueDates(aDue, bDue); // crescente; null (sem prazo) por último
 
-    // "deadline" (padrão): pela data de vencimento do prazo normal do status.
-    return compareDueDates(
-      deadlineKey(getCurrentStatusDeadline(a).dueDate),
-      deadlineKey(getCurrentStatusDeadline(b).dueDate),
-    );
+    // "newest" inverte apenas a ORDEM entre datas válidas; sem dueDate permanece
+    // no final (não invertido).
+    if (mode === "newest" && cmp !== 0 && aDue !== null && bDue !== null) {
+      return -cmp;
+    }
+    return cmp;
   });
 }
 

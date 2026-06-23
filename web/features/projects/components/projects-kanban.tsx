@@ -402,10 +402,12 @@ function useVirtualSlice(total: number, scrollTop: number) {
 
 // ─── Sort control (column header) ─────────────────────────────────────────────
 
+// Labels explícitos de que a ordenação é pela DATA DE VENCIMENTO do card (e não
+// por data de cadastro), evitando a ambiguidade que o "Mais antigo primeiro" tinha.
 const SORT_OPTIONS: Array<{ value: KanbanSortMode; label: string }> = [
   { value: "deadline", label: "Por vencimento" },
-  { value: "oldest", label: "Mais antigo primeiro" },
-  { value: "newest", label: "Mais novo primeiro" },
+  { value: "oldest", label: "Vencimento: antigo → novo" },
+  { value: "newest", label: "Vencimento: novo → antigo" },
 ];
 
 /** Dropdown discreto de ordenação no cabeçalho da coluna. Estado é controlado

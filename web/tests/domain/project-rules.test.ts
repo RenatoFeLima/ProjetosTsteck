@@ -273,21 +273,27 @@ describe("sortProjectsForKanban", () => {
 });
 
 // ── Controle de ordenação do Kanban (modos deadline/oldest/newest) ────────────
-describe("sortProjectsForKanban — modos de ordenação", () => {
-  // Projeto não-urgente em ELABORAR ANTE-PROJETO com data base (lançamento) controlada.
-  function nu(id: string, dataLancamento: string | null, enteredAt = "2026-05-05"): Project {
+// TODOS os modos ordenam os não-urgentes pela DATA DE VENCIMENTO do card
+// (getCurrentStatusDeadline.dueDate), NÃO por data de cadastro/lançamento.
+describe("sortProjectsForKanban — modos de ordenação por data de vencimento", () => {
+  // Não-urgente em ELABORAR ANTE-PROJETO com dueDate controlada via `deadline`
+  // (getCurrentStatusDeadline prioriza project.deadline sobre o cálculo por status).
+  // `data_lancamento`/`created_at` recebem datas PROPOSITALMENTE diferentes da
+  // dueDate para provar que a ordenação NÃO usa a data de cadastro.
+  function nu(id: string, dueDate: string | null): Project {
     return makeProject({
       id,
       urgente: false,
       status_atual: "ELABORAR ANTE-PROJETO",
-      status_entered_at: enteredAt,
-      data_lancamento: dataLancamento as string,
-      created_at: dataLancamento as string,
+      deadline: dueDate,
+      // datas de cadastro "trocadas" de propósito (não devem influenciar a ordem):
+      data_lancamento: "2026-01-01",
+      created_at: "2026-01-01",
     } as Partial<Project>);
   }
 
-  it("1. modo padrão é 'deadline' (chamar sem modo == chamar com 'deadline')", () => {
-    const projects = [nu("a", "2026-01-01", "2026-05-20"), nu("b", "2026-02-01", "2026-04-01")];
+  it("1. modo padrão é 'deadline'", () => {
+    const projects = [nu("a", "2026-08-02"), nu("b", "2026-06-26")];
     expect(sortProjectsForKanban(projects).map((x) => x.id)).toEqual(
       sortProjectsForKanban(projects, "deadline").map((x) => x.id),
     );
@@ -296,52 +302,63 @@ describe("sortProjectsForKanban — modos de ordenação", () => {
 
   it("2. urgentes continuam no topo em TODOS os modos", () => {
     const projects = [
-      nu("nao1", "2020-01-01"),
+      nu("nao1", "2026-02-01"),
       makeProject({ id: "urg", urgente: true, urgentDeadline: "2026-12-31", status_atual: "ELABORAR ANTE-PROJETO" } as Partial<Project>),
-      nu("nao2", "2030-01-01"),
+      nu("nao2", "2026-09-01"),
     ];
     for (const mode of ["deadline", "oldest", "newest"] as const) {
       expect(sortProjectsForKanban(projects, mode)[0].id).toBe("urg");
     }
   });
 
-  it("4. 'oldest' ordena não-urgentes do mais antigo para o mais novo (por data de lançamento)", () => {
+  // Exemplo real do enunciado: A=02/08, B=26/06, C=07/02, D=17/07.
+  it("3+4. 'oldest' ordena não-urgentes pela dueDate crescente (exemplo do enunciado: C,B,D,A)", () => {
     const projects = [
-      nu("novo", "2026-06-01"),
-      nu("antigo", "2026-01-01"),
-      nu("meio", "2026-03-01"),
+      nu("A", "2026-08-02"),
+      nu("B", "2026-06-26"),
+      nu("C", "2026-02-07"),
+      nu("D", "2026-07-17"),
     ];
-    expect(sortProjectsForKanban(projects, "oldest").map((x) => x.id)).toEqual(["antigo", "meio", "novo"]);
+    expect(sortProjectsForKanban(projects, "oldest").map((x) => x.id)).toEqual(["C", "B", "D", "A"]);
   });
 
-  it("5. 'newest' ordena não-urgentes do mais novo para o mais antigo", () => {
+  it("3+5. 'newest' ordena não-urgentes pela dueDate decrescente (exemplo do enunciado: A,D,B,C)", () => {
     const projects = [
-      nu("antigo", "2026-01-01"),
-      nu("novo", "2026-06-01"),
-      nu("meio", "2026-03-01"),
+      nu("A", "2026-08-02"),
+      nu("B", "2026-06-26"),
+      nu("C", "2026-02-07"),
+      nu("D", "2026-07-17"),
     ];
-    expect(sortProjectsForKanban(projects, "newest").map((x) => x.id)).toEqual(["novo", "meio", "antigo"]);
+    expect(sortProjectsForKanban(projects, "newest").map((x) => x.id)).toEqual(["A", "D", "B", "C"]);
   });
 
-  it("6. sem data base calculável ficam no final em 'oldest' E em 'newest'", () => {
-    const semData = makeProject({ id: "sem", urgente: false, status_atual: "ELABORAR ANTE-PROJETO", data_lancamento: "" , created_at: "" } as Partial<Project>);
-    const comData = nu("com", "2026-02-01");
-    expect(sortProjectsForKanban([semData, comData], "oldest").map((x) => x.id)).toEqual(["com", "sem"]);
-    expect(sortProjectsForKanban([semData, comData], "newest").map((x) => x.id)).toEqual(["com", "sem"]);
+  it("ordenação NÃO usa data de cadastro: cards mais 'novos' de cadastro podem vencer antes", () => {
+    // dueDate manda; data_lancamento é igual em todos, então não interfere.
+    const projects = [nu("vence-depois", "2026-12-31"), nu("vence-antes", "2026-03-01")];
+    expect(sortProjectsForKanban(projects, "oldest").map((x) => x.id)).toEqual(["vence-antes", "vence-depois"]);
+    expect(sortProjectsForKanban(projects, "newest").map((x) => x.id)).toEqual(["vence-depois", "vence-antes"]);
   });
 
-  it("oldest/newest: urgentes no topo por urgentDeadline, depois não-urgentes pela data base", () => {
+  it("6. sem dueDate calculável ficam no final em 'oldest' E em 'newest'", () => {
+    // status sem prazo operacional e sem `deadline` → dueDate ausente.
+    const semPrazo = makeProject({ id: "sem", urgente: false, status_atual: "ANTE-PROJETO APROVADO", deadline: null } as Partial<Project>);
+    const comPrazo = nu("com", "2026-02-01");
+    expect(sortProjectsForKanban([semPrazo, comPrazo], "oldest").map((x) => x.id)).toEqual(["com", "sem"]);
+    expect(sortProjectsForKanban([semPrazo, comPrazo], "newest").map((x) => x.id)).toEqual(["com", "sem"]);
+  });
+
+  it("oldest/newest: urgentes no topo por urgentDeadline, depois não-urgentes pela dueDate", () => {
     const projects = [
-      nu("nao-novo", "2026-06-01"),
+      nu("nao-vence-tarde", "2026-09-01"),
       makeProject({ id: "urg-futuro", urgente: true, urgentDeadline: "2026-12-31", status_atual: "ELABORAR ANTE-PROJETO" } as Partial<Project>),
-      nu("nao-antigo", "2026-01-01"),
+      nu("nao-vence-cedo", "2026-03-01"),
       makeProject({ id: "urg-vencido", urgente: true, urgentDeadline: "2026-01-01", status_atual: "ELABORAR ANTE-PROJETO" } as Partial<Project>),
     ];
     expect(sortProjectsForKanban(projects, "oldest").map((x) => x.id)).toEqual([
-      "urg-vencido", "urg-futuro", "nao-antigo", "nao-novo",
+      "urg-vencido", "urg-futuro", "nao-vence-cedo", "nao-vence-tarde",
     ]);
     expect(sortProjectsForKanban(projects, "newest").map((x) => x.id)).toEqual([
-      "urg-vencido", "urg-futuro", "nao-novo", "nao-antigo",
+      "urg-vencido", "urg-futuro", "nao-vence-tarde", "nao-vence-cedo",
     ]);
   });
 });
