@@ -67,6 +67,25 @@ const PROJECT_INCLUDE = {
 const REVIEW_STUDY = "REVISAO_DE_ESTUDO" as const;
 const REVIEW_FINAL = "REVISAO_DE_PROJETO_FINAL" as const;
 
+/**
+ * Efeitos colaterais de campos ao ENTRAR num status (além de status/datas).
+ * Função PURA (sem prisma) para ser testável isoladamente.
+ *  - REVISAO DE ESTUDO/PROJETO FINAL: incrementa o contador de revisões.
+ *  - PROJETO APROVADO (terminal): zera a prioridade.
+ *  - ANTE-PROJETO ENVIADO: remove a urgência por completo (priority + prazo + motivo),
+ *    pois a urgência perde o sentido após o envio do ante-projeto.
+ */
+export function statusUpdateExtras(to: DbStatus): Prisma.ProjectUncheckedUpdateInput {
+  return {
+    ...(to === REVIEW_STUDY ? { reviewStudyCount: { increment: 1 } } : {}),
+    ...(to === REVIEW_FINAL ? { finalReviewCount: { increment: 1 } } : {}),
+    ...(to === "PROJETO_APROVADO" ? { priority: "NORMAL" } : {}),
+    ...(to === "ANTE_PROJETO_ENVIADO"
+      ? { priority: "NORMAL", urgentDeadline: null, urgentReason: null }
+      : {}),
+  };
+}
+
 // ─── Serialização (DB -> formato da UI) ──────────────────────────────────────
 
 function iso(d: Date | null | undefined): string | null {
@@ -536,9 +555,9 @@ export async function changeStatus(
         updatedById: actor.id,
         ...(leavingCadastroInicial ? { projectReceived: true, cabinLocationDefined: true, alignmentCompleted: true } : {}),
         ...(finalCodeToApply ? { code: finalCodeToApply } : {}),
-        ...(to === REVIEW_STUDY ? { reviewStudyCount: { increment: 1 } } : {}),
-        ...(to === REVIEW_FINAL ? { finalReviewCount: { increment: 1 } } : {}),
-        ...(to === "PROJETO_APROVADO" ? { priority: "NORMAL" } : {}),
+        // Efeitos por status (contadores de revisão, limpeza de urgência ao
+        // enviar ante-projeto / aprovar). Pura e testável: ver statusUpdateExtras.
+        ...statusUpdateExtras(to),
       },
     });
   });

@@ -92,9 +92,21 @@ export function DeadlineBadge({ project }: { project: Project }) {
           ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-700/50 dark:bg-emerald-900/30 dark:text-emerald-300"
           : "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700/50 dark:bg-zinc-800/40 dark:text-zinc-400";
 
+  // Data final do prazo normal (dd/MM/yyyy), exibida de forma discreta ao lado do
+  // badge — mesmo motor de cálculo que gera o "Xd restantes" (getCurrentStatusDeadline).
+  // Fica fora do pill (que tem truncate) para não deformar o card nem sobrepor a obra.
+  const dueDateLabel = hasDeadline && dueDate ? formatUrgentDeadline(dueDate) : "";
+
   return (
-    <span title={tooltip} className={`${BASE_BADGE_CLASS} max-w-[120px] ${className}`}>
-      <span className="truncate">{label}</span>
+    <span className="inline-flex max-w-full items-center gap-1.5">
+      <span title={tooltip} className={`${BASE_BADGE_CLASS} max-w-[120px] ${className}`}>
+        <span className="truncate">{label}</span>
+      </span>
+      {dueDateLabel && (
+        <span className="shrink-0 text-[10px] leading-none text-zinc-400 dark:text-zinc-500 tabular-nums">
+          {dueDateLabel}
+        </span>
+      )}
     </span>
   );
 }

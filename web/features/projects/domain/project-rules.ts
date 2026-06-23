@@ -311,29 +311,55 @@ export function transitionStatus(input: {
 }
 
 /**
- * Ordena projetos para exibição no Kanban:
- *   1. Urgentes com deadline — ordem crescente de urgentDeadline (vencidos primeiro)
- *   2. Urgentes sem deadline
- *   3. Não-urgentes (ordem de entrada: estável)
+ * Ordena projetos para exibição no Kanban, por prioridade de vencimento:
+ *   1. Urgentes sempre no topo.
+ *   2. Entre urgentes: por urgentDeadline crescente (vencidos primeiro; sem
+ *      deadline por último). Urgência usa o próprio prazo (dias úteis na exibição,
+ *      mas a ORDEM é pela data absoluta urgentDeadline).
+ *   3. Depois, os não-urgentes.
+ *   4. Entre não-urgentes: pela data de vencimento do prazo normal do status
+ *      (getCurrentStatusDeadline.dueDate — ex.: ELABORAR ANTE-PROJETO = 45d
+ *      corridos), crescente; vencidos antes; sem prazo calculável por último.
+ *
+ * Ordenar por dueDate (data absoluta) resolve "vencido antes de no prazo" de forma
+ * natural: datas menores (passado) vêm primeiro. Comparar strings yyyy-MM-dd é
+ * equivalente a comparar as datas. Sort estável do JS preserva a ordem original
+ * quando o critério empata (ex.: dois projetos sem prazo calculável).
  */
 export function sortProjectsForKanban(projects: Project[]): Project[] {
   return [...projects].sort((a, b) => {
     const aUrgent = a.urgente;
     const bUrgent = b.urgente;
 
+    // 1. Urgentes no topo.
     if (aUrgent !== bUrgent) return aUrgent ? -1 : 1;
 
+    // 2. Entre urgentes: por urgentDeadline (data absoluta) crescente.
     if (aUrgent && bUrgent) {
-      const aHas = Boolean(a.urgentDeadline);
-      const bHas = Boolean(b.urgentDeadline);
-      if (aHas !== bHas) return aHas ? -1 : 1;
-      if (aHas && bHas) {
-        return (a.urgentDeadline as string).slice(0, 10).localeCompare((b.urgentDeadline as string).slice(0, 10));
-      }
+      return compareDueDates(deadlineKey(a.urgentDeadline), deadlineKey(b.urgentDeadline));
     }
 
-    return 0;
+    // 4. Entre não-urgentes: pela data de vencimento do prazo normal do status.
+    return compareDueDates(
+      deadlineKey(getCurrentStatusDeadline(a).dueDate),
+      deadlineKey(getCurrentStatusDeadline(b).dueDate),
+    );
   });
+}
+
+/** Normaliza um deadline para chave comparável (yyyy-MM-dd) ou null se ausente. */
+function deadlineKey(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.slice(0, 10);
+}
+
+/** Compara duas datas de vencimento: menor (mais próxima/vencida) primeiro;
+ *  null (sem prazo calculável) sempre por último. Empate → 0 (ordem estável). */
+function compareDueDates(a: string | null, b: string | null): number {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a.localeCompare(b);
 }
 
 export function statusOrder(status: ProjectStatus): number {

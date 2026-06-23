@@ -217,6 +217,58 @@ describe("sortProjectsForKanban", () => {
     const sorted = sortProjectsForKanban(projects);
     expect(sorted.map((proj) => proj.id)).toEqual(["urg-com", "urg-sem", "normal"]);
   });
+
+  // ── Regra 1: não-urgentes ordenados pelo prazo NORMAL do status ──────────────
+  // dueDate = status_entered_at + 45d (ELABORAR ANTE-PROJETO). A ordem por dueDate
+  // independe de "hoje", então os testes são determinísticos.
+  function elaborar(id: string, enteredAt: string | null): Project {
+    return makeProject({
+      id,
+      urgente: false,
+      status_atual: "ELABORAR ANTE-PROJETO",
+      status_entered_at: enteredAt as string,
+    } as Partial<Project>);
+  }
+
+  it("3. não-urgentes em ELABORAR ANTE-PROJETO ordenados por prazo normal crescente", () => {
+    // entered mais antigo → dueDate mais cedo → aparece primeiro.
+    const projects = [
+      elaborar("tarde", "2026-05-20"), // due 2026-07-04
+      elaborar("cedo", "2026-04-01"), // due 2026-05-16
+      elaborar("meio", "2026-05-01"), // due 2026-06-15
+    ];
+    const sorted = sortProjectsForKanban(projects);
+    expect(sorted.map((x) => x.id)).toEqual(["cedo", "meio", "tarde"]);
+  });
+
+  it("4. dentro dos não-urgentes, vencidos (dueDate menor) vêm antes dos no prazo", () => {
+    const projects = [
+      elaborar("no-prazo", "2030-01-01"), // due bem no futuro
+      elaborar("vencido", "2020-01-01"), // due bem no passado
+    ];
+    const sorted = sortProjectsForKanban(projects);
+    expect(sorted.map((x) => x.id)).toEqual(["vencido", "no-prazo"]);
+  });
+
+  it("5. não-urgentes sem prazo calculável ficam no final", () => {
+    const projects = [
+      makeProject({ id: "sem-prazo", urgente: false, status_atual: "ANTE-PROJETO APROVADO" } as Partial<Project>),
+      elaborar("com-prazo", "2026-04-01"),
+    ];
+    const sorted = sortProjectsForKanban(projects);
+    expect(sorted.map((x) => x.id)).toEqual(["com-prazo", "sem-prazo"]);
+  });
+
+  it("1+3 combinados: urgentes no topo (por urgentDeadline), depois não-urgentes por prazo normal", () => {
+    const projects = [
+      elaborar("nao-tarde", "2026-05-20"), // due 2026-07-04
+      makeProject({ id: "urg-futuro", urgente: true, urgentDeadline: "2026-12-31", status_atual: "ELABORAR ANTE-PROJETO" } as Partial<Project>),
+      elaborar("nao-cedo", "2026-04-01"), // due 2026-05-16
+      makeProject({ id: "urg-vencido", urgente: true, urgentDeadline: "2026-01-01", status_atual: "ELABORAR ANTE-PROJETO" } as Partial<Project>),
+    ];
+    const sorted = sortProjectsForKanban(projects);
+    expect(sorted.map((x) => x.id)).toEqual(["urg-vencido", "urg-futuro", "nao-cedo", "nao-tarde"]);
+  });
 });
 
 describe("countBusinessDays", () => {

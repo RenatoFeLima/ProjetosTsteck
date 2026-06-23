@@ -542,6 +542,11 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
               finalReviewHistory: updatedFinalReviewHistory,
               updated_at: now,
               ...(nextStatus === "PROJETO APROVADO" ? { urgente: false } : {}),
+              // Enviar ante-projeto remove a urgência (espelha o backend). Limpa
+              // flag, prazo e motivo para o card perder o badge imediatamente.
+              ...(nextStatus === "ANTE-PROJETO ENVIADO"
+                ? { urgente: false, urgentDeadline: null, urgentReason: null }
+                : {}),
             }
           : project,
       ),
