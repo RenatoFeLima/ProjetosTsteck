@@ -814,8 +814,12 @@ export function ProjectDetailsDrawer({
                     <article className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-2.5">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-muted">Tempo no status atual</p>
                       <p className="mt-1 text-base font-bold text-zinc-900 dark:text-foreground">{kpis.diasNoStatusAtual} dias</p>
-                      <p className="text-xs text-zinc-600 dark:text-zinc-400">Meta: {kpis.slaTargetDias} dias</p>
+                      {/* Meta/SLA só aparece em status com SLA de desenvolvimento. */}
+                      {kpis.hasSla && (
+                        <p className="text-xs text-zinc-600 dark:text-zinc-400">Meta: {kpis.slaTargetDias} dias</p>
+                      )}
                     </article>
+                    {kpis.hasSla && (
                     <article className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-2.5">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-muted">SLA status</p>
                       <p
@@ -831,11 +835,12 @@ export function ProjectDetailsDrawer({
                         {kpis.slaState === "ok" ? "Dentro do SLA" : kpis.slaState === "atencao" ? "SLA em atenção" : "SLA estourado"}
                       </p>
                       <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                        {kpis.slaRestanteDias >= 0
+                        {(kpis.slaRestanteDias ?? 0) >= 0
                           ? `${kpis.slaRestanteDias} dias restantes`
-                          : `${Math.abs(kpis.slaRestanteDias)} dias de estouro`}
+                          : `${Math.abs(kpis.slaRestanteDias ?? 0)} dias de estouro`}
                       </p>
                     </article>
+                    )}
                     <article className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-2.5">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-muted">Dias desde cadastro</p>
                       <p className="mt-1 text-base font-bold text-zinc-900 dark:text-foreground">{kpis.diasDesdeCadastro} dias</p>

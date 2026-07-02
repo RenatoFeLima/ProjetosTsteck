@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   applyAlignmentAutomation,
   computeOperationalKpis,
+  hasDevelopmentSla,
+  getCurrentStatusDeadline,
   computePrazoBadge,
   computePrazoEntrega,
   countBusinessDays,
@@ -456,5 +458,97 @@ describe("sortProjectsByCodeDesc — colunas de projeto final", () => {
     expect(sortProjectsByCodeDesc(input).map((x) => x.id)).toEqual([
       "primeiro", "segundo", "terceiro",
     ]);
+  });
+});
+
+describe("hasDevelopmentSla — status com SLA de desenvolvimento", () => {
+  it("true apenas para ELABORAR ANTE-PROJETO / REVISAO DE ESTUDO / REVISAO DE PROJETO FINAL", () => {
+    expect(hasDevelopmentSla("ELABORAR ANTE-PROJETO")).toBe(true);
+    expect(hasDevelopmentSla("REVISAO DE ESTUDO")).toBe(true);
+    expect(hasDevelopmentSla("REVISAO DE PROJETO FINAL")).toBe(true);
+  });
+
+  it("false para todos os demais status (sem SLA/atraso operacional)", () => {
+    expect(hasDevelopmentSla("CADASTRO INICIAL")).toBe(false);
+    expect(hasDevelopmentSla("ANTE-PROJETO ENVIADO")).toBe(false);
+    expect(hasDevelopmentSla("ANTE-PROJETO APROVADO")).toBe(false);
+    expect(hasDevelopmentSla("PROJETO FINAL ENVIADO")).toBe(false);
+    expect(hasDevelopmentSla("PROJETO APROVADO")).toBe(false);
+  });
+});
+
+describe("SLA/atraso restrito aos status de desenvolvimento", () => {
+  const withStatusEntered = (status: Project["status_atual"], enteredAt: string, extra: Partial<Project> = {}) =>
+    makeProject({ status_atual: status, status_entered_at: enteredAt, created_at: enteredAt, ...extra } as Partial<Project>);
+  const history = (status: Project["status_atual"], em: string) => [
+    { id: "h", projeto_id: "p1", status_de: "CADASTRO INICIAL" as const, status_para: status, alterado_em: em, origem: "kanban" as const },
+  ];
+
+  it("1. PROJETO FINAL ENVIADO há 6 dias NÃO é SLA estourado e não tem meta", () => {
+    const p = withStatusEntered("PROJETO FINAL ENVIADO", "2026-06-25");
+    const kpis = computeOperationalKpis(p, history("PROJETO FINAL ENVIADO", "2026-06-25"), "2026-07-01");
+    expect(kpis.diasNoStatusAtual).toBe(6);
+    expect(kpis.hasSla).toBe(false);
+    expect(kpis.slaTargetDias).toBeNull();
+    expect(kpis.slaRestanteDias).toBeNull();
+    expect(kpis.slaState).toBe("ok");
+  });
+
+  it("PROJETO FINAL ENVIADO nunca é isOverdue, mesmo com deadline importado no passado", () => {
+    const p = withStatusEntered("PROJETO FINAL ENVIADO", "2026-06-25", { deadline: "2026-01-01" });
+    const dl = getCurrentStatusDeadline(p, "2026-07-01");
+    expect(dl.isOverdue).toBe(false);
+    expect(dl.hasDeadline).toBe(false);
+  });
+
+  it("2/3/4/5. status sem SLA de dev não retornam atraso (isOverdue=false)", () => {
+    for (const status of [
+      "CADASTRO INICIAL", "ANTE-PROJETO ENVIADO", "ANTE-PROJETO APROVADO",
+      "PROJETO FINAL ENVIADO", "PROJETO APROVADO",
+    ] as Project["status_atual"][]) {
+      const p = withStatusEntered(status, "2026-01-01", { deadline: "2026-01-05" });
+      expect(getCurrentStatusDeadline(p, "2026-07-01").isOverdue).toBe(false);
+    }
+  });
+
+  it("6. ELABORAR ANTE-PROJETO acima de 45 dias continua atrasado", () => {
+    const p = withStatusEntered("ELABORAR ANTE-PROJETO", "2026-05-01");
+    // 45 dias após 01/05 = 15/06; em 01/07 já passou.
+    const dl = getCurrentStatusDeadline(p, "2026-07-01");
+    expect(dl.isOverdue).toBe(true);
+    expect(dl.hasDeadline).toBe(true);
+  });
+
+  it("7. REVISAO DE ESTUDO acima de 20 dias continua atrasado", () => {
+    const p = withStatusEntered("REVISAO DE ESTUDO", "2026-05-01");
+    // 20 dias após 01/05 = 21/05; em 01/07 já passou.
+    expect(getCurrentStatusDeadline(p, "2026-07-01").isOverdue).toBe(true);
+  });
+
+  it("8. REVISAO DE PROJETO FINAL acima de 20 dias continua atrasado", () => {
+    const p = withStatusEntered("REVISAO DE PROJETO FINAL", "2026-05-01");
+    expect(getCurrentStatusDeadline(p, "2026-07-01").isOverdue).toBe(true);
+  });
+
+  it("9. urgência não transforma status sem SLA em atraso operacional", () => {
+    const p = withStatusEntered("PROJETO FINAL ENVIADO", "2026-06-25", {
+      urgente: true, urgentDeadline: "2026-06-26",
+    });
+    // Mesmo urgente e com urgentDeadline vencido, não há atraso por SLA de dev.
+    expect(getCurrentStatusDeadline(p, "2026-07-01").isOverdue).toBe(false);
+  });
+
+  it("KPI 'Atrasados' (isOverdue) só conta status com SLA de desenvolvimento", () => {
+    const today = "2026-07-01";
+    const projects = [
+      withStatusEntered("ELABORAR ANTE-PROJETO", "2026-05-01"),        // >45d → atrasado
+      withStatusEntered("REVISAO DE ESTUDO", "2026-05-01"),            // >20d → atrasado
+      withStatusEntered("REVISAO DE PROJETO FINAL", "2026-05-01"),     // >20d → atrasado
+      withStatusEntered("PROJETO FINAL ENVIADO", "2026-01-01", { deadline: "2026-01-05" }), // NÃO
+      withStatusEntered("PROJETO APROVADO", "2026-01-01", { deadline: "2026-01-05" }),      // NÃO
+      withStatusEntered("ANTE-PROJETO ENVIADO", "2026-01-01", { deadline: "2026-01-05" }),  // NÃO
+    ];
+    const atrasados = projects.filter((p) => getCurrentStatusDeadline(p, today).isOverdue).length;
+    expect(atrasados).toBe(3);
   });
 });

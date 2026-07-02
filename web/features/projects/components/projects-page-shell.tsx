@@ -21,7 +21,7 @@ import { useProjectsStore, setProjectsErrorSink, type ProjectsView } from "@/fea
 import { apiExportProjects } from "@/features/projects/lib/projects-api";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import { hydrateMasterDataFromApi } from "@/features/master-data/lib/master-data-hydrate";
-import { computePrazoBadge, computePrazoEntrega, todayIsoDate } from "@/features/projects/domain/project-rules";
+import { getCurrentStatusDeadline } from "@/features/projects/domain/project-rules";
 import { countAlerts } from "@/features/projects/domain/project-alerts";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
 import { sendProjectNotification } from "@/features/projects/services/project-notification-service";
@@ -134,10 +134,9 @@ export function ProjectsPageShell() {
 
   const kpis = useMemo(() => {
     const total = baseProjects.length;
-    const atrasados = baseProjects.filter((project) => {
-      const prazo = computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido);
-      return computePrazoBadge(todayIsoDate(), prazo) === "atrasado";
-    }).length;
+    // "Atrasado" = fora do prazo de DESENVOLVIMENTO. getCurrentStatusDeadline só
+    // marca isOverdue em status com SLA de desenvolvimento (os demais nunca contam).
+    const atrasados = baseProjects.filter((project) => getCurrentStatusDeadline(project).isOverdue).length;
     const urgentes = baseProjects.filter((project) => project.urgente).length;
     const finalizados = baseProjects.filter((project) => project.status_atual === "PROJETO APROVADO").length;
     const andamento = Math.max(total - finalizados, 0);
@@ -150,10 +149,7 @@ export function ProjectsPageShell() {
     if (kpiFilter === "urgentes") return baseProjects.filter((project) => project.urgente);
     if (kpiFilter === "finalizados") return baseProjects.filter((project) => project.status_atual === "PROJETO APROVADO");
     if (kpiFilter === "atrasados") {
-      return baseProjects.filter((project) => {
-        const prazo = computePrazoEntrega(project.data_alinhamento, project.proj_obra_recebido && project.local_cabine_definido);
-        return computePrazoBadge(todayIsoDate(), prazo) === "atrasado";
-      });
+      return baseProjects.filter((project) => getCurrentStatusDeadline(project).isOverdue);
     }
     return baseProjects.filter((project) => project.status_atual !== "PROJETO APROVADO");
   }, [baseProjects, kpiFilter]);

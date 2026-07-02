@@ -33,8 +33,11 @@ export type ProjectOperationalKpis = {
   diasDesdeCadastro: number;
   diasSemAtualizacao: number;
   diasNoStatusAtual: number;
-  slaTargetDias: number;
-  slaRestanteDias: number;
+  // SLA só existe em status com SLA de desenvolvimento; nos demais é null (sem
+  // meta, sem estouro). hasSla facilita o gate na UI.
+  hasSla: boolean;
+  slaTargetDias: number | null;
+  slaRestanteDias: number | null;
   slaState: SlaState;
 };
 
@@ -50,7 +53,25 @@ const STATUS_SLA_TARGET_DAYS: Record<ProjectStatus, number> = {
   "REVISAO DE PROJETO FINAL": 4,
 };
 
-// Prazo externo por status (compromisso com o cliente/fluxo)
+// ─── SLA de DESENVOLVIMENTO (única fonte de "atraso operacional") ──────────────
+//
+// Somente estes status possuem prazo de desenvolvimento, SLA estourado e
+// contagem de atraso. TODOS os demais status (CADASTRO INICIAL, ANTE-PROJETO
+// ENVIADO/APROVADO, PROJETO FINAL ENVIADO, PROJETO APROVADO) NÃO são atrasados
+// por SLA operacional — nem no drawer, nem no KPI "Atrasados", nem nos alertas.
+export const DEVELOPMENT_SLA_STATUSES: ProjectStatus[] = [
+  "ELABORAR ANTE-PROJETO",
+  "REVISAO DE ESTUDO",
+  "REVISAO DE PROJETO FINAL",
+];
+
+/** True somente para os status que têm prazo/SLA de desenvolvimento. */
+export function hasDevelopmentSla(status: ProjectStatus): boolean {
+  return DEVELOPMENT_SLA_STATUSES.includes(status);
+}
+
+// Prazo externo por status (compromisso com o cliente/fluxo).
+// Derivado de DEVELOPMENT_SLA_STATUSES: exatamente os mesmos status têm prazo.
 const STATUS_DEADLINE_DAYS: Partial<Record<ProjectStatus, number>> = {
   "ELABORAR ANTE-PROJETO": 45,
   "REVISAO DE ESTUDO": 20,
@@ -135,6 +156,13 @@ export type CurrentStatusDeadline = {
 export function getCurrentStatusDeadline(project: Project, todayOverride?: string): CurrentStatusDeadline {
   const today = todayOverride ?? todayIsoDate();
   const todayDate = parseISO(today);
+
+  // Atraso/SLA só existe em status com SLA de desenvolvimento. Demais status
+  // (inclusive PROJETO FINAL ENVIADO / PROJETO APROVADO) nunca são atrasados por
+  // prazo operacional, mesmo com deadline absoluto importado.
+  if (!hasDevelopmentSla(project.status_atual)) {
+    return { hasDeadline: false, isOverdue: false, label: "Sem prazo" };
+  }
 
   // Prazo absoluto (vindo de importação CSV) tem prioridade sobre o cálculo por status.
   if (project.deadline) {
@@ -491,6 +519,20 @@ export function computeOperationalKpis(
   const diasSemAtualizacao = Math.max(differenceInCalendarDays(today, updated), 0);
   const diasNoStatusAtual = Math.max(differenceInCalendarDays(today, enteredStatusAt), 0);
 
+  // SLA/atraso só se aplica a status com SLA de desenvolvimento. Nos demais,
+  // não há meta nem estouro: slaTargetDias/slaRestanteDias = null, estado "ok".
+  if (!hasDevelopmentSla(project.status_atual)) {
+    return {
+      diasDesdeCadastro,
+      diasSemAtualizacao,
+      diasNoStatusAtual,
+      hasSla: false,
+      slaTargetDias: null,
+      slaRestanteDias: null,
+      slaState: "ok",
+    };
+  }
+
   const slaTargetDias = STATUS_SLA_TARGET_DAYS[project.status_atual];
   const slaRestanteDias = slaTargetDias - diasNoStatusAtual;
 
@@ -502,6 +544,7 @@ export function computeOperationalKpis(
     diasDesdeCadastro,
     diasSemAtualizacao,
     diasNoStatusAtual,
+    hasSla: true,
     slaTargetDias,
     slaRestanteDias,
     slaState,
