@@ -382,6 +382,51 @@ function compareDueDates(a: string | null, b: string | null): number {
   return a.localeCompare(b);
 }
 
+// ─── Ordenação por sufixo numérico do código (colunas de projeto final) ───────
+
+/**
+ * Colunas terminais onde os cards são ordenados pelos 4 últimos dígitos do
+ * código do projeto, em ordem DECRESCENTE (2060 antes de 2059...). As demais
+ * colunas mantêm a ordenação por prazo/urgência (sortProjectsForKanban).
+ */
+export const CODE_DESC_SORTED_COLUMNS: ProjectStatus[] = [
+  "PROJETO FINAL ENVIADO",
+  "PROJETO APROVADO",
+];
+
+/**
+ * Extrai o sufixo numérico do código do projeto — preferencialmente os últimos
+ * 4 dígitos no FINAL do código (regex `(\d{4})$`).
+ *  - "CRE-UBA-2060" → 2060
+ *  - código vazio/nulo, ou que não termina em 4 dígitos → null (vai para o fim).
+ * Não modifica o código; apenas lê.
+ */
+export function getCodeNumericSuffix(code: string | null | undefined): number | null {
+  if (!code) return null;
+  const match = code.trim().match(/(\d{4})$/);
+  if (!match) return null;
+  return Number(match[1]);
+}
+
+/**
+ * Ordena projetos pelo sufixo numérico do código em ordem DECRESCENTE.
+ * Fallback:
+ *  - código sem 4 dígitos finais / vazio / nulo → sempre no final;
+ *  - empate (mesmo sufixo, ou ambos inválidos) → preserva a ordem de entrada
+ *    (sort estável do JS), que já vem ordenada por prazo/urgência.
+ * Não altera nenhum campo do projeto.
+ */
+export function sortProjectsByCodeDesc(projects: Project[]): Project[] {
+  return [...projects].sort((a, b) => {
+    const aKey = getCodeNumericSuffix(a.codigo_projeto);
+    const bKey = getCodeNumericSuffix(b.codigo_projeto);
+    if (aKey === bKey) return 0; // empate ou ambos null → ordem estável (fallback)
+    if (aKey === null) return 1; // inválido por último
+    if (bKey === null) return -1;
+    return bKey - aKey; // decrescente
+  });
+}
+
 export function statusOrder(status: ProjectStatus): number {
   const order: Record<ProjectStatus, number> = {
     "CADASTRO INICIAL": 0,

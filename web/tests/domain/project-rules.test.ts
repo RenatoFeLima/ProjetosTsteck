@@ -7,6 +7,8 @@ import {
   countBusinessDays,
   shouldShowOperationalDeadline,
   sortProjectsForKanban,
+  sortProjectsByCodeDesc,
+  getCodeNumericSuffix,
   DEFAULT_KANBAN_SORT_MODE,
   toDateInputValue,
   transitionStatus,
@@ -385,5 +387,74 @@ describe("countBusinessDays", () => {
   it("sábado e domingo não contam", () => {
     // sex 19/06 → seg 22/06 = 1 dia útil (apenas a seg conta)
     expect(countBusinessDays(new Date("2026-06-19"), new Date("2026-06-22"))).toBe(1);
+  });
+});
+
+describe("getCodeNumericSuffix", () => {
+  it("extrai os 4 últimos dígitos do código", () => {
+    expect(getCodeNumericSuffix("CRE-UBA-2060")).toBe(2060);
+    expect(getCodeNumericSuffix("CRE-NAC-2059")).toBe(2059);
+  });
+
+  it("retorna null para código vazio, nulo ou sem 4 dígitos finais", () => {
+    expect(getCodeNumericSuffix("")).toBeNull();
+    expect(getCodeNumericSuffix(null)).toBeNull();
+    expect(getCodeNumericSuffix(undefined)).toBeNull();
+    expect(getCodeNumericSuffix("CRE-UBA-206")).toBeNull(); // só 3 dígitos
+    expect(getCodeNumericSuffix("PROVISORIO")).toBeNull();
+    expect(getCodeNumericSuffix("CRE-2060-AB")).toBeNull(); // não termina em dígitos
+  });
+});
+
+describe("sortProjectsByCodeDesc — colunas de projeto final", () => {
+  const proj = (id: string, codigo: string, status: Project["status_atual"]) =>
+    makeProject({ id, codigo_projeto: codigo, status_atual: status } as Partial<Project>);
+
+  it("1/7. ordena PROJETO FINAL ENVIADO por sufixo desc (exemplo real)", () => {
+    const input = [
+      proj("a", "CRE-AGA-2056", "PROJETO FINAL ENVIADO"),
+      proj("b", "CRE-TIQ-2058", "PROJETO FINAL ENVIADO"),
+      proj("c", "CRE-UBA-2060", "PROJETO FINAL ENVIADO"),
+      proj("d", "CRE-NAC-2059", "PROJETO FINAL ENVIADO"),
+      proj("e", "CRE-TIQ-2057", "PROJETO FINAL ENVIADO"),
+    ];
+    expect(sortProjectsByCodeDesc(input).map((x) => x.codigo_projeto)).toEqual([
+      "CRE-UBA-2060", "CRE-NAC-2059", "CRE-TIQ-2058", "CRE-TIQ-2057", "CRE-AGA-2056",
+    ]);
+  });
+
+  it("2. ordena PROJETO APROVADO pela mesma lógica (desc)", () => {
+    const input = [
+      proj("a", "CRE-AAA-1001", "PROJETO APROVADO"),
+      proj("b", "CRE-BBB-1003", "PROJETO APROVADO"),
+      proj("c", "CRE-CCC-1002", "PROJETO APROVADO"),
+    ];
+    expect(sortProjectsByCodeDesc(input).map((x) => x.codigo_projeto)).toEqual([
+      "CRE-BBB-1003", "CRE-CCC-1002", "CRE-AAA-1001",
+    ]);
+  });
+
+  it("4/5. código sem 4 dígitos finais ou vazio vai para o fim", () => {
+    const input = [
+      proj("invalido", "PROVISORIO", "PROJETO FINAL ENVIADO"),
+      proj("vazio", "", "PROJETO FINAL ENVIADO"),
+      proj("baixo", "CRE-XXX-2050", "PROJETO FINAL ENVIADO"),
+      proj("alto", "CRE-YYY-2061", "PROJETO FINAL ENVIADO"),
+    ];
+    const ids = sortProjectsByCodeDesc(input).map((x) => x.id);
+    expect(ids.slice(0, 2)).toEqual(["alto", "baixo"]);
+    // Os dois inválidos ficam no fim, preservando ordem de entrada (estável).
+    expect(ids.slice(2)).toEqual(["invalido", "vazio"]);
+  });
+
+  it("6. sufixos iguais mantêm fallback estável (ordem de entrada)", () => {
+    const input = [
+      proj("primeiro", "CRE-AAA-2060", "PROJETO FINAL ENVIADO"),
+      proj("segundo", "CRE-BBB-2060", "PROJETO FINAL ENVIADO"),
+      proj("terceiro", "CRE-CCC-2060", "PROJETO FINAL ENVIADO"),
+    ];
+    expect(sortProjectsByCodeDesc(input).map((x) => x.id)).toEqual([
+      "primeiro", "segundo", "terceiro",
+    ]);
   });
 });

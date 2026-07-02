@@ -22,6 +22,8 @@ import {
   computeNextAction,
   getCurrentStatusDeadline,
   sortProjectsForKanban,
+  sortProjectsByCodeDesc,
+  CODE_DESC_SORTED_COLUMNS,
   validateStatusTransition,
   DEFAULT_KANBAN_SORT_MODE,
   type KanbanSortMode,
@@ -30,8 +32,6 @@ import { getStatusTheme } from "@/features/projects/domain/status-theme";
 import { PrazoBadge, UrgenteBadge, formatUrgentDeadline } from "./pill-badges";
 import { KanbanStatusChangeDialog } from "./kanban-status-change-dialog";
 import { FinalCodeDialog } from "./final-code-dialog";
-
-const FINAL_STATUS: ProjectStatus = "PROJETO APROVADO";
 
 /** Cadastro Inicial com documentação + local da cabine recebidos → pronto p/ alinhamento. */
 function isReadyForAlignment(project: Project): boolean {
@@ -651,10 +651,10 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
     () =>
       COLUMNS.map((status) => {
         const list = projects.filter((p) => p.status_atual === status);
-        if (status === FINAL_STATUS) {
-          // Coluna terminal: mais recente primeiro (ordem fixa, sem controle).
-          list.sort((a, b) => (b.status_entered_at ?? "").localeCompare(a.status_entered_at ?? ""));
-          return { status, projects: list };
+        if (CODE_DESC_SORTED_COLUMNS.includes(status)) {
+          // Colunas de projeto final: ordenadas pelos 4 últimos dígitos do código
+          // (decrescente). Fallback estável usa a ordem por prazo já existente.
+          return { status, projects: sortProjectsByCodeDesc(sortProjectsForKanban(list)) };
         }
         const mode = sortModes[status] ?? DEFAULT_KANBAN_SORT_MODE;
         return { status, projects: sortProjectsForKanban(list, mode) };
