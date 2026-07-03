@@ -196,17 +196,24 @@ function ReminderFormDialogBody({ project, reminder, onCancel, onSave }: Omit<Re
 
             <div className="flex flex-col gap-1.5">
               <label htmlFor={FIELD_IDS.recorrencia} className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Repetir a cada X dias <span className="text-[#9e0b0f]">*</span>
+                Repetir a cada <span className="text-[#9e0b0f]">*</span>
               </label>
-              <input
-                id={FIELD_IDS.recorrencia}
-                type="number"
-                min={1}
-                step={1}
-                value={recorrencia}
-                onChange={(e) => setRecorrencia(e.target.value)}
-                className={inputCls(Boolean(errors.recorrencia_dias))}
-              />
+              {/* "dias" como sufixo visual dentro do input; padding à direita
+                  evita que o valor digitado fique atrás do sufixo. */}
+              <div className="relative">
+                <input
+                  id={FIELD_IDS.recorrencia}
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={recorrencia}
+                  onChange={(e) => setRecorrencia(e.target.value)}
+                  className={inputCls(Boolean(errors.recorrencia_dias)) + " pr-11"}
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-zinc-400 dark:text-zinc-500">
+                  dias
+                </span>
+              </div>
               {fieldError("recorrencia_dias")}
             </div>
           </div>

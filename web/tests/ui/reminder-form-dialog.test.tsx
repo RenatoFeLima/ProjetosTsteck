@@ -93,10 +93,12 @@ describe("ReminderFormDialog — criar lembrete para esta obra", () => {
     expect(await screen.findByText(/Somente a equipe de Projetos/i)).toBeInTheDocument();
   });
 
-  it("mostra os rótulos ajustados (Primeiro alerta, Repetir a cada X dias) e o texto de apoio", () => {
+  it("mostra os rótulos ajustados (Primeiro alerta, Repetir a cada + sufixo 'dias') e o texto de apoio", () => {
     setup();
     expect(screen.getByLabelText(/Primeiro alerta/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Repetir a cada X dias/i)).toBeInTheDocument();
+    // Label encurtado (evita quebra do asterisco); "dias" é sufixo visual do input.
+    expect(screen.getByLabelText(/Repetir a cada/i)).toBeInTheDocument();
+    expect(screen.getByText(/^dias$/i)).toBeInTheDocument();
     expect(
       screen.getByText(/será alertada no primeiro alerta e novamente a cada X dias/i),
     ).toBeInTheDocument();
