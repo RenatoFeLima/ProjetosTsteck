@@ -17,6 +17,7 @@ import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
 import { UrgencyJustificationDialog } from "./urgency-justification-dialog";
 import { formatPhone, formatProjectCode, normalizeEngineerName, stripPhone } from "./project-form-utils";
 import { useProjectsStore } from "@/features/projects/state/projects-store";
+import { ProjectRemindersSection } from "./project-reminders-section";
 
 // ─── types ─────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,8 @@ type ProjectDetailsDrawerProps = {
   notify: (message: string) => void;
   /** Quando false, o painel é somente leitura (sem editar/observar). Default true. */
   canEdit?: boolean;
+  /** Gerenciar lembretes (criar/editar/adiar/resolver/remover) — ADMIN/Projetos. */
+  canManageReminders?: boolean;
 };
 
 type DrawerMode = "view" | "edit";
@@ -148,6 +151,7 @@ export function ProjectDetailsDrawer({
   isCodigoDuplicado,
   notify,
   canEdit = true,
+  canManageReminders = false,
 }: ProjectDetailsDrawerProps) {
   // Perfil somente-leitura nunca entra em modo de edição, mesmo se solicitado.
   const safeInitialMode: DrawerMode = canEdit ? initialMode : "view";
@@ -806,6 +810,9 @@ export function ProjectDetailsDrawer({
                 <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Próxima ação recomendada</h3>
                 <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{computeNextAction(project)}</p>
               </section>
+
+              {/* Lembretes operacionais desta obra (todos veem; ADMIN/Projetos gerenciam). */}
+              <ProjectRemindersSection project={project} canManage={canManageReminders} />
 
               {kpis && (
                 <section className="rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3">

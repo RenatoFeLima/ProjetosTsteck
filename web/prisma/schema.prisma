@@ -55,6 +55,17 @@ enum NotificationType {
   DEADLINE_OVERDUE
 }
 
+enum ReminderPriority {
+  NORMAL
+  ALTA
+}
+
+enum ReminderStatus {
+  PENDENTE
+  RESOLVIDO
+  CANCELADO
+}
+
 // ─── Usuários ───────────────────────────────────────────────────────────────
 
 model User {
@@ -246,6 +257,7 @@ model Project {
   finalReviewHistory ProjectFinalReviewHistory[]
   observations       ProjectObservation[]
   notifications      ProjectNotification[]
+  reminders          ProjectReminder[]
 
   @@index([status])
   @@index([priority])
@@ -343,6 +355,67 @@ model ProjectNotification {
 
   @@index([projectId])
   @@index([type])
+}
+
+// ─── Lembretes operacionais por projeto ─────────────────────────────────────
+// Follow-ups vinculados a um projeto (validar com vendedor, contato com cliente,
+// reunião pendente...). Soft delete: remover = status CANCELADO (mantém auditoria).
+// Lembrete NÃO altera status/urgência/SLA/ordenação do projeto.
+
+model ProjectReminder {
+  id             String           @id @default(uuid())
+  projectId      String
+  description    String           @db.Text
+  priority       ReminderPriority @default(NORMAL)
+  status         ReminderStatus   @default(PENDENTE)
+  // Data inicial escolhida na criação; nextAlertDate avança em adiamentos.
+  startDate      DateTime
+  nextAlertDate  DateTime
+  recurrenceDays Int
+
+  createdById   String?
+  createdByName String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  resolvedById   String?
+  resolvedByName String?
+  resolvedAt     DateTime?
+
+  canceledById   String?
+  canceledByName String?
+  canceledAt     DateTime?
+
+  lastPostponedById   String?
+  lastPostponedByName String?
+  lastPostponedAt     DateTime?
+
+  project Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  logs    ProjectReminderLog[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([nextAlertDate])
+}
+
+// Log/auditoria de TODAS as ações sobre lembretes (criação, edição, adiamento,
+// conclusão, cancelamento/remoção, mudança de prioridade/data/recorrência).
+model ProjectReminderLog {
+  id          String   @id @default(uuid())
+  reminderId  String
+  projectId   String
+  action      String
+  actorUserId String?
+  actorName   String
+  oldValue    String?  @db.Text
+  newValue    String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  reminder ProjectReminder @relation(fields: [reminderId], references: [id], onDelete: Cascade)
+
+  @@index([reminderId])
+  @@index([projectId])
+  @@index([createdAt])
 }
 
 // ─── Auditoria ──────────────────────────────────────────────────────────────

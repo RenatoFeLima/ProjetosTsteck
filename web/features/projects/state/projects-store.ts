@@ -26,6 +26,16 @@ import {
   apiUpdateProject,
   type ReviewAggItem,
 } from "@/features/projects/lib/projects-api";
+import type { ProjectReminder } from "@/features/projects/domain/project-reminders";
+import {
+  apiCreateReminder,
+  apiListReminders,
+  apiPostponeReminder,
+  apiRemoveReminder,
+  apiResolveReminder,
+  apiUpdateReminder,
+  type ReminderCreatePayload,
+} from "@/features/projects/lib/reminders-api";
 
 // ─── Persistência em background + reconciliação de IDs otimistas ──────────────
 // Cada mutação otimista local dispara a chamada à API (MySQL é a fonte da verdade).
@@ -91,6 +101,8 @@ type StoreState = {
   projects: Project[];
   observations: ProjectObservation[];
   statusHistory: StatusHistoryItem[];
+  /** Lembretes operacionais de todos os projetos visíveis (fonte: MySQL). */
+  reminders: ProjectReminder[];
   /** Revisões agregadas (todos os projetos) — base dos SLAs de revisão nos KPIs. */
   reviewStudyAgg: ReviewAggItem[];
   finalReviewAgg: ReviewAggItem[];
@@ -111,6 +123,16 @@ type StoreState = {
   isCodigoProjetoDuplicado: (codigo: string, ignoreId?: string) => boolean;
   /** Recarrega os projetos a partir do MySQL (fonte da verdade). */
   hydrate: () => Promise<void>;
+  /** Carrega os lembretes operacionais do MySQL. */
+  loadReminders: () => Promise<void>;
+  createReminder: (projectId: string, input: ReminderCreatePayload) => Promise<{ ok: boolean; error?: string }>;
+  updateReminder: (
+    id: string,
+    patch: Partial<ReminderCreatePayload> & { proxima_data?: string },
+  ) => Promise<{ ok: boolean; error?: string }>;
+  postponeReminder: (id: string, date: string) => void;
+  resolveReminder: (id: string) => void;
+  removeReminder: (id: string) => void;
   /** Carrega histórico + observações reais de um projeto do MySQL (ao abrir o drawer). */
   loadProjectDetail: (id: string) => Promise<void>;
   /** Carrega dados agregados de TODOS os projetos (histórico + revisões) p/ KPIs. */
@@ -146,6 +168,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
   projects: initialProjects,
   observations: [],
   statusHistory: buildInitialHistory(initialProjects),
+  reminders: [],
   reviewStudyAgg: [],
   finalReviewAgg: [],
   activeView: "table",
@@ -617,6 +640,85 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     } catch (e) {
       debugLog("falha ao listar projetos", e);
     }
+  },
+
+  // ─── Lembretes operacionais ─────────────────────────────────────────────────
+  // Ações de status (adiar/resolver/remover) são otimistas com rollback via
+  // reload; criação/edição aguardam o backend (id/validação server-side).
+
+  loadReminders: async () => {
+    try {
+      const reminders = await apiListReminders();
+      set({ reminders });
+    } catch (e) {
+      debugLog("falha ao listar lembretes", e);
+    }
+  },
+
+  createReminder: async (projectId, input) => {
+    if (isPending(projectId)) {
+      return { ok: false, error: "Aguarde o projeto terminar de salvar antes de criar lembretes." };
+    }
+    try {
+      const reminder = await apiCreateReminder(projectId, input);
+      set((state) => ({ reminders: [...state.reminders, reminder] }));
+      return { ok: true };
+    } catch (e) {
+      const msg = messageFrom(e, "Não foi possível salvar o lembrete.");
+      reportUserError(msg);
+      return { ok: false, error: msg };
+    }
+  },
+
+  updateReminder: async (id, patch) => {
+    try {
+      const reminder = await apiUpdateReminder(id, patch);
+      set((state) => ({ reminders: state.reminders.map((r) => (r.id === id ? reminder : r)) }));
+      return { ok: true };
+    } catch (e) {
+      const msg = messageFrom(e, "Não foi possível salvar as alterações do lembrete.");
+      reportUserError(msg);
+      return { ok: false, error: msg };
+    }
+  },
+
+  postponeReminder: (id, date) => {
+    set((state) => ({
+      reminders: state.reminders.map((r) => (r.id === id ? { ...r, proxima_data: date } : r)),
+    }));
+    void apiPostponeReminder(id, date)
+      .then((real) => set((state) => ({ reminders: state.reminders.map((r) => (r.id === id ? real : r)) })))
+      .catch((e) => {
+        debugLog("falha ao adiar lembrete", e);
+        reportUserError(messageFrom(e, "Não foi possível adiar o lembrete."));
+        void get().loadReminders();
+      });
+  },
+
+  resolveReminder: (id) => {
+    set((state) => ({
+      reminders: state.reminders.map((r) => (r.id === id ? { ...r, status: "RESOLVIDO" as const } : r)),
+    }));
+    void apiResolveReminder(id)
+      .then((real) => set((state) => ({ reminders: state.reminders.map((r) => (r.id === id ? real : r)) })))
+      .catch((e) => {
+        debugLog("falha ao resolver lembrete", e);
+        reportUserError(messageFrom(e, "Não foi possível marcar o lembrete como resolvido."));
+        void get().loadReminders();
+      });
+  },
+
+  removeReminder: (id) => {
+    set((state) => ({
+      reminders: state.reminders.map((r) => (r.id === id ? { ...r, status: "CANCELADO" as const } : r)),
+    }));
+    void apiRemoveReminder(id)
+      .then((real) => set((state) => ({ reminders: state.reminders.map((r) => (r.id === id ? real : r)) })))
+      .catch((e) => {
+        debugLog("falha ao remover lembrete", e);
+        reportUserError(messageFrom(e, "Não foi possível remover o lembrete."));
+        void get().loadReminders();
+      });
   },
 
   // Busca o histórico/observações persistidos no MySQL e SUBSTITUI as entradas

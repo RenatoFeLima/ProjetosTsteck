@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertCircle, ArrowDownUp, Check, CheckCircle2, ChevronDown, GripVertical } from "lucide-react";
+import { AlertCircle, ArrowDownUp, BellPlus, Check, CheckCircle2, ChevronDown, GripVertical } from "lucide-react";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
 import {
   computeNextAction,
@@ -32,6 +32,9 @@ import { getStatusTheme } from "@/features/projects/domain/status-theme";
 import { PrazoBadge, UrgenteBadge, formatUrgentDeadline } from "./pill-badges";
 import { KanbanStatusChangeDialog } from "./kanban-status-change-dialog";
 import { FinalCodeDialog } from "./final-code-dialog";
+import { ReminderPill } from "./reminder-badges";
+import { activeRemindersForProject } from "@/features/projects/domain/project-reminders";
+import { useProjectsStore } from "@/features/projects/state/projects-store";
 
 /** Cadastro Inicial com documentação + local da cabine recebidos → pronto p/ alinhamento. */
 function isReadyForAlignment(project: Project): boolean {
@@ -110,6 +113,8 @@ type ProjectsKanbanProps = {
   isCodigoDuplicado: (codigo: string, ignoreId?: string) => boolean;
   /** Quando false, o arraste é desabilitado (usuário sem permissão kanban.dragAndDrop). */
   canDrag?: boolean;
+  /** Abre o modal de criação de lembrete (presente só para ADMIN/Projetos). */
+  onCreateReminder?: (project: Project) => void;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -121,12 +126,25 @@ function getReviewOrdinal(count: number): string {
 
 // ─── Shared card content ─────────────────────────────────────────────────────
 
-function CardContent({ project }: { project: Project }) {
+function CardContent({
+  project,
+  onCreateReminder,
+}: {
+  project: Project;
+  /** Presente somente para quem pode gerenciar lembretes — mostra o botão de pin. */
+  onCreateReminder?: (project: Project) => void;
+}) {
   const theme = getStatusTheme(project.status_atual);
   const nextAction = computeNextAction(project);
   const isInReview = project.status_atual === "REVISAO DE ESTUDO";
   const isInFinalReview = project.status_atual === "REVISAO DE PROJETO FINAL";
   const accentBg = project.urgente ? "bg-[#9e0b0f] dark:bg-red-600" : theme.accentBg;
+
+  // Lembretes ativos do projeto (indicador discreto — NÃO pinta o card inteiro
+  // nem interfere em urgência/status/SLA/ordenação). Mostra o mais crítico + "+N".
+  const reminders = useProjectsStore((s) => s.reminders);
+  const activeReminders = activeRemindersForProject(reminders, project.id);
+  const topReminder = activeReminders[0] ?? null;
 
   return (
     <div className="flex">
@@ -135,12 +153,29 @@ function CardContent({ project }: { project: Project }) {
 
       {/* Card body */}
       <div className="flex-1 min-w-0 p-3">
-        {/* Row 1: grip handle + project code + urgente badge */}
+        {/* Row 1: grip handle + project code + urgente badge + pin de lembrete */}
         <div className="mb-0.5 flex items-start gap-1.5">
           <GripVertical size={13} className="mt-[2px] shrink-0 text-zinc-300 dark:text-zinc-600" />
           <span className="flex-1 min-w-0 font-mono text-[12.5px] font-bold leading-tight text-zinc-900 dark:text-foreground">
             {project.codigo_projeto}
           </span>
+          {onCreateReminder && (
+            <button
+              type="button"
+              aria-label={`Criar lembrete para ${project.codigo_projeto}`}
+              title="Criar lembrete para esta obra"
+              // stopPropagation no pointerdown impede o dnd-kit de iniciar o arraste.
+              onPointerDown={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onCreateReminder(project);
+              }}
+              className="shrink-0 rounded-md p-0.5 text-zinc-300 transition hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-600 dark:hover:bg-white/8 dark:hover:text-zinc-300"
+            >
+              <BellPlus size={13} />
+            </button>
+          )}
           {project.urgente && <UrgenteBadge urgente urgentDeadline={project.urgentDeadline} />}
         </div>
 
@@ -170,6 +205,9 @@ function CardContent({ project }: { project: Project }) {
             </span>
           )}
           <PrazoBadge project={project} />
+          {topReminder && (
+            <ReminderPill reminder={topReminder} extraCount={activeReminders.length - 1} />
+          )}
           {project.reviewCount > 0 && (
             <span
               title={`Passou ${project.reviewCount}x por Revisao de Estudo`}
@@ -219,11 +257,13 @@ function KanbanCard({
   onOpen,
   recentlyMoved,
   canDrag,
+  onCreateReminder,
 }: {
   project: Project;
   onOpen: (project: Project) => void;
   recentlyMoved: boolean;
   canDrag: boolean;
+  onCreateReminder?: (project: Project) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: project.id,
@@ -258,7 +298,7 @@ function KanbanCard({
       ].join(" ")}
       style={isDragging ? { minHeight: CARD_HEIGHT } : undefined}
     >
-      <CardContent project={project} />
+      <CardContent project={project} onCreateReminder={onCreateReminder} />
       {recentlyMoved && <SuccessOverlay />}
     </article>
   );
@@ -500,6 +540,7 @@ function KanbanColumn({
   sortMode,
   onSortModeChange,
   showSortControl,
+  onCreateReminder,
 }: {
   status: ProjectStatus;
   projects: Project[];
@@ -512,6 +553,7 @@ function KanbanColumn({
   onSortModeChange: (mode: KanbanSortMode) => void;
   /** Controla se o botão de ordenação aparece nesta coluna. */
   showSortControl: boolean;
+  onCreateReminder?: (project: Project) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: status });
   const [scrollTop, setScrollTop] = useState(0);
@@ -593,6 +635,7 @@ function KanbanColumn({
               onOpen={onOpen}
               recentlyMoved={recentlyMovedProjectId === project.id}
               canDrag={canDrag}
+              onCreateReminder={onCreateReminder}
             />
           ))}
         </div>
@@ -604,7 +647,7 @@ function KanbanColumn({
 
 // ─── Board ────────────────────────────────────────────────────────────────────
 
-export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodigoDuplicado, canDrag = true }: ProjectsKanbanProps) {
+export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodigoDuplicado, canDrag = true, onCreateReminder }: ProjectsKanbanProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overStatus, setOverStatus] = useState<ProjectStatus | null>(null);
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
@@ -820,6 +863,7 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
             sortMode={getSortMode(column.status)}
             onSortModeChange={(mode) => handleSortModeChange(column.status, mode)}
             showSortControl={SORTABLE_COLUMNS.includes(column.status)}
+            onCreateReminder={onCreateReminder}
           />
         ))}
       </div>

@@ -23,9 +23,15 @@ import { useMasterDataStore } from "@/features/master-data/state/master-data-sto
 import { hydrateMasterDataFromApi } from "@/features/master-data/lib/master-data-hydrate";
 import { getCurrentStatusDeadline } from "@/features/projects/domain/project-rules";
 import { countAlerts } from "@/features/projects/domain/project-alerts";
+import { canManageReminders, dueReminders } from "@/features/projects/domain/project-reminders";
+import { ReminderAlertDialog } from "./reminder-alert-dialog";
+import { ReminderFormDialog } from "./reminder-form-dialog";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
 import { sendProjectNotification } from "@/features/projects/services/project-notification-service";
 import { useAuth } from "@/features/auth/hooks/use-auth";
+
+// Chave de sessão do modal de lembretes (1 exibição por sessão do navegador).
+const REMINDER_ALERT_SESSION_KEY = "tsteck:reminders:alerted";
 
 export function ProjectsPageShell() {
   const {
@@ -46,6 +52,10 @@ export function ProjectsPageShell() {
     getProjectObservations,
     isCodigoProjetoDuplicado,
     addObservation,
+    reminders,
+    createReminder,
+    postponeReminder,
+    resolveReminder,
   } = useProjectsStore();
 
   const { vendedores } = useMasterDataStore();
@@ -69,6 +79,9 @@ export function ProjectsPageShell() {
   // têm kpis.export=false → botão oculto e backend retorna 403 se forçarem direto.
   const canExport = role === "ADMIN" || Boolean(perms?.kpis.export);
   const canImport = role === "ADMIN";
+  // Lembretes: gerenciar = equipe de projetos (ADMIN/PROJECTS ou quem tem
+  // projects.edit); comerciais nunca. Mesma regra validada no backend.
+  const canManageRem = canManageReminders({ role, permissions: perms });
   const visibleViews = useMemo<ProjectsView[]>(() => {
     const views: ProjectsView[] = ["table", "kanban"];
     if (canViewKpis) views.push("kpis");
@@ -113,6 +126,9 @@ export function ProjectsPageShell() {
   const [newProjectDropOpen, setNewProjectDropOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false);
+  // Lembretes: modal de criação aberto pelo pin do card + alerta estilo Outlook.
+  const [reminderFormProject, setReminderFormProject] = useState<Project | null>(null);
+  const [reminderAlertOpen, setReminderAlertOpen] = useState(false);
   const router = useRouter();
 
   const baseProjects = filteredProjects();
@@ -158,6 +174,9 @@ export function ProjectsPageShell() {
   // regra da aba Alertas), já respeitando os filtros globais aplicados em `projects`.
   const alertCount = useMemo(() => countAlerts(projects), [projects]);
 
+  // Lembretes vencidos/do dia (conteúdo do modal de alerta estilo Outlook).
+  const dueReminderList = useMemo(() => dueReminders(reminders), [reminders]);
+
   const tabCounts = useMemo(
     () => ({ table: projects.length, kanban: projects.length, kpis: allProjects.length, alerts: alertCount }),
     [projects.length, allProjects.length, alertCount],
@@ -175,15 +194,35 @@ export function ProjectsPageShell() {
       setToast(message);
       window.setTimeout(() => setToast(""), 4000);
     });
-    // Hidrata projetos e cadastros mestres a partir do MySQL (fonte da verdade).
+    // Hidrata projetos, cadastros mestres e lembretes a partir do MySQL.
     void useProjectsStore.getState().hydrate();
     void hydrateMasterDataFromApi();
+    void useProjectsStore.getState().loadReminders();
     const timer = window.setTimeout(() => setTableState("ready"), 420);
     return () => {
       window.clearTimeout(timer);
       setProjectsErrorSink(null);
     };
   }, []);
+
+  // Modal de alerta de lembretes (estilo Outlook): ao entrar no sistema, se há
+  // lembretes vencidos/do dia para a equipe de Projetos, abre NO MÁXIMO 1x por
+  // sessão (sessionStorage). Badges e tela de Alertas continuam mostrando os
+  // lembretes até serem resolvidos/adiado. setState só no .then (assíncrono).
+  useEffect(() => {
+    if (!canManageRem) return;
+    if (window.sessionStorage.getItem(REMINDER_ALERT_SESSION_KEY)) return;
+    void useProjectsStore
+      .getState()
+      .loadReminders()
+      .then(() => {
+        if (window.sessionStorage.getItem(REMINDER_ALERT_SESSION_KEY)) return;
+        const due = dueReminders(useProjectsStore.getState().reminders);
+        if (due.length === 0) return;
+        window.sessionStorage.setItem(REMINDER_ALERT_SESSION_KEY, "1");
+        setReminderAlertOpen(true);
+      });
+  }, [canManageRem]);
 
   function touchLastUpdated() {
     setLastUpdatedAt(new Date().toLocaleString());
@@ -511,6 +550,7 @@ export function ProjectsPageShell() {
             notify={notify}
             isCodigoDuplicado={isCodigoProjetoDuplicado}
             canDrag={canMove}
+            onCreateReminder={canManageRem ? (project) => setReminderFormProject(project) : undefined}
             onMoveStatus={(projectId, status, observation, finalCode) => {
               const current = projects.find((item) => item.id === projectId);
               const oldStatus = current?.status_atual;
@@ -565,6 +605,7 @@ export function ProjectsPageShell() {
               loading={tableState === "loading"}
               error={tableState === "error"}
               onRetry={retryTableLoad}
+              canManageReminders={canManageRem}
             />
           )}
         </section>
@@ -621,8 +662,41 @@ export function ProjectsPageShell() {
             isCodigoDuplicado={isCodigoProjetoDuplicado}
             notify={notify}
             canEdit={canMutate}
+            canManageReminders={canManageRem}
           />
         )}
+
+        {/* Modal de criação de lembrete aberto pelo pin do card no Kanban. */}
+        {reminderFormProject && (
+          <ReminderFormDialog
+            open={true}
+            project={reminderFormProject}
+            onCancel={() => setReminderFormProject(null)}
+            onSave={async (value) => {
+              const result = await createReminder(reminderFormProject.id, value);
+              if (result.ok) {
+                setReminderFormProject(null);
+                notify("Lembrete criado.");
+              }
+              return result;
+            }}
+          />
+        )}
+
+        {/* Alerta de lembretes estilo Outlook (1x por sessão). */}
+        <ReminderAlertDialog
+          open={reminderAlertOpen}
+          reminders={dueReminderList}
+          projects={allProjects}
+          canManage={canManageRem}
+          onClose={() => setReminderAlertOpen(false)}
+          onOpenProject={(project) => {
+            setReminderAlertOpen(false);
+            openDetails(project);
+          }}
+          onPostpone={(id, date) => postponeReminder(id, date)}
+          onResolve={(id) => resolveReminder(id)}
+        />
 
         {statusChangeProject && (
           <ProjectStatusChangeDialog
