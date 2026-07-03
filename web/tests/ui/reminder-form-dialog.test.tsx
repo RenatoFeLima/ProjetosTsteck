@@ -63,7 +63,7 @@ describe("ReminderFormDialog — criar lembrete para esta obra", () => {
       "Confirmar com o cliente se precisará de item especial.",
     );
     await user.selectOptions(screen.getByLabelText(/Prioridade/i), "ALTA");
-    const data = screen.getByLabelText(/Data do lembrete/i);
+    const data = screen.getByLabelText(/Primeiro alerta/i);
     await user.clear(data);
     // fireEvent-style: input date aceita value direto via type
     await user.type(data, "2026-07-15");
@@ -91,5 +91,21 @@ describe("ReminderFormDialog — criar lembrete para esta obra", () => {
     await user.click(screen.getByRole("button", { name: /Salvar lembrete/i }));
 
     expect(await screen.findByText(/Somente a equipe de Projetos/i)).toBeInTheDocument();
+  });
+
+  it("mostra os rótulos ajustados (Primeiro alerta, Repetir a cada X dias) e o texto de apoio", () => {
+    setup();
+    expect(screen.getByLabelText(/Primeiro alerta/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Repetir a cada X dias/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/será alertada no primeiro alerta e novamente a cada X dias/i),
+    ).toBeInTheDocument();
+  });
+
+  it("limita a descrição a 500 caracteres (contador + maxLength no textarea)", () => {
+    setup();
+    const textarea = screen.getByLabelText(/Descrição do lembrete/i) as HTMLTextAreaElement;
+    expect(textarea.maxLength).toBe(500);
+    expect(screen.getByText(/^0\/500$/)).toBeInTheDocument();
   });
 });

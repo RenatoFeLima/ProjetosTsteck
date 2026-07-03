@@ -211,12 +211,19 @@ export type ReminderValidation =
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}/;
 
+/** Limite de caracteres da descrição do lembrete (validado na UI e no backend). */
+export const REMINDER_DESCRIPTION_MAX = 500;
+
 /** Valida os campos do lembrete (criação/edição). Pura — usada na UI e no backend. */
 export function validateReminderInput(input: ReminderInput): ReminderValidation {
   const errors: Record<string, string> = {};
 
   const descricao = typeof input.descricao === "string" ? input.descricao.trim() : "";
-  if (!descricao) errors.descricao = "Descrição do lembrete é obrigatória.";
+  if (!descricao) {
+    errors.descricao = "Descrição do lembrete é obrigatória.";
+  } else if (descricao.length > REMINDER_DESCRIPTION_MAX) {
+    errors.descricao = `A descrição deve ter no máximo ${REMINDER_DESCRIPTION_MAX} caracteres.`;
+  }
 
   const prioridade = input.prioridade;
   if (prioridade !== "NORMAL" && prioridade !== "ALTA") {

@@ -187,6 +187,14 @@ describe("Lembretes — criação por equipe de projetos (ADMIN / PROJECTS / CUS
     expect(prismaMock.projectReminder.create).not.toHaveBeenCalled();
   });
 
+  it("validação: descrição acima de 500 caracteres retorna 400 sem gravar (backend)", async () => {
+    prismaMock.project.findUnique.mockResolvedValue({ id: "p1", code: "CRE-UBA-2060" });
+    await expectHttp(400, () =>
+      createReminder(makeUser("ADMIN"), "p1", { ...VALID_INPUT, descricao: "a".repeat(501) }),
+    );
+    expect(prismaMock.projectReminder.create).not.toHaveBeenCalled();
+  });
+
   it("projeto inexistente retorna 404", async () => {
     prismaMock.project.findUnique.mockResolvedValue(null);
     await expectHttp(404, () => createReminder(makeUser("ADMIN"), "nope", VALID_INPUT));

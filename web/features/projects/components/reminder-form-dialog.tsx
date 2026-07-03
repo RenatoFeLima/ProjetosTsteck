@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle, BellPlus, Loader2 } from "lucide-react";
 import {
   validateReminderInput,
+  REMINDER_DESCRIPTION_MAX,
   type ProjectReminder,
   type ReminderPriority,
 } from "@/features/projects/domain/project-reminders";
@@ -129,7 +130,10 @@ function ReminderFormDialogBody({ project, reminder, onCancel, onSave }: Omit<Re
               {isEdit ? "Editar lembrete" : "Criar lembrete para esta obra"}
             </h2>
             {project && (
-              <p className="mt-0.5 truncate text-sm text-zinc-600 dark:text-zinc-400">
+              <p
+                className="mt-0.5 truncate text-sm text-zinc-600 dark:text-zinc-400"
+                title={`${project.codigo_projeto} · ${project.construtora} — ${project.obra}`}
+              >
                 {project.codigo_projeto} · {project.construtora} — {project.obra}
               </p>
             )}
@@ -146,11 +150,17 @@ function ReminderFormDialogBody({ project, reminder, onCancel, onSave }: Omit<Re
               id={FIELD_IDS.descricao}
               rows={3}
               value={descricao}
+              maxLength={REMINDER_DESCRIPTION_MAX}
               onChange={(e) => setDescricao(e.target.value)}
               placeholder="Ex: validar com o vendedor a quantidade de itens locados nessa obra."
               className={inputCls(Boolean(errors.descricao)) + " resize-none"}
             />
-            {fieldError("descricao")}
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">{fieldError("descricao")}</div>
+              <span className="shrink-0 text-[10px] tabular-nums text-zinc-400 dark:text-zinc-500">
+                {descricao.length}/{REMINDER_DESCRIPTION_MAX}
+              </span>
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
@@ -172,7 +182,7 @@ function ReminderFormDialogBody({ project, reminder, onCancel, onSave }: Omit<Re
 
             <div className="flex flex-col gap-1.5">
               <label htmlFor={FIELD_IDS.data} className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                {isEdit ? "Próxima data" : "Data do lembrete"} <span className="text-[#9e0b0f]">*</span>
+                {isEdit ? "Próxima data" : "Primeiro alerta"} <span className="text-[#9e0b0f]">*</span>
               </label>
               <input
                 id={FIELD_IDS.data}
@@ -186,7 +196,7 @@ function ReminderFormDialogBody({ project, reminder, onCancel, onSave }: Omit<Re
 
             <div className="flex flex-col gap-1.5">
               <label htmlFor={FIELD_IDS.recorrencia} className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                Repetir a cada (dias) <span className="text-[#9e0b0f]">*</span>
+                Repetir a cada X dias <span className="text-[#9e0b0f]">*</span>
               </label>
               <input
                 id={FIELD_IDS.recorrencia}
@@ -202,7 +212,8 @@ function ReminderFormDialogBody({ project, reminder, onCancel, onSave }: Omit<Re
           </div>
 
           <p className="text-xs text-zinc-500 dark:text-muted">
-            A equipe de Projetos será alertada na data escolhida e a cada X dias até o lembrete ser resolvido.
+            A equipe de Projetos será alertada no primeiro alerta e novamente a cada X dias, até que o lembrete
+            seja resolvido.
           </p>
 
           {serverError && (

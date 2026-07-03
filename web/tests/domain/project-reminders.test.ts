@@ -11,6 +11,7 @@ import {
   reminderDaysOverdue,
   reminderDaysUntil,
   validateReminderInput,
+  REMINDER_DESCRIPTION_MAX,
   type ProjectReminder,
 } from "@/features/projects/domain/project-reminders";
 import type { UserRole } from "@/features/auth/lib/auth-types";
@@ -217,6 +218,14 @@ describe("validateReminderInput — validações do modal/backend", () => {
     const result = validateReminderInput({ ...valid, descricao: "   " });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.errors.descricao).toBeTruthy();
+  });
+
+  it("descrição no limite (500) passa; acima de 500 é rejeitada", () => {
+    expect(REMINDER_DESCRIPTION_MAX).toBe(500);
+    expect(validateReminderInput({ ...valid, descricao: "a".repeat(REMINDER_DESCRIPTION_MAX) }).ok).toBe(true);
+    const tooLong = validateReminderInput({ ...valid, descricao: "a".repeat(REMINDER_DESCRIPTION_MAX + 1) });
+    expect(tooLong.ok).toBe(false);
+    if (!tooLong.ok) expect(tooLong.errors.descricao).toMatch(/máximo 500 caracteres/i);
   });
 
   it("data é obrigatória", () => {
