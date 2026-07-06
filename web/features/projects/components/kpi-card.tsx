@@ -13,6 +13,8 @@ type KpiCardProps = {
   variant?: KpiCardVariant;
   trend?: string;
   tooltip?: string;
+  /** Linha curta de base de cálculo, sempre visível (ex.: "Base: 21 finalizados no período"). */
+  base?: string;
   active?: boolean;
   onClick?: () => void;
   className?: string;
@@ -70,6 +72,7 @@ export function KpiCard({
   variant = "neutral",
   trend,
   tooltip,
+  base,
   active = false,
   onClick,
   className,
@@ -99,6 +102,9 @@ export function KpiCard({
           {value}
         </p>
         <div className="mt-auto pt-2">
+          {base && (
+            <p className="text-[10px] font-semibold leading-4 text-zinc-500 dark:text-zinc-400">{base}</p>
+          )}
           {description && <p className="text-[10px] leading-4 text-zinc-400 dark:text-zinc-500">{description}</p>}
           {trend && <p className="mt-0.5 text-[10px] font-semibold text-zinc-500 dark:text-muted">{trend}</p>}
         </div>

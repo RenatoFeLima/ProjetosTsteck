@@ -34,7 +34,7 @@ import {
 import { differenceInCalendarDays, format, isValid, parseISO, subDays } from "date-fns";
 import { SearchableCombobox } from "./searchable-combobox";
 import { PROJECT_STATUSES, type Project, type ProjectStatus, type StatusHistoryItem } from "@/features/projects/domain/project-types";
-import { computeNextAction, getCurrentStatusDeadline, todayIsoDate } from "@/features/projects/domain/project-rules";
+import { computeNextAction, getCurrentStatusDeadline, hasDevelopmentSla, todayIsoDate } from "@/features/projects/domain/project-rules";
 import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { KpiCard } from "./kpi-card";
 import { ProductionPeriodCards } from "./production-period-cards";
@@ -74,7 +74,11 @@ type CardMetric = {
   label: string;
   value: string;
   tooltip: string;
+  /** Texto curto sob o valor. Se ausente, usa o tooltip (comportamento original). */
+  description?: string;
   trend?: string;
+  /** Linha curta de base de cálculo, exibida no card (ex.: "Base: 21 finalizados no período"). */
+  base?: string;
   icon: ComponentType<{ size?: number; className?: string }>;
   group: KpiGroup;
 };
@@ -382,9 +386,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       return getCurrentStatusDeadline(item).isOverdue;
     });
 
-    const withoutDeadline = filteredProjects.filter((item) =>
-      item.status_atual !== "CADASTRO INICIAL" && !getCurrentStatusDeadline(item).hasDeadline,
-    );
+    // "Projetos com SLA sem prazo": SOMENTE projetos nos status de SLA de
+    // desenvolvimento (ELABORAR ANTE-PROJETO / REVISAO DE ESTUDO / REVISAO DE
+    // PROJETO FINAL) que estejam sem prazo definido. Status sem SLA (cadastro
+    // inicial, enviados, aprovados) NUNCA entram — não têm prazo por definição.
+    const slaStatusProjects = filteredProjects.filter((item) => hasDevelopmentSla(item.status_atual));
+    const withoutDeadline = slaStatusProjects.filter((item) => !getCurrentStatusDeadline(item).hasDeadline);
 
     const deliveryTimes: number[] = [];
     let estimatedByFallback = 0;
@@ -670,7 +677,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
     }
     if (total) insights.push(`Projetos urgentes representam ${((urgent.length / total) * 100).toFixed(1)}% da carteira atual.`);
     if (avgDelivery !== null) insights.push(`Tempo medio de entrega atual em ${avgDelivery.toFixed(1)} dias.`);
-    if (withoutDeadline.length) insights.push(`Existem ${withoutDeadline.length} projetos sem prazo definido fora do cadastro inicial.`);
+    if (withoutDeadline.length) insights.push(`Existem ${withoutDeadline.length} projetos em status de SLA sem prazo definido.`);
     if (bySeller[0]) insights.push(`O vendedor ${bySeller[0].nome} possui o maior volume de projetos (${bySeller[0].totalProjetos}).`);
     if (byConstrutora[0]) insights.push(`A construtora ${byConstrutora[0].nome} concentra o maior volume de projetos (${byConstrutora[0].totalProjetos}).`);
 
@@ -776,6 +783,8 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       urgent,
       overdue,
       withoutDeadline,
+      slaStatusProjects,
+      finalizedWithDeadline,
       avgDelivery,
       completionRate,
       slaRate,
@@ -872,7 +881,10 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
         key: "atrasados",
         label: "Atrasados por SLA",
         value: String(analytics.overdue.length),
-        tooltip: "Projetos com prazo vencido e nao finalizados.",
+        description: "Em desenvolvimento, com prazo vencido.",
+        tooltip:
+          "Atrasados por SLA = projetos atualmente em status de desenvolvimento (Elaborar Ante-Projeto, Revisao de Estudo, Revisao de Projeto Final) com prazo vencido. Status sem SLA nao entram.",
+        base: `Base: ${analytics.slaStatusProjects.length} em status com SLA`,
         trend: formatDelta(analytics.overdue.length, previousMetrics.overdue),
         icon: Clock3,
         group: "risco",
@@ -896,9 +908,12 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       },
       {
         key: "semPrazo",
-        label: "Projetos sem Prazo",
+        label: "Projetos com SLA sem prazo",
         value: String(analytics.withoutDeadline.length),
-        tooltip: "Projetos fora do cadastro inicial sem prazo definido.",
+        description: "Em status de SLA, sem prazo definido.",
+        tooltip:
+          "Projetos nos status de SLA de desenvolvimento (Elaborar Ante-Projeto, Revisao de Estudo, Revisao de Projeto Final) que estao sem prazo definido. Status sem SLA nao sao contados.",
+        base: `Base: ${analytics.slaStatusProjects.length} em status com SLA`,
         icon: CalendarRange,
         group: "risco",
       },
@@ -907,7 +922,10 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
         key: "sla",
         label: "SLA de Entregas Finalizadas",
         value: `${analytics.slaRate.toFixed(1)}%`,
-        tooltip: "Percentual de finalizados dentro do prazo (45 dias de Elaborar Ante-Projeto).",
+        description: "Entregas dentro do prazo no periodo.",
+        tooltip:
+          "SLA de Entregas Finalizadas = percentual de entregas finalizadas dentro do prazo (45 dias entre Elaborar Ante-Projeto e a aprovacao). Base diferente de 'Atrasados por SLA', que olha os projetos em desenvolvimento agora.",
+        base: `Base: ${analytics.finalizedWithDeadline.length} finalizados com historico`,
         icon: CheckCircle2,
         group: "eficiencia",
       },
@@ -1257,10 +1275,11 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
                   key={card.key}
                   title={card.label}
                   value={card.value}
-                  description={card.tooltip}
+                  description={card.description ?? card.tooltip}
                   icon={card.icon}
                   trend={card.trend}
                   tooltip={card.tooltip}
+                  base={card.base}
                   variant={kpiVariant(card.key)}
                 />
               ))}

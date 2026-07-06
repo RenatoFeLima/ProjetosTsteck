@@ -89,4 +89,41 @@ describe("projects kpi dashboard", () => {
     // Carteira/Risco/Eficiência usam o chip "Situação atual" (3 blocos).
     expect(screen.getAllByText(/Situação atual/i).length).toBe(3);
   });
+
+  // ─── Etapa 4: SLA / sem prazo / bases de cálculo ───────────────────────────
+
+  it("renomeia 'Projetos sem Prazo' para 'Projetos com SLA sem prazo'", () => {
+    render(<ProjectsKpiDashboard projects={[makeProject()]} statusHistory={[]} />);
+
+    expect(screen.getByText(/^Projetos com SLA sem prazo$/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^Projetos sem Prazo$/i)).not.toBeInTheDocument();
+  });
+
+  it("'SLA sem prazo' conta apenas status de desenvolvimento sem prazo (ignora status sem SLA)", () => {
+    // p1: ELABORAR ANTE-PROJETO sem status_entered_at => SLA status, sem prazo => CONTA
+    // p2: ANTE-PROJETO ENVIADO (sem SLA) => NÃO conta, mesmo sem prazo
+    // p3: PROJETO APROVADO (sem SLA) => NÃO conta
+    const projects = [
+      makeProject({ id: "p1", status_atual: "ELABORAR ANTE-PROJETO", status_entered_at: "" }),
+      makeProject({ id: "p2", status_atual: "ANTE-PROJETO ENVIADO" }),
+      makeProject({ id: "p3", status_atual: "PROJETO APROVADO" }),
+    ];
+    render(<ProjectsKpiDashboard projects={projects} statusHistory={[]} />);
+
+    // O card "Projetos com SLA sem prazo" deve valer 1 (apenas p1).
+    const label = screen.getByText(/^Projetos com SLA sem prazo$/i);
+    const card = label.closest("article");
+    expect(card).not.toBeNull();
+    expect(card).toHaveTextContent("1");
+    // Base visível: só p1 está em status com SLA.
+    expect(card).toHaveTextContent(/Base:\s*1\s*em status com SLA/i);
+  });
+
+  it("exibe linha de base nos cards sensíveis (Atrasados, SLA sem prazo, SLA de Entregas)", () => {
+    render(<ProjectsKpiDashboard projects={[makeProject()]} statusHistory={[]} />);
+
+    // Duas bases "em status com SLA" (Atrasados + SLA sem prazo) e uma de finalizados.
+    expect(screen.getAllByText(/Base:.*em status com SLA/i).length).toBe(2);
+    expect(screen.getByText(/Base:.*finalizados com historico/i)).toBeInTheDocument();
+  });
 });
