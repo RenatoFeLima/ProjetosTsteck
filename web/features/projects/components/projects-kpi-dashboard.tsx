@@ -36,6 +36,7 @@ import { PROJECT_STATUSES, type Project, type ProjectStatus, type StatusHistoryI
 import { computeNextAction, getCurrentStatusDeadline, todayIsoDate } from "@/features/projects/domain/project-rules";
 import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { KpiCard } from "./kpi-card";
+import { ProductionPeriodCards } from "./production-period-cards";
 import { useProjectsStore } from "@/features/projects/state/projects-store";
 
 type ProjectsKpiDashboardProps = {
@@ -1132,6 +1133,14 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             </select>
           </label>
         </div>
+      </section>
+
+      <section className="rounded-3xl border border-line bg-white dark:bg-panel p-5 shadow-[0_16px_30px_-24px_rgba(0,0,0,0.4)]">
+        <ProductionPeriodCards
+          statusHistory={statusHistory}
+          periodStart={formatDateForInput(filters.periodStart)}
+          periodEnd={formatDateForInput(filters.periodEnd)}
+        />
       </section>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
