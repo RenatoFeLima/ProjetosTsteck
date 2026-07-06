@@ -10,12 +10,15 @@ type ProductionPeriodCardsProps = {
   statusHistory: StatusHistoryItem[];
   periodStart?: string | null;
   periodEnd?: string | null;
+  /** Oculta o título interno quando o bloco pai já exibe um cabeçalho. */
+  hideHeading?: boolean;
 };
 
 export function ProductionPeriodCards({
   statusHistory,
   periodStart,
   periodEnd,
+  hideHeading = false,
 }: ProductionPeriodCardsProps) {
   const metrics = useMemo(
     () => calculateProductionMetrics(statusHistory, periodStart, periodEnd),
@@ -53,7 +56,9 @@ export function ProductionPeriodCards({
 
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Produção do Período</h3>
+      {!hideHeading && (
+        <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Produção do Período</h3>
+      )}
       <div className="grid gap-3 sm:grid-cols-3">
         {cards.map((card) => (
           <div key={card.key} className="group">

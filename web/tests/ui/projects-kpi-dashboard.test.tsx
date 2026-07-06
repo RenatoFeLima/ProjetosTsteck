@@ -1,8 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { ProjectsKpiDashboard } from "@/features/projects/components/projects-kpi-dashboard";
 import type { Project } from "@/features/projects/domain/project-types";
+
+afterEach(() => cleanup());
 
 function makeProject(overrides: Partial<Project> = {}): Project {
   return {
@@ -58,5 +60,33 @@ describe("projects kpi dashboard", () => {
 
     expect(screen.getByText(/Periodo analisado: Todos os periodos/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Dashboard de Projetos/i })).toBeInTheDocument();
+  });
+
+  it("agrupa os KPIs nos 4 blocos rotulados", () => {
+    render(<ProjectsKpiDashboard projects={[makeProject()]} statusHistory={[]} />);
+
+    // Cada bloco tem um heading próprio.
+    expect(screen.getByRole("heading", { name: /^Produção do Período$/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Carteira Atual$/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Risco Operacional$/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Eficiência \/ SLA$/i })).toBeInTheDocument();
+  });
+
+  it("renomeia 'Projetos Finalizados' para 'Aprovados atualmente' (evita conflito com finais enviados)", () => {
+    render(<ProjectsKpiDashboard projects={[makeProject()]} statusHistory={[]} />);
+
+    expect(screen.getByText(/^Aprovados atualmente$/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^Projetos Finalizados$/i)).not.toBeInTheDocument();
+    // Card de carteira que reflete o status atual Projeto Final Enviado.
+    expect(screen.getByText(/^Em Projeto Final Enviado$/i)).toBeInTheDocument();
+  });
+
+  it("marca o bloco de produção como do período e os demais como situação atual", () => {
+    render(<ProjectsKpiDashboard projects={[makeProject()]} statusHistory={[]} />);
+
+    // Sem período selecionado, o chip de produção mostra "Todos os periodos".
+    expect(screen.getByText(/Período: Todos os periodos/i)).toBeInTheDocument();
+    // Carteira/Risco/Eficiência usam o chip "Situação atual" (3 blocos).
+    expect(screen.getAllByText(/Situação atual/i).length).toBe(3);
   });
 });

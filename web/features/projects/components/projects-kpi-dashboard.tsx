@@ -12,6 +12,7 @@ import {
   Gauge,
   Layers,
   ListChecks,
+  Package,
   RefreshCcw,
   TrendingUp,
 } from "lucide-react";
@@ -64,6 +65,10 @@ type CriticalProjectRow = {
   acao: string;
 };
 
+// Blocos do dashboard: separam produção do período (por evento, respeita filtro)
+// de carteira atual (fotografia do estado agora) e dos indicadores de risco/SLA.
+type KpiGroup = "producao" | "carteira" | "risco" | "eficiencia";
+
 type CardMetric = {
   key: string;
   label: string;
@@ -71,7 +76,45 @@ type CardMetric = {
   tooltip: string;
   trend?: string;
   icon: ComponentType<{ size?: number; className?: string }>;
+  group: KpiGroup;
 };
+
+// Metadados de cada bloco (título + subtítulo explicativo + chip de contexto).
+// O chip de período é preenchido em runtime (usa o período filtrado).
+const KPI_GROUP_META: Record<KpiGroup, { title: string; subtitle: string; scope: "periodo" | "atual" }> = {
+  producao: {
+    title: "Produção do Período",
+    subtitle: "Contagens por evento no período filtrado.",
+    scope: "periodo",
+  },
+  carteira: {
+    title: "Carteira Atual",
+    subtitle: "Fotografia do estado atual da carteira (status de agora).",
+    scope: "atual",
+  },
+  risco: {
+    title: "Risco Operacional",
+    subtitle: "Projetos que exigem atenção agora.",
+    scope: "atual",
+  },
+  eficiencia: {
+    title: "Eficiência / SLA",
+    subtitle: "Percentuais de cumprimento de prazo e idade dos abertos.",
+    scope: "atual",
+  },
+};
+
+const KPI_GROUP_ORDER: KpiGroup[] = ["producao", "carteira", "risco", "eficiencia"];
+
+// Cor de acento do card por chave — realça atraso (danger), urgência (brand),
+// entregas/SLA (success) e métricas de tempo (info); o resto fica neutro.
+function kpiVariant(key: string): "neutral" | "info" | "danger" | "success" | "brand" {
+  if (key === "atrasados") return "danger";
+  if (key === "urgentes" || key === "semAtualizacao") return "brand";
+  if (key === "finalizados" || key === "sla") return "success";
+  if (key === "tempoMedioEntrega" || key === "idadeMedia") return "info";
+  return "neutral";
+}
 
 const STATUS_COLORS: Record<ProjectStatus, string> = {
   "CADASTRO INICIAL": "#9ca3af",
@@ -776,29 +819,63 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
     const avgDeliveryLabel = analytics.avgDelivery === null ? "N/D" : `${analytics.avgDelivery.toFixed(1)} dias`;
     const avgAgeOpenLabel = analytics.avgAgeOpen === null ? "N/D" : `${analytics.avgAgeOpen.toFixed(1)} dias`;
 
+    const finalSentNow =
+      analytics.statusCounts.find((item) => item.status === "PROJETO FINAL ENVIADO")?.total ?? 0;
+
     return [
+      // ─── Produção do Período (respeita período/filtro; complementa os 3 cards por evento da Etapa 2) ───
+      {
+        key: "tempoMedioEntrega",
+        label: "Tempo Medio de Entrega",
+        value: avgDeliveryLabel,
+        tooltip: "Media de dias entre Elaborar Ante-Projeto e Projeto Final Enviado (projetos com historico completo).",
+        icon: Gauge,
+        group: "producao",
+      },
+      // ─── Carteira Atual (fotografia do estado atual — status de agora) ───
       {
         key: "total",
         label: "Total de Projetos",
         value: String(analytics.total),
-        tooltip: "Quantidade total de projetos no periodo filtrado.",
+        tooltip: "Quantidade total de projetos no recorte filtrado.",
         trend: formatDelta(analytics.total, previousMetrics.total),
         icon: Layers,
+        group: "carteira",
       },
       {
         key: "andamento",
         label: "Projetos em Andamento",
         value: String(analytics.ongoing.length),
-        tooltip: "Projetos que ainda nao chegaram em Projeto Final Enviado.",
+        tooltip: "Projetos cujo status atual ainda nao e Projeto Aprovado.",
         icon: CircleDashed,
+        group: "carteira",
+      },
+      {
+        key: "finalEnviadoAtual",
+        label: "Em Projeto Final Enviado",
+        value: String(finalSentNow),
+        tooltip: "Projetos cujo status ATUAL e Projeto Final Enviado (aguardando aprovacao do cliente).",
+        icon: Package,
+        group: "carteira",
       },
       {
         key: "finalizados",
-        label: "Projetos Finalizados",
+        label: "Aprovados atualmente",
         value: String(analytics.finalized.length),
-        tooltip: "Projetos com status Projeto Final Enviado.",
+        tooltip: "Projetos cujo status ATUAL e Projeto Aprovado (fotografia da carteira, nao eventos do periodo).",
         trend: formatDelta(analytics.finalized.length, previousMetrics.finalized),
         icon: CheckCircle2,
+        group: "carteira",
+      },
+      // ─── Risco Operacional (o que exige atenção agora) ───
+      {
+        key: "atrasados",
+        label: "Atrasados por SLA",
+        value: String(analytics.overdue.length),
+        tooltip: "Projetos com prazo vencido e nao finalizados.",
+        trend: formatDelta(analytics.overdue.length, previousMetrics.overdue),
+        icon: Clock3,
+        group: "risco",
       },
       {
         key: "urgentes",
@@ -807,14 +884,15 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
         tooltip: "Projetos marcados com prioridade urgente.",
         trend: formatDelta(analytics.urgent.length, previousMetrics.urgent),
         icon: AlertTriangle,
+        group: "risco",
       },
       {
-        key: "atrasados",
-        label: "Projetos Atrasados",
-        value: String(analytics.overdue.length),
-        tooltip: "Projetos com prazo vencido e nao finalizados.",
-        trend: formatDelta(analytics.overdue.length, previousMetrics.overdue),
-        icon: Clock3,
+        key: "semAtualizacao",
+        label: "Sem Atualizacao",
+        value: String(analytics.stalledProjects.length),
+        tooltip: "Projetos parados ha 10 dias ou mais no status atual.",
+        icon: CircleDashed,
+        group: "risco",
       },
       {
         key: "semPrazo",
@@ -822,27 +900,24 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
         value: String(analytics.withoutDeadline.length),
         tooltip: "Projetos fora do cadastro inicial sem prazo definido.",
         icon: CalendarRange,
+        group: "risco",
       },
+      // ─── Eficiência / SLA (percentuais de cumprimento + idade dos abertos) ───
       {
-        key: "tempoMedioEntrega",
-        label: "Tempo Medio de Entrega",
-        value: avgDeliveryLabel,
-        tooltip: "Media de dias entre Elaborar Ante-Projeto e Projeto Final Enviado.",
-        icon: Gauge,
+        key: "sla",
+        label: "SLA de Entregas Finalizadas",
+        value: `${analytics.slaRate.toFixed(1)}%`,
+        tooltip: "Percentual de finalizados dentro do prazo (45 dias de Elaborar Ante-Projeto).",
+        icon: CheckCircle2,
+        group: "eficiencia",
       },
       {
         key: "taxaConclusao",
         label: "Taxa de Conclusao",
         value: `${analytics.completionRate.toFixed(1)}%`,
-        tooltip: "Percentual de projetos finalizados sobre o total do periodo.",
+        tooltip: "Percentual de projetos aprovados sobre o total do recorte filtrado.",
         icon: TrendingUp,
-      },
-      {
-        key: "sla",
-        label: "SLA no Prazo",
-        value: `${analytics.slaRate.toFixed(1)}%`,
-        tooltip: "Percentual de finalizados dentro do prazo (45 dias de Elaborar Ante-Projeto).",
-        icon: CheckCircle2,
+        group: "eficiencia",
       },
       {
         key: "slaRevisaoEstudo",
@@ -850,6 +925,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
         value: analytics.reviewStudySla.rate === null ? "N/D" : `${analytics.reviewStudySla.rate.toFixed(1)}%`,
         tooltip: "Percentual de revisoes de estudo dentro de 20 dias (abertas ha mais de 20 dias contam como fora).",
         icon: CheckCircle2,
+        group: "eficiencia",
       },
       {
         key: "slaRevisaoFinal",
@@ -857,6 +933,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
         value: analytics.finalReviewSla.rate === null ? "N/D" : `${analytics.finalReviewSla.rate.toFixed(1)}%`,
         tooltip: "Percentual de revisoes de projeto final dentro de 20 dias (abertas ha mais de 20 dias contam como fora).",
         icon: CheckCircle2,
+        group: "eficiencia",
       },
       {
         key: "idadeMedia",
@@ -864,6 +941,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
         value: avgAgeOpenLabel,
         tooltip: "Media de idade dos projetos em andamento.",
         icon: Clock3,
+        group: "eficiencia",
       },
     ];
   }, [analytics, previousMetrics]);
@@ -1135,40 +1213,61 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
         </div>
       </section>
 
-      <section className="rounded-3xl border border-line bg-white dark:bg-panel p-5 shadow-[0_16px_30px_-24px_rgba(0,0,0,0.4)]">
-        <ProductionPeriodCards
-          statusHistory={statusHistory}
-          periodStart={formatDateForInput(filters.periodStart)}
-          periodEnd={formatDateForInput(filters.periodEnd)}
-        />
-      </section>
+      {KPI_GROUP_ORDER.map((group) => {
+        const meta = KPI_GROUP_META[group];
+        const groupCards = cards.filter((card) => card.group === group);
+        return (
+          <section
+            key={group}
+            className="rounded-3xl border border-line bg-white dark:bg-panel p-5 shadow-[0_16px_30px_-24px_rgba(0,0,0,0.4)]"
+          >
+            <header className="mb-4 flex flex-wrap items-center gap-2">
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-foreground">{meta.title}</h3>
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-muted">{meta.subtitle}</p>
+              </div>
+              <span
+                className={[
+                  "ml-auto inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                  meta.scope === "periodo"
+                    ? "bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300"
+                    : "bg-zinc-100 text-zinc-600 dark:bg-white/8 dark:text-zinc-300",
+                ].join(" ")}
+              >
+                <CalendarRange size={12} />
+                {meta.scope === "periodo" ? `Período: ${periodLabel}` : "Situação atual"}
+              </span>
+            </header>
 
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
-        {cards.map((card) => {
-          return (
-            <KpiCard
-              key={card.key}
-              title={card.label}
-              value={card.value}
-              description={card.tooltip}
-              icon={card.icon}
-              trend={card.trend}
-              tooltip={card.tooltip}
-              variant={
-                card.key === "atrasados"
-                  ? "danger"
-                  : card.key === "urgentes"
-                    ? "brand"
-                    : card.key === "finalizados" || card.key === "sla"
-                      ? "success"
-                      : card.key === "tempoMedioEntrega" || card.key === "idadeMedia"
-                        ? "info"
-                        : "neutral"
-              }
-            />
-          );
-        })}
-      </section>
+            {/* Bloco de produção abre com os 3 cards por-evento da Etapa 2 (não alterados). */}
+            {group === "producao" && (
+              <div className="mb-4">
+                <ProductionPeriodCards
+                  statusHistory={statusHistory}
+                  periodStart={formatDateForInput(filters.periodStart)}
+                  periodEnd={formatDateForInput(filters.periodEnd)}
+                  hideHeading
+                />
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
+              {groupCards.map((card) => (
+                <KpiCard
+                  key={card.key}
+                  title={card.label}
+                  value={card.value}
+                  description={card.tooltip}
+                  icon={card.icon}
+                  trend={card.trend}
+                  tooltip={card.tooltip}
+                  variant={kpiVariant(card.key)}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
 
       {analytics.estimatedByFallback > 0 && (
         <p className="rounded-xl border border-amber-200 dark:border-amber-700/40 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-300">
