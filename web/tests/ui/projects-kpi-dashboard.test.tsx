@@ -126,4 +126,45 @@ describe("projects kpi dashboard", () => {
     expect(screen.getAllByText(/Base:.*em status com SLA/i).length).toBe(2);
     expect(screen.getByText(/Base:.*finalizados com historico/i)).toBeInTheDocument();
   });
+
+  // ─── Textos do bloco "Gargalos do Fluxo" + estados-zero das revisões ───────
+
+  it("usa os rótulos revisados no bloco Gargalos do Fluxo", () => {
+    render(<ProjectsKpiDashboard projects={[makeProject()]} statusHistory={[]} />);
+
+    expect(screen.getByText(/Status com maior permanencia media/i)).toBeInTheDocument();
+    expect(screen.getByText(/Maior concentracao atual/i)).toBeInTheDocument();
+    // Mantém a contagem pluralizada ("1 projeto") e o texto de apoio revisado.
+    expect(screen.getByText(/^1 projeto$/i)).toBeInTheDocument();
+    expect(screen.getByText(/Status com maior volume no momento\./i)).toBeInTheDocument();
+    expect(screen.getByText(/^Projetos sem movimentacao$/i)).toBeInTheDocument();
+    expect(screen.getByText(/Projetos ha 10\+ dias no mesmo status\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Projetos urgentes sem atualizacao ha 7\+ dias\./i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/priorizar a analise dos projetos no status com maior concentracao/i),
+    ).toBeInTheDocument();
+  });
+
+  it("pluraliza a contagem do card 'Maior concentração atual' (N projetos)", () => {
+    // Dois projetos no mesmo status => "2 projetos" (plural).
+    render(
+      <ProjectsKpiDashboard
+        projects={[
+          makeProject({ id: "c1", status_atual: "ANTE-PROJETO ENVIADO" }),
+          makeProject({ id: "c2", status_atual: "ANTE-PROJETO ENVIADO" }),
+        ]}
+        statusHistory={[]}
+      />,
+    );
+    expect(screen.getByText(/^2 projetos$/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^2 projeto$/i)).not.toBeInTheDocument();
+  });
+
+  it("mostra frases amigáveis quando não há revisões no período", () => {
+    // makeProject padrão não gera revisões → seções caem no estado-zero.
+    render(<ProjectsKpiDashboard projects={[makeProject()]} statusHistory={[]} />);
+
+    expect(screen.getByText(/Nao houve revisoes de estudo no periodo\./i)).toBeInTheDocument();
+    expect(screen.getByText(/Nao houve revisoes de projeto final no periodo\./i)).toBeInTheDocument();
+  });
 });

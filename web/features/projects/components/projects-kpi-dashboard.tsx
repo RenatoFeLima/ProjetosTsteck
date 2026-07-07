@@ -212,6 +212,11 @@ function formatDelta(current: number, previous: number, suffix = ""): string {
   return `${sign}${delta.toFixed(1)}${suffix} vs periodo anterior`;
 }
 
+/** Contagem de projetos com pluralização: "1 projeto" / "N projetos". */
+function formatProjectCount(count: number): string {
+  return count === 1 ? "1 projeto" : `${count} projetos`;
+}
+
 function csvEscape(value: string): string {
   const safe = value.replace(/\"/g, '""');
   return `"${safe}"`;
@@ -1452,28 +1457,29 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
           <h3 className="mb-2 text-sm font-bold text-zinc-900 dark:text-foreground">Gargalos do Fluxo</h3>
           <div className="grid gap-2 sm:grid-cols-2">
             <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
-              <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Maior gargalo</p>
+              <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Status com maior permanencia media</p>
               <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-foreground">{analytics.bottleneck?.status ?? "N/D"}</p>
               <p className="text-xs text-zinc-600 dark:text-zinc-400">Tempo medio: {analytics.bottleneck ? `${analytics.bottleneck.dias.toFixed(1)} dias` : "N/D"}</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
-              <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Status com maior acumulacao</p>
+              <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Maior concentracao atual</p>
               <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-foreground">{analytics.stacked?.status ?? "N/D"}</p>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400">Projetos: {analytics.stacked?.total ?? "N/D"}</p>
+              <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{analytics.stacked ? formatProjectCount(analytics.stacked.total) : "N/D"}</p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">Status com maior volume no momento.</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
-              <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Projetos parados</p>
+              <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Projetos sem movimentacao</p>
               <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-foreground">{analytics.stalledProjects.length}</p>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400">Parados ha 10+ dias no status atual.</p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">Projetos ha 10+ dias no mesmo status.</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
               <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Urgentes sem avancar</p>
               <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-foreground">{analytics.urgentStalled.length}</p>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400">Atualizacao ausente ha 7+ dias.</p>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400">Projetos urgentes sem atualizacao ha 7+ dias.</p>
             </div>
           </div>
           <p className="mt-2 rounded-lg border border-brand/20 bg-brand/5 px-2 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            Acao recomendada: revisar pendencias no status mais acumulado e priorizar projetos urgentes sem atualizacao.
+            Acao recomendada: priorizar a analise dos projetos no status com maior concentracao e tratar imediatamente os urgentes sem avanco.
           </p>
         </article>
 
@@ -1499,6 +1505,11 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             {analytics.reviews.total} revisoes totais
           </span>
         </header>
+        {analytics.reviews.total === 0 ? (
+          <p className="rounded-lg border border-dashed border-zinc-300 dark:border-white/15 bg-zinc-50 dark:bg-panel-soft px-3 py-4 text-sm text-zinc-500 dark:text-muted">
+            Nao houve revisoes de estudo no periodo.
+          </p>
+        ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
             <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Total de ciclos</p>
@@ -1527,7 +1538,9 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             <p className={`mt-1 text-2xl font-bold ${analytics.reviews.overdueReviews > 0 ? "text-red-700 dark:text-red-400" : "text-zinc-900 dark:text-foreground"}`}>
               {analytics.reviews.overdueReviews}
             </p>
-            <p className="text-xs text-zinc-500 dark:text-muted">Em revisao ha mais de 20 dias</p>
+            <p className="text-xs text-zinc-500 dark:text-muted">
+              {analytics.reviews.overdueReviews > 0 ? "Em revisao ha mais de 20 dias" : "Nenhuma revisao vencida."}
+            </p>
           </div>
           {analytics.reviews.byConstrutora.length > 0 && (
             <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3 sm:col-span-2 lg:col-span-3 xl:col-span-2">
@@ -1543,6 +1556,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             </div>
           )}
         </div>
+        )}
       </section>
 
       {/* ─── Revisao de Projeto Final KPIs ─────────────────────────────────── */}
@@ -1553,6 +1567,11 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             {analytics.finalReviews.total} revisoes totais
           </span>
         </header>
+        {analytics.finalReviews.total === 0 ? (
+          <p className="rounded-lg border border-dashed border-zinc-300 dark:border-white/15 bg-zinc-50 dark:bg-panel-soft px-3 py-4 text-sm text-zinc-500 dark:text-muted">
+            Nao houve revisoes de projeto final no periodo.
+          </p>
+        ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3">
             <p className="text-xs font-semibold text-zinc-500 dark:text-muted uppercase">Total de revisoes finais</p>
@@ -1581,7 +1600,9 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             <p className={`mt-1 text-2xl font-bold ${analytics.finalReviews.overdueFinalReviews > 0 ? "text-red-700 dark:text-red-400" : "text-zinc-900 dark:text-foreground"}`}>
               {analytics.finalReviews.overdueFinalReviews}
             </p>
-            <p className="text-xs text-zinc-500 dark:text-muted">Em revisao final ha mais de 20 dias</p>
+            <p className="text-xs text-zinc-500 dark:text-muted">
+              {analytics.finalReviews.overdueFinalReviews > 0 ? "Em revisao final ha mais de 20 dias" : "Nenhuma revisao vencida."}
+            </p>
           </div>
           {analytics.finalReviews.byConstrutora.length > 0 && (
             <div className="rounded-xl border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-3 sm:col-span-2">
@@ -1610,6 +1631,7 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
             </div>
           )}
         </div>
+        )}
       </section>
 
       <section className="rounded-2xl border border-line bg-white dark:bg-panel p-3">
