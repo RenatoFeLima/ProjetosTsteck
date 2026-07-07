@@ -70,6 +70,31 @@ export function hasDevelopmentSla(status: ProjectStatus): boolean {
   return DEVELOPMENT_SLA_STATUSES.includes(status);
 }
 
+// ─── Status OPERACIONAIS / ACTIONÁVEIS (base dos KPIs de fluxo e risco) ────────
+//
+// PROJETO APROVADO é o status TERMINAL da carteira: não é etapa operacional em
+// andamento nem risco. Ele só aparece em "Projetos aprovados" (Produção do
+// Período, por entrada no status) e "Aprovados atualmente" (Carteira Atual, por
+// status atual). NUNCA deve entrar em: gargalos/permanência média, maior
+// concentração, projetos sem movimentação, projetos que exigem atenção, risco,
+// sem prazo, atrasados por SLA, ou ações recomendadas operacionais.
+//
+// Esta é a única lista de status "em andamento operacional" — use isOperationalStatus.
+export const OPERATIONAL_ACTIVE_STATUSES: ProjectStatus[] = [
+  "CADASTRO INICIAL",
+  "ELABORAR ANTE-PROJETO",
+  "ANTE-PROJETO ENVIADO",
+  "ANTE-PROJETO APROVADO",
+  "PROJETO FINAL ENVIADO",
+  "REVISAO DE ESTUDO",
+  "REVISAO DE PROJETO FINAL",
+];
+
+/** True para status operacionais/actionáveis (exclui o terminal PROJETO APROVADO). */
+export function isOperationalStatus(status: ProjectStatus): boolean {
+  return OPERATIONAL_ACTIVE_STATUSES.includes(status);
+}
+
 // Prazo externo por status (compromisso com o cliente/fluxo).
 // Derivado de DEVELOPMENT_SLA_STATUSES: exatamente os mesmos status têm prazo.
 const STATUS_DEADLINE_DAYS: Partial<Record<ProjectStatus, number>> = {

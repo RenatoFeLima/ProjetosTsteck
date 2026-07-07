@@ -34,7 +34,7 @@ import {
 import { differenceInCalendarDays, format, isValid, parseISO, subDays } from "date-fns";
 import { SearchableCombobox } from "./searchable-combobox";
 import { PROJECT_STATUSES, type Project, type ProjectStatus, type StatusHistoryItem } from "@/features/projects/domain/project-types";
-import { computeNextAction, getCurrentStatusDeadline, hasDevelopmentSla, todayIsoDate } from "@/features/projects/domain/project-rules";
+import { computeNextAction, getCurrentStatusDeadline, hasDevelopmentSla, isOperationalStatus, todayIsoDate } from "@/features/projects/domain/project-rules";
 import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { KpiCard } from "./kpi-card";
 import { ProductionPeriodCards } from "./production-period-cards";
@@ -579,13 +579,22 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
       total: filteredProjects.filter((item) => item.status_atual === status).length,
     }));
 
+    // Permanência média e concentração são leituras OPERACIONAIS: excluem o
+    // status terminal PROJETO APROVADO (carteira, não etapa em andamento).
     const mostBottleneck = [...avgByStatus]
-      .filter((item) => item.hasData)
+      .filter((item) => item.hasData && isOperationalStatus(item.status))
       .sort((a, b) => b.dias - a.dias)[0];
 
-    const mostStacked = [...statusCounts].sort((a, b) => b.total - a.total)[0];
+    const mostStacked = [...statusCounts]
+      .filter((item) => isOperationalStatus(item.status))
+      .sort((a, b) => b.total - a.total)[0];
 
-    const stalledProjects = filteredProjects.filter((project) => daysInCurrentStatus(project, historyByProject, today) >= 10);
+    // "Sem movimentação" é risco operacional: só status actionáveis (exclui aprovado).
+    const stalledProjects = filteredProjects.filter(
+      (project) =>
+        isOperationalStatus(project.status_atual) &&
+        daysInCurrentStatus(project, historyByProject, today) >= 10,
+    );
 
     const urgentStalled = urgent.filter((project) => {
       const updated = parseDate(project.updated_at) ?? today;
@@ -594,6 +603,10 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
 
     const criticalRows: CriticalProjectRow[] = [];
     for (const project of filteredProjects) {
+      // PROJETO APROVADO é terminal: nunca "exige atenção" operacional (sem prazo,
+      // parado, revisão, vencimento). Fica de fora da tabela de atenção.
+      if (!isOperationalStatus(project.status_atual)) continue;
+
       const dl = getCurrentStatusDeadline(project);
       const diasStatus = daysInCurrentStatus(project, historyByProject, today);
 

@@ -3,6 +3,8 @@ import {
   applyAlignmentAutomation,
   computeOperationalKpis,
   hasDevelopmentSla,
+  isOperationalStatus,
+  OPERATIONAL_ACTIVE_STATUSES,
   getCurrentStatusDeadline,
   computePrazoBadge,
   computePrazoEntrega,
@@ -550,5 +552,27 @@ describe("SLA/atraso restrito aos status de desenvolvimento", () => {
     ];
     const atrasados = projects.filter((p) => getCurrentStatusDeadline(p, today).isOverdue).length;
     expect(atrasados).toBe(3);
+  });
+});
+
+describe("isOperationalStatus — PROJETO APROVADO é terminal (fora de KPIs operacionais)", () => {
+  it("exclui PROJETO APROVADO dos status operacionais", () => {
+    expect(isOperationalStatus("PROJETO APROVADO")).toBe(false);
+    expect(OPERATIONAL_ACTIVE_STATUSES).not.toContain("PROJETO APROVADO");
+  });
+
+  it("inclui os demais status (cadastro, dev, revisões, enviados)", () => {
+    const operacionais = [
+      "CADASTRO INICIAL",
+      "ELABORAR ANTE-PROJETO",
+      "ANTE-PROJETO ENVIADO",
+      "ANTE-PROJETO APROVADO",
+      "PROJETO FINAL ENVIADO",
+      "REVISAO DE ESTUDO",
+      "REVISAO DE PROJETO FINAL",
+    ] as const;
+    for (const status of operacionais) {
+      expect(isOperationalStatus(status)).toBe(true);
+    }
   });
 });

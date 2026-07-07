@@ -167,4 +167,51 @@ describe("projects kpi dashboard", () => {
     expect(screen.getByText(/Nao houve revisoes de estudo no periodo\./i)).toBeInTheDocument();
     expect(screen.getByText(/Nao houve revisoes de projeto final no periodo\./i)).toBeInTheDocument();
   });
+
+  // ─── PROJETO APROVADO (terminal) não pode vazar para leituras operacionais ──
+
+  it("nao trata PROJETO APROVADO como maior concentracao operacional", () => {
+    // Maioria APROVADO, minoria em desenvolvimento. A concentração operacional
+    // deve apontar o status de desenvolvimento, nunca PROJETO APROVADO.
+    const projects = [
+      makeProject({ id: "a1", status_atual: "PROJETO APROVADO" }),
+      makeProject({ id: "a2", status_atual: "PROJETO APROVADO" }),
+      makeProject({ id: "a3", status_atual: "PROJETO APROVADO" }),
+      makeProject({ id: "d1", status_atual: "ELABORAR ANTE-PROJETO" }),
+    ];
+    render(<ProjectsKpiDashboard projects={projects} statusHistory={[]} />);
+
+    const label = screen.getByText(/Maior concentracao atual/i);
+    const card = label.closest("div");
+    expect(card).not.toBeNull();
+    // O card destaca o status operacional (1 projeto), não os 3 aprovados.
+    expect(card).toHaveTextContent(/ELABORAR ANTE-PROJETO/i);
+    expect(card).not.toHaveTextContent(/PROJETO APROVADO/i);
+    expect(card).toHaveTextContent(/^Maior concentracao atualELABORAR ANTE-PROJETO1 projeto/i);
+  });
+
+  it("nao inclui PROJETO APROVADO em 'Projetos que exigem atencao'", () => {
+    // Projeto aprovado, antigo e sem prazo — antes cairia como "Sem prazo" e
+    // "Parado ha X dias". Agora nao deve aparecer na tabela de atencao.
+    const projects = [makeProject({ id: "apv", codigo_projeto: "APV-001", status_atual: "PROJETO APROVADO" })];
+    render(<ProjectsKpiDashboard projects={projects} statusHistory={[]} />);
+
+    // A tabela mostra "0 itens" e nao lista o codigo do projeto aprovado.
+    expect(screen.getByText(/Projetos que exigem atencao/i)).toBeInTheDocument();
+    expect(screen.queryByText(/APV-001/)).not.toBeInTheDocument();
+  });
+
+  it("nao conta PROJETO APROVADO como projeto sem movimentacao", () => {
+    // Um aprovado antigo + um em desenvolvimento antigo. "Sem movimentacao"
+    // (parados 10+ dias) deve contar apenas o operacional => 1.
+    const projects = [
+      makeProject({ id: "apv", status_atual: "PROJETO APROVADO" }),
+      makeProject({ id: "dev", status_atual: "ELABORAR ANTE-PROJETO" }),
+    ];
+    render(<ProjectsKpiDashboard projects={projects} statusHistory={[]} />);
+
+    const label = screen.getByText(/^Projetos sem movimentacao$/i);
+    const card = label.closest("div");
+    expect(card).toHaveTextContent("1");
+  });
 });
