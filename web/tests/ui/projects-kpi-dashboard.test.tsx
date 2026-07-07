@@ -201,6 +201,54 @@ describe("projects kpi dashboard", () => {
     expect(screen.queryByText(/APV-001/)).not.toBeInTheDocument();
   });
 
+  it("calcula Tempo Medio de Entrega em dias uteis, ignorando fim de semana", () => {
+    // Entrada em ELABORAR ANTE-PROJETO na sexta 2026-06-05 e em PROJETO FINAL
+    // ENVIADO na segunda 2026-06-08 => 3 dias corridos, mas 1 dia util.
+    const statusHistory = [
+      {
+        id: "e1",
+        projeto_id: "p1",
+        status_de: "CADASTRO INICIAL" as const,
+        status_para: "ELABORAR ANTE-PROJETO" as const,
+        alterado_em: "2026-06-05T00:00:00",
+        origem: "sistema" as const,
+      },
+      {
+        id: "e2",
+        projeto_id: "p1",
+        status_de: "ANTE-PROJETO APROVADO" as const,
+        status_para: "PROJETO FINAL ENVIADO" as const,
+        alterado_em: "2026-06-08T00:00:00",
+        origem: "sistema" as const,
+      },
+    ];
+    render(
+      <ProjectsKpiDashboard
+        projects={[makeProject({ id: "p1", status_atual: "PROJETO FINAL ENVIADO" })]}
+        statusHistory={statusHistory}
+      />,
+    );
+
+    // Card mostra "1,0 dias úteis" (vírgula decimal), não "3,0".
+    expect(screen.getByText(/^1,0 dias úteis$/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Media em dias uteis entre Elaborar Ante-Projeto e Projeto Final Enviado\./i),
+    ).toBeInTheDocument();
+  });
+
+  it("mantem fora da base o projeto sem historico completo (Tempo Medio de Entrega = N/D)", () => {
+    // Sem eventos no historico => sem entrada em ELABORAR/FINAL ENVIADO => N/D.
+    render(
+      <ProjectsKpiDashboard
+        projects={[makeProject({ id: "p1", status_atual: "PROJETO FINAL ENVIADO" })]}
+        statusHistory={[]}
+      />,
+    );
+    const label = screen.getByText(/^Tempo Medio de Entrega$/i);
+    const card = label.closest("article");
+    expect(card).toHaveTextContent(/N\/D/i);
+  });
+
   it("nao conta PROJETO APROVADO como projeto sem movimentacao", () => {
     // Um aprovado antigo + um em desenvolvimento antigo. "Sem movimentacao"
     // (parados 10+ dias) deve contar apenas o operacional => 1.

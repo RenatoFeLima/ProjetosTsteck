@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyAlignmentAutomation,
+  businessDaysBetween,
   computeOperationalKpis,
   hasDevelopmentSla,
   isOperationalStatus,
@@ -552,6 +553,47 @@ describe("SLA/atraso restrito aos status de desenvolvimento", () => {
     ];
     const atrasados = projects.filter((p) => getCurrentStatusDeadline(p, today).isOverdue).length;
     expect(atrasados).toBe(3);
+  });
+});
+
+describe("businessDaysBetween — dias úteis com fração (seg–sex, ignora fim de semana)", () => {
+  // Datas locais explícitas (ano, mês 0-based, dia, hora).
+  const at = (y: number, m: number, d: number, h = 0, min = 0) => new Date(y, m - 1, d, h, min);
+
+  it("segunda 00h → terça 00h = 1 dia útil", () => {
+    // 2026-06-01 é segunda-feira.
+    expect(businessDaysBetween(at(2026, 6, 1), at(2026, 6, 2))).toBeCloseTo(1, 6);
+  });
+
+  it("sexta 00h → segunda 00h = 1 dia útil (ignora sábado e domingo)", () => {
+    // 2026-06-05 sexta → 2026-06-08 segunda: só a sexta conta.
+    expect(businessDaysBetween(at(2026, 6, 5), at(2026, 6, 8))).toBeCloseTo(1, 6);
+  });
+
+  it("intervalo que atravessa o fim de semana desconta 2 dias", () => {
+    // Quinta → próxima quinta = 7 dias corridos, mas 5 dias úteis.
+    // 2026-06-04 (qui) → 2026-06-11 (qui).
+    expect(businessDaysBetween(at(2026, 6, 4), at(2026, 6, 11))).toBeCloseTo(5, 6);
+  });
+
+  it("preserva fração de dia atravessando o fim de semana (sexta 12h → segunda 12h = 1 dia útil)", () => {
+    // Sexta 12:00→24:00 (0,5) + sábado/domingo ignorados + segunda 00:00→12:00 (0,5) = 1,0.
+    expect(businessDaysBetween(at(2026, 6, 5, 12), at(2026, 6, 8, 12))).toBeCloseTo(1, 6);
+  });
+
+  it("preserva fração dentro do mesmo dia útil (segunda 09h → segunda 15h = 0,25 dia)", () => {
+    // 6 horas de um dia útil = 6/24 = 0,25.
+    expect(businessDaysBetween(at(2026, 6, 1, 9), at(2026, 6, 1, 15))).toBeCloseTo(0.25, 6);
+  });
+
+  it("intervalo inteiramente no fim de semana = 0", () => {
+    // Sábado → domingo.
+    expect(businessDaysBetween(at(2026, 6, 6), at(2026, 6, 7))).toBeCloseTo(0, 6);
+  });
+
+  it("retorna 0 quando to <= from", () => {
+    expect(businessDaysBetween(at(2026, 6, 10), at(2026, 6, 10))).toBe(0);
+    expect(businessDaysBetween(at(2026, 6, 10), at(2026, 6, 9))).toBe(0);
   });
 });
 

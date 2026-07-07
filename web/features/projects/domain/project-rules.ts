@@ -18,6 +18,38 @@ export function countBusinessDays(from: Date, to: Date): number {
   }
   return forward ? count : -count;
 }
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * Tempo decorrido em DIAS ÚTEIS (seg–sex) entre `from` e `to`, com fração.
+ *
+ * Diferente de countBusinessDays (que conta transições inteiras de dia), esta
+ * soma apenas os milissegundos que caem em dias úteis e divide por 24h, então
+ * preserva a fração de dia. Sábados e domingos são ignorados por completo
+ * (sexta 18h → segunda 6h conta só a parte útil, sem o fim de semana).
+ * Feriados NÃO são considerados nesta etapa. Retorna 0 se `to` <= `from`.
+ */
+export function businessDaysBetween(from: Date, to: Date): number {
+  if (to.getTime() <= from.getTime()) return 0;
+
+  let usefulMs = 0;
+  let cursor = new Date(from);
+
+  while (cursor.getTime() < to.getTime()) {
+    // Fim do dia corrente (meia-noite seguinte).
+    const dayEnd = new Date(cursor);
+    dayEnd.setHours(24, 0, 0, 0);
+    const segmentEnd = dayEnd.getTime() < to.getTime() ? dayEnd : to;
+
+    if (!isWeekend(cursor)) {
+      usefulMs += segmentEnd.getTime() - cursor.getTime();
+    }
+    cursor = segmentEnd;
+  }
+
+  return usefulMs / MS_PER_DAY;
+}
 import type {
   AlignmentAutomationResult,
   PrazoBadge,

@@ -34,7 +34,7 @@ import {
 import { differenceInCalendarDays, format, isValid, parseISO, subDays } from "date-fns";
 import { SearchableCombobox } from "./searchable-combobox";
 import { PROJECT_STATUSES, type Project, type ProjectStatus, type StatusHistoryItem } from "@/features/projects/domain/project-types";
-import { computeNextAction, getCurrentStatusDeadline, hasDevelopmentSla, isOperationalStatus, todayIsoDate } from "@/features/projects/domain/project-rules";
+import { businessDaysBetween, computeNextAction, getCurrentStatusDeadline, hasDevelopmentSla, isOperationalStatus, todayIsoDate } from "@/features/projects/domain/project-rules";
 import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { KpiCard } from "./kpi-card";
 import { ProductionPeriodCards } from "./production-period-cards";
@@ -197,6 +197,18 @@ function findEnteredStatusDate(project: Project, status: ProjectStatus, historyB
   if (hit) return parseDate(hit.alterado_em);
   if (project.status_atual === status) return parseDate(project.created_at) ?? parseDate(project.data_lancamento);
   return null;
+}
+
+// Entrada em um status ESTRITAMENTE pelo evento real do histórico (sem fallback
+// por data de lançamento/status atual). Base do Tempo Médio de Entrega, que só
+// aceita projetos com histórico completo. Preserva a hora do evento (ISO).
+function findStatusEventDate(
+  projectId: string,
+  status: ProjectStatus,
+  historyByProject: Map<string, StatusHistoryItem[]>,
+): Date | null {
+  const hit = (historyByProject.get(projectId) ?? []).find((item) => item.status_para === status);
+  return hit ? parseDate(hit.alterado_em) : null;
 }
 
 function daysInCurrentStatus(project: Project, historyByProject: Map<string, StatusHistoryItem[]>, today: Date): number {
@@ -398,17 +410,25 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
     const slaStatusProjects = filteredProjects.filter((item) => hasDevelopmentSla(item.status_atual));
     const withoutDeadline = slaStatusProjects.filter((item) => !getCurrentStatusDeadline(item).hasDeadline);
 
+    // "Tempo Médio de Entrega": DIAS ÚTEIS (seg–sex, com fração) entre a entrada
+    // em ELABORAR ANTE-PROJETO e a entrada em PROJETO FINAL ENVIADO — o tempo de
+    // trabalho da engenharia. Fonte: ProjectStatusHistory (nunca updatedAt).
+    // Só entram projetos com AMBOS os eventos reais no histórico (sem fallback
+    // por data de lançamento) — sem histórico completo, fica fora da base.
+    // Percorre TODO o histórico (não só os finalizados agora): um projeto que já
+    // avançou para além de Projeto Final Enviado ainda teve sua entrega medida.
     const deliveryTimes: number[] = [];
-    let estimatedByFallback = 0;
+    // Sem fallback: a base do Tempo Médio de Entrega só inclui projetos com
+    // histórico completo, então não há mais estimativa por ausência de evento.
+    const estimatedByFallback = 0;
 
-    for (const project of finalized) {
-      const enteredEngineering = findEnteredStatusDate(project, "ELABORAR ANTE-PROJETO", historyByProject);
-      const finalizedAt = findFinalizedAt(project, historyByProject);
-      if (!finalizedAt) continue;
+    for (const project of filteredProjects) {
+      const enteredEngineering = findStatusEventDate(project.id, "ELABORAR ANTE-PROJETO", historyByProject);
+      const finalSentAt = findStatusEventDate(project.id, "PROJETO FINAL ENVIADO", historyByProject);
+      if (!enteredEngineering || !finalSentAt) continue; // histórico incompleto → fora da base
+      if (finalSentAt.getTime() <= enteredEngineering.getTime()) continue;
 
-      const start = enteredEngineering ?? projectStartDate(project);
-      if (!enteredEngineering) estimatedByFallback += 1;
-      deliveryTimes.push(Math.max(differenceInCalendarDays(finalizedAt, start), 0));
+      deliveryTimes.push(businessDaysBetween(enteredEngineering, finalSentAt));
     }
 
     const avgDelivery = average(deliveryTimes);
@@ -843,7 +863,9 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
   }, [previousPeriodProjects]);
 
   const cards = useMemo<CardMetric[]>(() => {
-    const avgDeliveryLabel = analytics.avgDelivery === null ? "N/D" : `${analytics.avgDelivery.toFixed(1)} dias`;
+    // Tempo Médio de Entrega em dias úteis, com vírgula decimal (pt-BR).
+    const avgDeliveryLabel =
+      analytics.avgDelivery === null ? "N/D" : `${analytics.avgDelivery.toFixed(1).replace(".", ",")} dias úteis`;
     const avgAgeOpenLabel = analytics.avgAgeOpen === null ? "N/D" : `${analytics.avgAgeOpen.toFixed(1)} dias`;
 
     const finalSentNow =
@@ -855,7 +877,9 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
         key: "tempoMedioEntrega",
         label: "Tempo Medio de Entrega",
         value: avgDeliveryLabel,
-        tooltip: "Media de dias entre Elaborar Ante-Projeto e Projeto Final Enviado (projetos com historico completo).",
+        description: "Media em dias uteis entre Elaborar Ante-Projeto e Projeto Final Enviado.",
+        tooltip:
+          "Media em dias uteis entre a entrada em Elaborar Ante-Projeto e a entrada em Projeto Final Enviado, apenas para projetos com historico completo. Considera apenas segunda a sexta. Nao considera fins de semana.",
         icon: Gauge,
         group: "producao",
       },
