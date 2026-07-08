@@ -1,8 +1,11 @@
 // @vitest-environment node
 // Geração do PDF é server-side (pdfkit, Node puro). Não há banco envolvido.
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
 import { generateKpiReportPdf } from "@/server/services/kpiReportPdf";
 import { validateKpiReport, type KpiReportViewModel } from "@/features/projects/domain/kpi-report";
+
+afterEach(() => vi.restoreAllMocks());
 
 function sampleViewModel(overrides: Partial<KpiReportViewModel> = {}): KpiReportViewModel {
   return validateKpiReport({
@@ -85,5 +88,28 @@ describe("generateKpiReportPdf", () => {
   it("não quebra com tabela grande (25 linhas) e ranking", async () => {
     const pdf = await generateKpiReportPdf(sampleViewModel());
     expect(pdf.length).toBeGreaterThan(2000);
+  });
+
+  it("gera PDF com fallback textual quando a logo está ausente (não quebra)", async () => {
+    // Simula o asset da logo indisponível no ambiente (ex.: bundle serverless).
+    vi.spyOn(fs, "existsSync").mockReturnValue(false);
+    const pdf = await generateKpiReportPdf(sampleViewModel());
+    expect(pdf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+    expect(pdf.length).toBeGreaterThan(1000);
+  });
+
+  it("gera PDF mesmo se a leitura da logo lançar erro (fallback)", async () => {
+    vi.spyOn(fs, "existsSync").mockImplementation(() => {
+      throw new Error("EACCES");
+    });
+    const pdf = await generateKpiReportPdf(sampleViewModel());
+    expect(pdf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+  });
+
+  it("trata dados ausentes como N/D/vazio sem estourar", async () => {
+    // Payload minimo/vazio já saneado — deve gerar PDF válido.
+    const vm = validateKpiReport({ producaoPeriodo: [{ label: "X", value: "1" }] });
+    const pdf = await generateKpiReportPdf(vm);
+    expect(pdf.subarray(0, 5).toString("latin1")).toBe("%PDF-");
   });
 });

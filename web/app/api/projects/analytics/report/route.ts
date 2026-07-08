@@ -33,7 +33,21 @@ export async function POST(req: NextRequest) {
     // Identidade de quem gerou vem da sessão (fonte confiável), não do cliente.
     viewModel.meta.geradoPor = actor.name;
 
-    const pdf = await generateKpiReportPdf(viewModel);
+    // A geração do PDF é isolada: qualquer falha aqui (ex.: fonte/asset ausente
+    // no ambiente serverless) é logada com stack e vira um 500 amigável — nunca
+    // um 500 silencioso, e sem expor o stack ao usuário.
+    let pdf: Buffer;
+    try {
+      pdf = await generateKpiReportPdf(viewModel);
+    } catch (genErr) {
+      console.error("[kpi-report] failed to generate PDF", genErr instanceof Error ? genErr.stack : genErr);
+      logPerf("POST /api/projects/analytics/report", stop(), { success: false });
+      return NextResponse.json(
+        { error: "PDF_GENERATION_FAILED", message: "Não foi possível gerar o relatório PDF." },
+        { status: 500 },
+      );
+    }
+
     // NextResponse aceita BodyInit; copia para um ArrayBuffer puro (não Shared).
     const pdfBody = pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength) as ArrayBuffer;
 
@@ -47,6 +61,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (e) {
+    // Auth/permissão/CSRF (401/403/…) continuam com o tratamento padrão.
     logPerf("POST /api/projects/analytics/report", stop(), { success: false });
     return fail(e);
   }

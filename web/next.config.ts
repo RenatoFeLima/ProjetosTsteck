@@ -36,6 +36,19 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // pdfkit carrega suas fontes .afm via fs.readFileSync em runtime. Marcá-lo como
+  // pacote externo do servidor evita que o bundler o empacote (o que perderia
+  // esses assets) — é resolvido como módulo Node normal, com os .afm ao lado.
+  serverExternalPackages: ["pdfkit"],
+  // Reforço: garante que os arquivos de dados do pdfkit e a logo do relatório
+  // sejam incluídos no output serverless da rota do PDF (o tracer não os segue
+  // sozinho porque o acesso é dinâmico via fs).
+  outputFileTracingIncludes: {
+    "/api/projects/analytics/report": [
+      "./node_modules/pdfkit/js/data/*.afm",
+      "./public/logo-tsteck.png",
+    ],
+  },
   async headers() {
     return [
       {

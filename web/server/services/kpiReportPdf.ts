@@ -68,13 +68,20 @@ export function generateKpiReportPdf(vm: KpiReportViewModel): Promise<Buffer> {
 function renderHeader(doc: PDFKit.PDFDocument, vm: KpiReportViewModel) {
   const top = PAGE_MARGIN;
 
-  // Logo (best-effort — se faltar o arquivo, segue sem quebrar).
-  if (fs.existsSync(LOGO_PATH)) {
-    try {
+  // Logo (best-effort). Se o arquivo faltar ou a leitura falhar (ex.: asset não
+  // incluído no bundle serverless), cai no fallback textual "TSTECK" — o PDF
+  // NUNCA quebra por causa da logo.
+  let logoOk = false;
+  try {
+    if (fs.existsSync(LOGO_PATH)) {
       doc.image(LOGO_PATH, PAGE_MARGIN, top, { fit: [120, 44] });
-    } catch {
-      /* ignora falha de imagem */
+      logoOk = true;
     }
+  } catch {
+    logoOk = false;
+  }
+  if (!logoOk) {
+    doc.fillColor(BRAND).font("Helvetica-Bold").fontSize(22).text("TSTECK", PAGE_MARGIN, top + 8, { lineBreak: false });
   }
 
   // Faixa vermelha de acento à direita do título.
