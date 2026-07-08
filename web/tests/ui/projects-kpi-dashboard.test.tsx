@@ -1,10 +1,14 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ProjectsKpiDashboard } from "@/features/projects/components/projects-kpi-dashboard";
 import type { Project } from "@/features/projects/domain/project-types";
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 function makeProject(overrides: Partial<Project> = {}): Project {
   return {
@@ -261,5 +265,55 @@ describe("projects kpi dashboard", () => {
     const label = screen.getByText(/^Projetos sem movimentacao$/i);
     const card = label.closest("div");
     expect(card).toHaveTextContent("1");
+  });
+
+  // ─── Exportação: PDF (principal) + CSV (secundário) ─────────────────────────
+
+  it("mostra os botões 'Exportar PDF' e 'Exportar dados CSV'", () => {
+    render(<ProjectsKpiDashboard projects={[makeProject()]} statusHistory={[]} />);
+    expect(screen.getByRole("button", { name: /Exportar PDF/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Exportar dados CSV/i })).toBeInTheDocument();
+  });
+
+  it("clicar em 'Exportar PDF' faz POST para a rota e mostra loading", async () => {
+    const user = userEvent.setup();
+    let resolveFetch: (v: Response) => void = () => {};
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    // Evita erro de download real (jsdom não implementa createObjectURL).
+    vi.stubGlobal("URL", { ...URL, createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL: vi.fn() });
+
+    render(<ProjectsKpiDashboard projects={[makeProject()]} statusHistory={[]} />);
+    const btn = screen.getByRole("button", { name: /Exportar PDF/i });
+    await user.click(btn);
+
+    // Chamou a rota do relatório com POST (pode haver outras chamadas de fetch
+    // no mount, como loadAnalytics — filtramos pela URL do relatório).
+    const reportCalls = (fetchMock.mock.calls as unknown as [string, RequestInit?][]).filter(
+      (c) => c[0] === "/api/projects/analytics/report",
+    );
+    expect(reportCalls).toHaveLength(1);
+    expect(reportCalls[0][1]).toEqual(expect.objectContaining({ method: "POST" }));
+    // Enquanto pendente, mostra loading e desabilita (anti-duplo-clique).
+    await waitFor(() => expect(screen.getByRole("button", { name: /Gerando PDF/i })).toBeDisabled());
+
+    // Resolve o fetch para não vazar promise pendente.
+    resolveFetch({ ok: true, blob: async () => new Blob(["%PDF-"]) } as Response);
+  });
+
+  it("mostra erro amigável quando a exportação retorna 403", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 403 }) as Response));
+    vi.stubGlobal("URL", { ...URL, createObjectURL: vi.fn(() => "blob:x"), revokeObjectURL: vi.fn() });
+
+    render(<ProjectsKpiDashboard projects={[makeProject()]} statusHistory={[]} />);
+    await user.click(screen.getByRole("button", { name: /Exportar PDF/i }));
+
+    expect(await screen.findByText(/não tem permissão para exportar/i)).toBeInTheDocument();
   });
 });

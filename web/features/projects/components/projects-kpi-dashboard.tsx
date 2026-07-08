@@ -38,6 +38,11 @@ import { businessDaysBetween, computeNextAction, getCurrentStatusDeadline, hasDe
 import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { KpiCard } from "./kpi-card";
 import { ProductionPeriodCards } from "./production-period-cards";
+import type {
+  KpiReportViewModel,
+  KpiReportCard,
+  KpiReportReviewBlock,
+} from "@/features/projects/domain/kpi-report";
 import { useProjectsStore } from "@/features/projects/state/projects-store";
 
 type ProjectsKpiDashboardProps = {
@@ -261,6 +266,8 @@ function prettyMonth(key: string): string {
 
 export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDashboardProps) {
   const [selectedStatus, setSelectedStatus] = useState<ProjectStatus | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState("");
   const [filters, setFilters] = useState<KpiFilterState>(() => {
     return {
       periodStart: null,
@@ -1080,6 +1087,125 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
   const periodEndLabel = safeFormatDate(filters.periodEnd, "dd/MM/yyyy", "");
   const periodLabel = periodStartLabel && periodEndLabel ? `${periodStartLabel} a ${periodEndLabel}` : "Todos os periodos";
 
+  // Monta o view model do relatório PDF a partir do que JÁ está calculado/exibido
+  // (cards agrupados + analytics + filtros). O server só renderiza — não recalcula
+  // — então o PDF bate exatamente com a tela. Sem IDs internos nem dados sensíveis.
+  function buildReportViewModel(): KpiReportViewModel {
+    const toCard = (c: CardMetric): KpiReportCard => ({
+      label: c.label,
+      value: c.value,
+      subtitle: c.description,
+      base: c.base,
+    });
+    const cardsOf = (group: KpiGroup) => cards.filter((c) => c.group === group).map(toCard);
+
+    const filtrosAplicados: string[] = [];
+    if (periodStartLabel) filtrosAplicados.push(`Período inicial: ${periodStartLabel}`);
+    if (periodEndLabel) filtrosAplicados.push(`Período final: ${periodEndLabel}`);
+    if (filters.status !== "all") filtrosAplicados.push(`Status: ${filters.status}`);
+    if (filters.vendedor) filtrosAplicados.push(`Vendedor: ${filters.vendedor}`);
+    if (filters.construtora) filtrosAplicados.push(`Construtora: ${filters.construtora}`);
+    if (filters.obra) filtrosAplicados.push(`Obra: ${filters.obra}`);
+    if (filters.equipamento) filtrosAplicados.push(`Equipamento: ${filters.equipamento}`);
+    if (filters.prioridade !== "all") filtrosAplicados.push(`Prioridade: ${filters.prioridade === "urgente" ? "Urgente" : "Normal"}`);
+    if (filters.situacao !== "all") filtrosAplicados.push(`Situação: ${filters.situacao}`);
+    if (filters.abertoFinalizado !== "all") filtrosAplicados.push(`Recorte: ${filters.abertoFinalizado}`);
+    if (!filtrosAplicados.length) filtrosAplicados.push("Nenhum filtro aplicado");
+
+    const reviewBlock = (
+      titulo: string,
+      r: { total: number; projectsWithReview?: number; projectsWithFinalReview?: number; avgPerProject: number; currentlyInReview?: number; currentlyInFinalReview?: number; overdueReviews?: number; overdueFinalReviews?: number; byConstrutora: { nome: string; totalReviewCount?: number; totalFinalReviewCount?: number }[] },
+    ): KpiReportReviewBlock => ({
+      titulo,
+      total: r.total,
+      projetosComRevisao: r.projectsWithReview ?? r.projectsWithFinalReview ?? 0,
+      mediaPorProjeto: (r.projectsWithReview ?? r.projectsWithFinalReview ?? 0) ? r.avgPerProject.toFixed(1) : "N/D",
+      emRevisaoAgora: r.currentlyInReview ?? r.currentlyInFinalReview ?? 0,
+      vencidas: r.overdueReviews ?? r.overdueFinalReviews ?? 0,
+      ranking: r.byConstrutora
+        .slice(0, 5)
+        .map((c) => `${c.nome} — ${c.totalReviewCount ?? c.totalFinalReviewCount ?? 0} rev.`),
+    });
+
+    const criticalRows = analytics.criticalRows.map((row) => ({
+      codigo: row.project.codigo_projeto,
+      construtoraObra: `${row.project.construtora} / ${row.project.obra}`,
+      vendedor: row.project.vendedor,
+      status: row.project.status_atual,
+      diasNoStatus: row.diasNoStatus,
+      prioridade: row.project.urgente ? "Urgente" : "Normal",
+      motivo: row.motivo,
+      acao: row.acao,
+    }));
+
+    return {
+      meta: {
+        periodo: periodLabel,
+        emitidoEm: new Date().toISOString(),
+        // geradoPor é preenchido no server com o nome da sessão autenticada
+        // (não confiamos no cliente para identificar quem gerou).
+        filtros: filtrosAplicados,
+        projetosConsiderados: filteredProjects.length,
+      },
+      producaoPeriodo: cardsOf("producao"),
+      carteiraAtual: cardsOf("carteira"),
+      riscoOperacional: cardsOf("risco"),
+      eficienciaSla: cardsOf("eficiencia"),
+      insights: analytics.insights,
+      gargalos: {
+        permanenciaMedia: analytics.bottleneck
+          ? `${analytics.bottleneck.status} (${analytics.bottleneck.dias.toFixed(1)} dias)`
+          : "N/D",
+        concentracaoAtual: analytics.stacked
+          ? `${analytics.stacked.status} (${analytics.stacked.total} projetos)`
+          : "N/D",
+        semMovimentacao: String(analytics.stalledProjects.length),
+        urgentesSemAvancar: String(analytics.urgentStalled.length),
+        acaoRecomendada:
+          "Priorizar a análise dos projetos no status com maior concentração e tratar imediatamente os urgentes sem avanço.",
+      },
+      revisoes: [
+        reviewBlock("Revisão de Estudo", analytics.reviews),
+        reviewBlock("Revisão de Projeto Final", analytics.finalReviews),
+      ],
+      projetosAtencao: {
+        totalItens: analytics.criticalRows.length,
+        rows: criticalRows,
+      },
+    };
+  }
+
+  async function exportPdf() {
+    if (pdfLoading) return; // evita clique duplo
+    setPdfLoading(true);
+    try {
+      const viewModel = buildReportViewModel();
+      const res = await fetch("/api/projects/analytics/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+        body: JSON.stringify(viewModel),
+      });
+      if (!res.ok) {
+        const msg =
+          res.status === 403
+            ? "Você não tem permissão para exportar o relatório."
+            : "Não foi possível gerar o relatório PDF.";
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `relatorio-kpis-projetos-${todayIsoDate()}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : "Falha ao gerar o PDF.");
+    } finally {
+      setPdfLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <section className="rounded-3xl border border-line bg-white dark:bg-panel p-5 shadow-[0_16px_30px_-24px_rgba(0,0,0,0.4)]">
@@ -1116,10 +1242,29 @@ export function ProjectsKpiDashboard({ projects, statusHistory }: ProjectsKpiDas
           <button type="button" onClick={clearFilters} className="ml-auto rounded-lg border border-line bg-white dark:bg-panel-soft px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 transition hover:border-zinc-300 dark:hover:border-white/15 hover:text-zinc-900 dark:hover:text-foreground">
             Limpar filtros
           </button>
-          <button type="button" onClick={exportReport} className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 dark:bg-zinc-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand">
-            <Download size={13} /> Exportar relatorio
+          <button
+            type="button"
+            onClick={exportReport}
+            className="inline-flex items-center gap-1 rounded-lg border border-line bg-white dark:bg-panel-soft px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 transition hover:border-zinc-300 dark:hover:border-white/15 hover:text-zinc-900 dark:hover:text-foreground"
+          >
+            <Download size={13} /> Exportar dados CSV
+          </button>
+          <button
+            type="button"
+            onClick={exportPdf}
+            disabled={pdfLoading}
+            aria-busy={pdfLoading}
+            className="inline-flex items-center gap-1 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#870a0d] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {pdfLoading ? <RefreshCcw size={13} className="animate-spin" /> : <Download size={13} />}
+            {pdfLoading ? "Gerando PDF..." : "Exportar PDF"}
           </button>
         </header>
+        {pdfError && (
+          <p className="mb-3 flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:border-red-700/50 dark:bg-red-900/20 dark:text-red-300">
+            <AlertTriangle size={12} /> {pdfError}
+          </p>
+        )}
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
           <label className="rounded-2xl border border-line bg-zinc-50 dark:bg-panel-soft p-3 text-xs">
