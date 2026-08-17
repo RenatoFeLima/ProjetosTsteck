@@ -50,6 +50,17 @@ const REGISTRY: Record<MasterEntityKey, EntityConfig> = {
     required: ["name", "constructorId"],
     include: { builder: { select: { id: true, name: true } } },
   },
+  unidadesObra: {
+    delegate: () => prisma.workUnit as unknown as Delegate,
+    label: "Unidade da Obra",
+    displayField: "name",
+    allowed: ["workId", "name", "code", "description", "sortOrder"],
+    required: ["name", "workId"],
+    include: {
+      work: { select: { id: true, name: true } },
+      _count: { select: { projects: true } },
+    },
+  },
   equipamentos: {
     delegate: () => prisma.equipment as unknown as Delegate,
     label: "Equipamento",
@@ -121,10 +132,13 @@ async function assertNoDuplicate(
   if (excludeId) where.id = { not: excludeId };
   // Obra: duplicidade é por nome DENTRO da mesma construtora.
   if (entity === "obras" && data.constructorId) where.constructorId = data.constructorId;
+  // Unidade da Obra: duplicidade é por nome DENTRO da mesma obra.
+  if (entity === "unidadesObra" && data.workId) where.workId = data.workId;
 
   const clash = await cfg.delegate().findFirst({ where });
   if (clash) {
-    const scope = entity === "obras" ? " nesta construtora" : "";
+    const scope =
+      entity === "obras" ? " nesta construtora" : entity === "unidadesObra" ? " nesta obra" : "";
     throw new HttpError(409, `Já existe ${cfg.label.toLowerCase()} "${value}"${scope}.`);
   }
 }
@@ -133,6 +147,9 @@ async function assertNoDuplicate(
 function serialize(entity: MasterEntityKey, row: any): any {
   if (entity === "obras") {
     return { ...row, construtoraName: row.builder?.name ?? "" };
+  }
+  if (entity === "unidadesObra") {
+    return { ...row, obraName: row.work?.name ?? "", projectsCount: row._count?.projects ?? 0 };
   }
   return row;
 }
@@ -176,6 +193,11 @@ export async function createEntity(
     if (!exists) throw new HttpError(400, "Construtora informada não existe.");
   }
 
+  if (key === "unidadesObra") {
+    const exists = await prisma.work.findUnique({ where: { id: String(clean.workId) } });
+    if (!exists) throw new HttpError(400, "Obra informada não existe.");
+  }
+
   const tDedup = startTimer();
   await assertNoDuplicate(key, cfg, clean);
   const dedupMs = tDedup();
@@ -216,7 +238,11 @@ export async function updateEntity(
 
   const clean = pickAllowed(cfg, patch);
   if (clean[cfg.displayField] !== undefined) {
-    const dedupData = { ...clean, constructorId: clean.constructorId ?? existing.constructorId };
+    const dedupData = {
+      ...clean,
+      constructorId: clean.constructorId ?? existing.constructorId,
+      workId: clean.workId ?? existing.workId,
+    };
     await assertNoDuplicate(key, cfg, dedupData, id);
   }
 

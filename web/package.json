@@ -19,6 +19,7 @@
     "db:push": "dotenv -e .env.local -- prisma db push",
     "db:pull": "dotenv -e .env.local -- prisma db pull",
     "db:seed": "dotenv -e .env.local -- prisma db seed",
+    "db:seed-local": "dotenv -e .env.local -- tsx prisma/seed-local.ts",
     "db:studio": "dotenv -e .env.local -- prisma studio",
     "db:export-json": "dotenv -e .env.local -- tsx prisma/export-data.ts",
     "db:reset-operational": "dotenv -e .env.local -- tsx prisma/reset-operational-data.ts",

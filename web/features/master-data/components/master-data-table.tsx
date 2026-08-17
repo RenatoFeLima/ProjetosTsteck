@@ -1,6 +1,7 @@
 "use client";
 
-import { Power, Pencil, Trash2, Plus } from "lucide-react";
+import { Fragment, useState } from "react";
+import { ChevronRight, Power, Pencil, Trash2, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MasterEntity } from "@/features/master-data/domain/master-data-types";
 
@@ -20,6 +21,17 @@ type Props<T extends MasterEntity> = {
   entityLabel: string;
   searchValue: string;
   onSearch: (v: string) => void;
+  /** Ações extras opcionais renderizadas ANTES do botão Editar de cada linha. */
+  extraActions?: (item: T) => React.ReactNode;
+  /**
+   * Habilita linhas expansíveis (setinha ▸/▾ na 1ª coluna). Quando informado,
+   * renderiza o conteúdo-filho da linha expandida. A seta SOMENTE expande/recolhe
+   * — não dispara nenhuma outra ação. Várias linhas podem ficar abertas.
+   * Sem esta prop, a tabela se comporta exatamente como antes.
+   */
+  renderExpanded?: (item: T) => React.ReactNode;
+  /** Rótulo acessível da seta (ex.: "unidades de ADOLFO PINHEIRO"). */
+  expandLabel?: (item: T) => string;
 };
 
 export function MasterDataTable<T extends MasterEntity>({
@@ -32,8 +44,22 @@ export function MasterDataTable<T extends MasterEntity>({
   entityLabel,
   searchValue,
   onSearch,
+  extraActions,
+  renderExpanded,
+  expandLabel,
 }: Props<T>) {
   const activeCount = items.filter((i) => i.active).length;
+  const expandable = Boolean(renderExpanded);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  function toggleExpanded(id: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -64,6 +90,7 @@ export function MasterDataTable<T extends MasterEntity>({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line bg-zinc-50 dark:bg-panel-soft">
+              {expandable && <th className="w-10 px-2 py-3" aria-label="Expandir" />}
               {columns.map((col) => (
                 <th
                   key={String(col.key)}
@@ -81,21 +108,40 @@ export function MasterDataTable<T extends MasterEntity>({
             {items.length === 0 ? (
               <tr>
                 <td
-                  colSpan={columns.length + 1}
+                  colSpan={columns.length + 1 + (expandable ? 1 : 0)}
                   className="px-4 py-8 text-center text-sm text-zinc-400"
                 >
                   Nenhum registro encontrado.
                 </td>
               </tr>
             ) : (
-              items.map((item) => (
+              items.map((item) => {
+                const isExpanded = expandedIds.has(item.id);
+                return (
+                <Fragment key={item.id}>
                 <tr
-                  key={item.id}
                   className={cn(
-                    "border-b border-line transition-colors last:border-0",
+                    "border-b border-line transition-colors",
                     item.active ? "bg-white dark:bg-panel hover:bg-zinc-50 dark:hover:bg-white/5" : "bg-zinc-50/60 dark:bg-panel-soft/60 opacity-60 hover:opacity-80",
                   )}
                 >
+                  {expandable && (
+                    <td className="w-10 px-2 py-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpanded(item.id)}
+                        title={isExpanded ? "Recolher" : "Expandir"}
+                        aria-expanded={isExpanded}
+                        aria-label={`${isExpanded ? "Recolher" : "Expandir"} ${expandLabel?.(item) ?? entityLabel.toLowerCase()}`}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-white/8 dark:hover:text-foreground"
+                      >
+                        <ChevronRight
+                          size={15}
+                          className={cn("transition-transform", isExpanded && "rotate-90")}
+                        />
+                      </button>
+                    </td>
+                  )}
                   {columns.map((col) => (
                     <td key={String(col.key)} className="px-4 py-3 text-zinc-700 dark:text-zinc-300">
                       {col.render
@@ -105,9 +151,11 @@ export function MasterDataTable<T extends MasterEntity>({
                   ))}
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      {extraActions?.(item)}
                       <button
                         type="button"
-                        title="Editar"
+                        title={`Editar ${entityLabel.toLowerCase()}`}
+                        aria-label={`Editar ${entityLabel.toLowerCase()}`}
                         onClick={() => onEdit(item)}
                         className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 dark:text-zinc-400 transition hover:bg-zinc-100 dark:hover:bg-white/8 hover:text-zinc-900 dark:hover:text-foreground"
                       >
@@ -115,7 +163,8 @@ export function MasterDataTable<T extends MasterEntity>({
                       </button>
                       <button
                         type="button"
-                        title={item.active ? "Desativar" : "Ativar"}
+                        title={item.active ? `Inativar ${entityLabel.toLowerCase()}` : `Reativar ${entityLabel.toLowerCase()}`}
+                        aria-label={item.active ? `Inativar ${entityLabel.toLowerCase()}` : `Reativar ${entityLabel.toLowerCase()}`}
                         onClick={() => onToggle(item)}
                         className={cn(
                           "flex h-8 w-8 items-center justify-center rounded-lg transition",
@@ -137,7 +186,17 @@ export function MasterDataTable<T extends MasterEntity>({
                     </div>
                   </td>
                 </tr>
-              ))
+                {expandable && isExpanded && (
+                  <tr className="border-b border-line bg-zinc-50/50 dark:bg-panel-soft/40">
+                    <td />
+                    <td colSpan={columns.length} className="px-4 py-2">
+                      {renderExpanded!(item)}
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
+                );
+              })
             )}
           </tbody>
         </table>

@@ -58,6 +58,7 @@ function relProject(row: unknown): {
 const PROJECT_INCLUDE = {
   builder: { select: { id: true, name: true } },
   work: { select: { id: true, name: true } },
+  workUnit: { select: { id: true, name: true } },
   seller: { select: { id: true, name: true, email: true } },
   equipment: { select: { id: true, code: true, description: true } },
   cabinType: { select: { id: true, name: true } },
@@ -97,6 +98,7 @@ function serializeProject(p: any) {
     id: p.id,
     construtora: p.builder?.name ?? "",
     obra: p.work?.name ?? "",
+    unidade_obra: p.workUnit?.name ?? "",
     engenheiro_nome: p.engineerName ?? p.engineer?.name ?? "",
     engenheiro_celular: p.engineerPhone ?? p.engineer?.phone ?? "",
     equipamento: p.equipment?.code ?? "",
@@ -131,6 +133,7 @@ export type ProjectInput = {
   codigo_projeto?: string;
   construtora?: string;
   obra?: string;
+  unidade_obra?: string;
   vendedor?: string;
   equipamento?: string;
   tipo_cabine?: string;
@@ -172,9 +175,27 @@ async function resolveRefs(data: ProjectInput) {
   if (!seller) throw new HttpError(400, `Vendedor "${vendedor}" não encontrado nos cadastros ativos.`);
   if (!equipment) throw new HttpError(400, `Equipamento "${equipamento}" não encontrado nos cadastros ativos.`);
 
+  // Unidade da Obra é OPCIONAL (preserva projetos antigos sem unidade). Quando
+  // informada, precisa existir E pertencer à obra resolvida acima — a busca é
+  // escopada por workId (só conhecido após o Promise.all), garantindo no backend
+  // que a unidade não pode ser de outra obra.
+  const unidade = (data.unidade_obra ?? "").trim();
+  let workUnitId: string | null = null;
+  if (unidade) {
+    const workUnit = await prisma.workUnit.findFirst({
+      where: { name: unidade, workId: work.id, active: true },
+      select: { id: true },
+    });
+    if (!workUnit) {
+      throw new HttpError(400, `Unidade da Obra "${unidade}" não encontrada para a obra selecionada.`);
+    }
+    workUnitId = workUnit.id;
+  }
+
   return {
     constructorId: constructor.id,
     workId: work.id,
+    workUnitId,
     sellerId: seller.id,
     equipmentId: equipment.id,
     cabinTypeId: cabinType?.id ?? null,

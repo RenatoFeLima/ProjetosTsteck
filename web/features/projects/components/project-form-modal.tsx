@@ -53,6 +53,7 @@ function blankProject(): Partial<Project> {
   return {
     construtora: "",
     obra: "",
+    unidade_obra: "",
     engenheiro_nome: "",
     engenheiro_celular: "",
     equipamento: "",
@@ -77,11 +78,13 @@ function FormField({
   label,
   required,
   error,
+  hint,
   children,
 }: {
   label: string;
   required?: boolean;
   error?: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -89,6 +92,7 @@ function FormField({
       <span className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
         {label}
         {required && <span className="ml-0.5 text-[#9e0b0f]">*</span>}
+        {hint && <span className="ml-1.5 font-normal normal-case tracking-normal text-zinc-400">· {hint}</span>}
       </span>
       {children}
       {error && (
@@ -192,6 +196,23 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
     if (props.mode === "edit" && form.obra && !list.includes(form.obra)) list.unshift(form.obra);
     return Array.from(new Set(list)).map((value) => ({ value }));
   }, [obraOptions, form.obra, props.mode]);
+
+  // SOMENTE unidades ativas da obra selecionada. Unidade da Obra é OPCIONAL:
+  // fica desabilitada até uma obra ser escolhida e não bloqueia o salvamento
+  // (preserva projetos antigos sem unidade).
+  const unidadeOptions = useMemo(
+    () => (form.obra ? masterData.getActiveWorkUnitNames(form.obra) : []),
+    [masterData, form.obra],
+  );
+
+  const unidadeComboboxOptions = useMemo(() => {
+    const list = [...unidadeOptions];
+    // Em edição, mantém a unidade já salva visível mesmo se ficou inativa.
+    if (props.mode === "edit" && form.unidade_obra && !list.includes(form.unidade_obra)) {
+      list.unshift(form.unidade_obra);
+    }
+    return Array.from(new Set(list)).map((value) => ({ value }));
+  }, [unidadeOptions, form.unidade_obra, props.mode]);
 
   const vendedorComboboxOptions = useMemo(() => {
     const list = masterData.getActiveVendedorNames();
@@ -464,7 +485,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                   <SearchableCombobox
                     value={form.construtora ?? ""}
                     options={construtoraOptions}
-                    onChange={(value) => patch({ construtora: value, obra: "" })}
+                    onChange={(value) => patch({ construtora: value, obra: "", unidade_obra: "" })}
                     placeholder="Selecione a construtora"
                     searchPlaceholder="Buscar construtora..."
                     emptyMessage="Nenhuma construtora encontrada."
@@ -477,7 +498,7 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                   <SearchableCombobox
                     value={form.obra ?? ""}
                     options={obraComboboxOptions}
-                    onChange={(value) => patch({ obra: value })}
+                    onChange={(value) => patch({ obra: value, unidade_obra: "" })}
                     placeholder={form.construtora ? "Selecione a obra" : "Selecione a construtora primeiro"}
                     searchPlaceholder="Buscar obra..."
                     emptyMessage="Nenhuma obra vinculada a esta construtora."
@@ -491,6 +512,19 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                       Cadastre uma obra para esta construtora antes de criar o projeto.
                     </p>
                   )}
+                </FormField>
+
+                <FormField label="Unidade da Obra" hint="Torre / Bloco / Elevador / Etapa">
+                  <SearchableCombobox
+                    value={form.unidade_obra ?? ""}
+                    options={unidadeComboboxOptions}
+                    onChange={(value) => patch({ unidade_obra: value })}
+                    placeholder={form.obra ? "Selecione a unidade (opcional)" : "Selecione a obra primeiro"}
+                    searchPlaceholder="Buscar unidade..."
+                    emptyMessage="Nenhuma unidade cadastrada para esta obra."
+                    ariaLabel="Selecionar unidade da obra"
+                    disabled={!form.obra}
+                  />
                 </FormField>
 
                 <FormField label="Código do Projeto" required error={duplicated ? "Código de projeto já existe." : ""}>

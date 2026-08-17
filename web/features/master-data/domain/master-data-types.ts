@@ -27,6 +27,17 @@ export type Obra = MasterEntity & {
   notes?: string;
 };
 
+// Unidade da Obra (UI: "Unidade da Obra" — Torre / Bloco / Elevador / Etapa).
+export type UnidadeObra = MasterEntity & {
+  workId: string; // FK para a Obra (Work) à qual a unidade pertence
+  obraName: string; // nome da obra, para exibição/agrupamento na UI
+  name: string;
+  code?: string;
+  description?: string;
+  sortOrder?: number;
+  projectsCount?: number; // qtde de projetos vinculados (fornecido pela listagem via _count)
+};
+
 export type Equipamento = MasterEntity & {
   code: string; // chave única, uppercase
   description?: string;
@@ -58,6 +69,7 @@ export type Engenheiro = MasterEntity & {
 export type AuditEntityType =
   | "construtora"
   | "obra"
+  | "unidadeObra"
   | "equipamento"
   | "tipoCabine"
   | "vendedor"

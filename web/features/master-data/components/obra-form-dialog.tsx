@@ -84,7 +84,11 @@ export function ObraFormDialog({ open, mode, item, construtoraNames, onClose, on
             </select>
           </Field>
           <Field label="Nome da Obra *">
-            <input ref={nameRef} required value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Torre A" className={inputCls} />
+            <input ref={nameRef} required value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Adolfo Pinheiro" className={inputCls} />
+            <p className="text-xs leading-snug text-zinc-500 dark:text-muted">
+              Cadastre somente o nome do empreendimento. Torres, blocos, elevadores e etapas serão
+              cadastrados como Unidades da Obra.
+            </p>
           </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Endereço">

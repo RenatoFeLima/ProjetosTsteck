@@ -90,11 +90,13 @@ function FormField({
   label,
   required,
   error,
+  hint,
   children,
 }: {
   label: string;
   required?: boolean;
   error?: string;
+  hint?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -102,6 +104,7 @@ function FormField({
       <span className="block text-xs font-semibold uppercase tracking-wide text-zinc-500">
         {label}
         {required && <span className="ml-0.5 text-[#9e0b0f]">*</span>}
+        {hint && <span className="ml-1.5 font-normal normal-case tracking-normal text-zinc-400">· {hint}</span>}
       </span>
       {children}
       {error && (
@@ -256,6 +259,18 @@ export function ProjectDetailsDrawer({
     if (editForm.obra && !list.includes(editForm.obra)) list.unshift(editForm.obra);
     return Array.from(new Set(list)).map((value) => ({ value }));
   }, [rawObraOptions, editForm.obra]);
+
+  // Unidade da Obra: só unidades ativas da obra selecionada. Opcional.
+  const rawUnidadeOptions = useMemo(
+    () => (editForm.obra ? masterData.getActiveWorkUnitNames(editForm.obra) : []),
+    [masterData, editForm.obra],
+  );
+
+  const unidadeComboboxOptions = useMemo(() => {
+    const list = [...rawUnidadeOptions];
+    if (editForm.unidade_obra && !list.includes(editForm.unidade_obra)) list.unshift(editForm.unidade_obra);
+    return Array.from(new Set(list)).map((value) => ({ value }));
+  }, [rawUnidadeOptions, editForm.unidade_obra]);
 
   const vendedorOptions = useMemo(() => {
     const list = masterData.getActiveVendedorNames();
@@ -462,13 +477,19 @@ export function ProjectDetailsDrawer({
                   <h2 className="mt-1 font-display text-xl font-bold text-zinc-900 dark:text-foreground">Editar Projeto</h2>
                   <p className="truncate text-sm text-zinc-500 dark:text-muted">
                     {editForm.codigo_projeto || project.codigo_projeto} — {project.construtora} / {project.obra}
+                    {project.unidade_obra ? ` · ${project.unidade_obra}` : ""}
                   </p>
                 </>
               ) : (
                 <>
                   <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Painel Operacional</p>
                   <h2 className="font-display text-xl font-bold tracking-tight text-zinc-900 dark:text-foreground">{project.codigo_projeto}</h2>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">{project.construtora} / {project.obra}</p>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    {project.construtora} / {project.obra}
+                    {project.unidade_obra && (
+                      <span className="text-zinc-400 dark:text-zinc-500"> · {project.unidade_obra}</span>
+                    )}
+                  </p>
                 </>
               )}
             </div>
@@ -563,7 +584,7 @@ export function ProjectDetailsDrawer({
                     <SearchableCombobox
                       value={editForm.construtora ?? ""}
                       options={construtoraOptions}
-                      onChange={(v) => patchEdit({ construtora: v, obra: "" })}
+                      onChange={(v) => patchEdit({ construtora: v, obra: "", unidade_obra: "" })}
                       placeholder="Selecione a construtora"
                       searchPlaceholder="Buscar construtora..."
                       emptyMessage="Nenhuma construtora encontrada."
@@ -576,12 +597,25 @@ export function ProjectDetailsDrawer({
                     <SearchableCombobox
                       value={editForm.obra ?? ""}
                       options={obraComboboxOptions}
-                      onChange={(v) => patchEdit({ obra: v })}
+                      onChange={(v) => patchEdit({ obra: v, unidade_obra: "" })}
                       placeholder="Selecione a obra"
                       searchPlaceholder="Buscar obra..."
                       emptyMessage="Nenhuma obra encontrada."
                       ariaLabel="Selecionar obra"
                       error={obraError}
+                    />
+                  </FormField>
+
+                  <FormField label="Unidade da Obra" hint="Torre / Bloco / Elevador / Etapa">
+                    <SearchableCombobox
+                      value={editForm.unidade_obra ?? ""}
+                      options={unidadeComboboxOptions}
+                      onChange={(v) => patchEdit({ unidade_obra: v })}
+                      placeholder={editForm.obra ? "Selecione a unidade (opcional)" : "Selecione a obra primeiro"}
+                      searchPlaceholder="Buscar unidade..."
+                      emptyMessage="Nenhuma unidade cadastrada para esta obra."
+                      ariaLabel="Selecionar unidade da obra"
+                      disabled={!editForm.obra}
                     />
                   </FormField>
 
@@ -862,6 +896,11 @@ export function ProjectDetailsDrawer({
 
               <section className="grid gap-2 rounded-2xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-3 text-sm dark:text-zinc-300 md:grid-cols-2">
                 <h3 className="text-sm font-bold text-zinc-900 dark:text-foreground md:col-span-2">Resumo rápido</h3>
+                {project.unidade_obra && (
+                  <p className="md:col-span-2">
+                    <span className="font-semibold">Unidade da Obra:</span> {project.unidade_obra}
+                  </p>
+                )}
                 <p><span className="font-semibold">Vendedor:</span> {project.vendedor}</p>
                 <p><span className="font-semibold">Equipamento:</span> {project.equipamento}</p>
                 <p><span className="font-semibold">Engenheiro:</span> {project.engenheiro_nome || "Não informado"}</p>
@@ -1001,6 +1040,7 @@ export function ProjectDetailsDrawer({
               {[
                 ["Construtora", editForm.construtora],
                 ["Obra", editForm.obra],
+                ...(editForm.unidade_obra ? [["Unidade da Obra", editForm.unidade_obra]] : []),
                 ["Código", editForm.codigo_projeto],
                 ["Vendedor", editForm.vendedor],
                 ["Equipamento", editForm.equipamento],

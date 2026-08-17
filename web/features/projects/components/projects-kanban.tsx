@@ -184,9 +184,15 @@ function CardContent({
           {project.construtora}
         </p>
 
-        {/* Row 3: obra */}
-        <p className="pl-[19px] mt-0.5 truncate text-[11px] leading-snug text-zinc-500 dark:text-muted" title={project.obra}>
+        {/* Row 3: obra · unidade (unidade só aparece quando existir) */}
+        <p
+          className="pl-[19px] mt-0.5 truncate text-[11px] leading-snug text-zinc-500 dark:text-muted"
+          title={project.unidade_obra ? `${project.obra} · ${project.unidade_obra}` : project.obra}
+        >
           {project.obra}
+          {project.unidade_obra && (
+            <span className="text-zinc-400 dark:text-zinc-500"> · {project.unidade_obra}</span>
+          )}
         </p>
 
         {/* Row 3b: prazo de urgência (data discreta, só para projetos urgentes com deadline) */}

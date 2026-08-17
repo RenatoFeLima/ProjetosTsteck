@@ -257,6 +257,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       id: crypto.randomUUID(),
       construtora: input.construtora,
       obra: input.obra,
+      unidade_obra: input.unidade_obra ?? "",
       engenheiro_nome: input.engenheiro_nome ?? "",
       engenheiro_celular: input.engenheiro_celular ?? "",
       equipamento: input.equipamento,

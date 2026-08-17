@@ -4,6 +4,7 @@
 export type MasterEntityKey =
   | "construtoras"
   | "obras"
+  | "unidadesObra"
   | "equipamentos"
   | "tiposCabine"
   | "vendedores"
@@ -12,6 +13,7 @@ export type MasterEntityKey =
 export const MASTER_ENTITY_KEYS: MasterEntityKey[] = [
   "construtoras",
   "obras",
+  "unidadesObra",
   "equipamentos",
   "tiposCabine",
   "vendedores",

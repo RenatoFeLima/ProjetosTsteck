@@ -209,7 +209,15 @@ export function ProjectsTable({
                 </td>
                 <td className="px-3 py-3 overflow-hidden">
                   <div title={project.construtora} className="truncate font-semibold text-zinc-800 dark:text-foreground">{project.construtora}</div>
-                  <div title={project.obra} className="truncate text-xs text-zinc-500 dark:text-muted">{project.obra}</div>
+                  <div
+                    title={project.unidade_obra ? `${project.obra} · ${project.unidade_obra}` : project.obra}
+                    className="truncate text-xs text-zinc-500 dark:text-muted"
+                  >
+                    {project.obra}
+                    {project.unidade_obra && (
+                      <span className="text-zinc-400 dark:text-zinc-500"> · {project.unidade_obra}</span>
+                    )}
+                  </div>
                 </td>
                 <td title={project.vendedor} className="px-3 py-3 text-zinc-700 dark:text-zinc-300 whitespace-nowrap truncate">{project.vendedor}</td>
                 <td className="px-3 py-3 whitespace-nowrap">

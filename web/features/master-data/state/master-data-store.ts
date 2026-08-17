@@ -9,6 +9,7 @@ import type {
   Equipamento,
   Obra,
   TipoCabine,
+  UnidadeObra,
   Vendedor,
 } from "@/features/master-data/domain/master-data-types";
 
@@ -22,6 +23,7 @@ export type MasterDataState = {
   // entities
   construtoras: Construtora[];
   obras: Obra[];
+  unidadesObra: UnidadeObra[];
   equipamentos: Equipamento[];
   tiposCabine: TipoCabine[];
   vendedores: Vendedor[];
@@ -43,6 +45,14 @@ export type MasterDataState = {
   updateObra: (id: string, data: Partial<Omit<Obra, "id" | "createdAt" | "createdBy">>, by: string) => void;
   toggleObra: (id: string, by: string) => void;
   deleteObra: (id: string, by: string) => void;
+
+  // ─── Unidades da Obra ───────────────────────────────────────────────
+  getUnidadesObra: () => UnidadeObra[];
+  getActiveWorkUnitNames: (obraName?: string) => string[];
+  addUnidadeObra: (data: Omit<UnidadeObra, "id" | "active" | "createdAt" | "updatedAt">, by: string) => UnidadeObra;
+  updateUnidadeObra: (id: string, data: Partial<Omit<UnidadeObra, "id" | "createdAt" | "createdBy">>, by: string) => void;
+  toggleUnidadeObra: (id: string, by: string) => void;
+  deleteUnidadeObra: (id: string, by: string) => void;
 
   // ─── Equipamentos ───────────────────────────────────────────────────
   getEquipamentos: () => Equipamento[];
@@ -116,7 +126,7 @@ function buildStore(set: any, get: () => MasterDataState): MasterDataState {
   // Generic CRUD helpers
   type EntityKey = keyof Pick<
     MasterDataState,
-    "construtoras" | "obras" | "equipamentos" | "tiposCabine" | "vendedores" | "engenheiros"
+    "construtoras" | "obras" | "unidadesObra" | "equipamentos" | "tiposCabine" | "vendedores" | "engenheiros"
   >;
 
   function toggleEntity<T extends { id: string; active: boolean; updatedAt: string }>(
@@ -158,6 +168,7 @@ function buildStore(set: any, get: () => MasterDataState): MasterDataState {
     // Base inicia VAZIA — sem dados mockados. Cadastros reais serão criados no sistema.
     construtoras: [],
     obras: [],
+    unidadesObra: [],
     equipamentos: [],
     tiposCabine: [],
     vendedores: [],
@@ -224,6 +235,37 @@ function buildStore(set: any, get: () => MasterDataState): MasterDataState {
     },
     toggleObra: (id, by) => toggleEntity("obras", "obra", id, by),
     deleteObra: (id, by) => deleteEntity("obras", "obra", id, by),
+
+    // ─── Unidades da Obra ─────────────────────────────────────────────
+    getUnidadesObra: () => get().unidadesObra,
+    getActiveWorkUnitNames: (obraName) => {
+      const list = get().unidadesObra.filter((u) => u.active);
+      if (obraName) return list.filter((u) => u.obraName === obraName).map((u) => u.name);
+      return list.map((u) => u.name);
+    },
+
+    addUnidadeObra: (data, by) => {
+      const entity: UnidadeObra = {
+        ...data,
+        id: ID(),
+        active: true,
+        createdAt: TODAY(),
+        updatedAt: TODAY(),
+      };
+      set((s: MasterDataState) => ({ unidadesObra: [...s.unidadesObra, entity] }));
+      audit("unidadeObra", entity.id, entity.name, "created", by);
+      return entity;
+    },
+    updateUnidadeObra: (id, data, by) => {
+      const prev = get().unidadesObra.find((u) => u.id === id);
+      if (!prev) return;
+      set((s: MasterDataState) => ({
+        unidadesObra: s.unidadesObra.map((u) => (u.id === id ? { ...u, ...data, updatedAt: TODAY() } : u)),
+      }));
+      audit("unidadeObra", id, data.name ?? prev.name, "updated", by, prev.name, data.name);
+    },
+    toggleUnidadeObra: (id, by) => toggleEntity("unidadesObra", "unidadeObra", id, by),
+    deleteUnidadeObra: (id, by) => deleteEntity("unidadesObra", "unidadeObra", id, by),
 
     // ─── Equipamentos ─────────────────────────────────────────────────
     getEquipamentos: () => get().equipamentos,

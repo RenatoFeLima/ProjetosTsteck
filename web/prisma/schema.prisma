@@ -132,10 +132,34 @@ model Work {
 
   builder  Constructor @relation(fields: [constructorId], references: [id])
   projects Project[]
+  units    WorkUnit[]
 
   @@index([constructorId])
   @@index([active])
   @@index([constructorId, name])
+}
+
+// Unidade da Obra (UI: "Unidade da Obra" — Torre / Bloco / Elevador / Etapa).
+// Agrupa torre/bloco/elevador/etapa/equipamento sob uma Obra principal, evitando
+// duplicar Obras só para representar a subdivisão interna.
+model WorkUnit {
+  id          String   @id @default(uuid())
+  workId      String
+  name        String
+  code        String?
+  description String?  @db.Text
+  active      Boolean  @default(true)
+  sortOrder   Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  work     Work      @relation(fields: [workId], references: [id])
+  projects Project[]
+
+  // Regra: não permitir unidades duplicadas dentro da mesma obra.
+  @@unique([workId, name])
+  @@index([workId])
+  @@index([active])
 }
 
 model Equipment {
@@ -208,6 +232,7 @@ model Project {
   code          String  @unique
   constructorId String?
   workId        String?
+  workUnitId    String?
   sellerId      String?
   equipmentId   String?
   cabinTypeId   String?
@@ -245,6 +270,7 @@ model Project {
 
   builder     Constructor? @relation(fields: [constructorId], references: [id])
   work        Work?        @relation(fields: [workId], references: [id])
+  workUnit    WorkUnit?    @relation(fields: [workUnitId], references: [id])
   seller      Seller?      @relation(fields: [sellerId], references: [id])
   equipment   Equipment?   @relation(fields: [equipmentId], references: [id])
   cabinType   CabinType?   @relation(fields: [cabinTypeId], references: [id])
@@ -263,6 +289,7 @@ model Project {
   @@index([priority])
   @@index([constructorId])
   @@index([workId])
+  @@index([workUnitId])
   @@index([sellerId])
   @@index([equipmentId])
   @@index([currentStatusEnteredAt])

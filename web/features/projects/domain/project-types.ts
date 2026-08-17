@@ -32,6 +32,8 @@ export type Project = {
   id: string;
   construtora: string;
   obra: string;
+  /** Unidade da Obra (Torre / Bloco / Elevador / Etapa). Opcional — projetos antigos não têm. */
+  unidade_obra?: string;
   engenheiro_nome?: string;
   engenheiro_celular?: string;
   equipamento: string;
