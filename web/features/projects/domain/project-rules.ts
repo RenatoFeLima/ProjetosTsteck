@@ -512,6 +512,70 @@ export function sortProjectsByCodeDesc(projects: Project[]): Project[] {
   });
 }
 
+// ─── Ordenação por DATA DE ENTRADA no status atual ───────────────────────────
+
+/**
+ * Colunas ordenadas pela DATA/HORA EM QUE O PROJETO ENTROU no status atual —
+ * e não por vencimento (que ali não existe: ANTE-PROJETO APROVADO não tem SLA,
+ * logo getCurrentStatusDeadline não produz dueDate e a ordenação por prazo
+ * seria um no-op).
+ */
+export const STATUS_ENTRY_SORTED_COLUMNS: ProjectStatus[] = ["ANTE-PROJETO APROVADO"];
+
+/**
+ * Modos de ordenação por data de entrada no status atual.
+ *  - "entryNewest": entrou mais recentemente primeiro. Padrão.
+ *  - "entryOldest": está há mais tempo no status primeiro (aguardando avanço).
+ */
+export type StatusEntrySortMode = "entryNewest" | "entryOldest";
+
+export const DEFAULT_STATUS_ENTRY_SORT_MODE: StatusEntrySortMode = "entryNewest";
+
+/** União dos modos aceitos pelo controle de ordenação das colunas do Kanban. */
+export type ColumnSortMode = KanbanSortMode | StatusEntrySortMode;
+
+/**
+ * Chave de ordenação = instante da entrada no status ATUAL (project.status_entered_at,
+ * espelho de Project.currentStatusEnteredAt, gravado na MESMA transação e com o
+ * MESMO timestamp do registro em ProjectStatusHistory).
+ *
+ * Para um projeto que ESTÁ no status, esse valor é por construção a entrada MAIS
+ * RECENTE nele — reentradas sobrescrevem o campo, então um projeto que saiu e
+ * voltou usa a data do retorno.
+ *
+ * Ausente/inválida → null (NUNCA inventa data e nunca cai para createdAt/updatedAt).
+ */
+function statusEntryKey(project: Project): number | null {
+  const raw = project.status_entered_at;
+  if (!raw) return null;
+  const parsed = Date.parse(raw);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+/**
+ * Ordena projetos de uma coluna pela data de entrada no status atual.
+ * Fallback determinístico (mesmo padrão já usado nas demais colunas):
+ *  - sem data de entrada válida → SEMPRE no final, nos dois modos;
+ *  - empate (mesmo instante, ou ambos sem data) → preserva a ordem de entrada
+ *    (sort estável do JS).
+ * Não considera urgência, prazo, código, createdAt nem updatedAt.
+ */
+export function sortProjectsByStatusEntry(
+  projects: Project[],
+  mode: StatusEntrySortMode = DEFAULT_STATUS_ENTRY_SORT_MODE,
+): Project[] {
+  return [...projects].sort((a, b) => {
+    const aKey = statusEntryKey(a);
+    const bKey = statusEntryKey(b);
+    if (aKey === null && bKey === null) return 0; // ambos sem data → ordem estável
+    if (aKey === null) return 1; // sem data por último
+    if (bKey === null) return -1;
+    if (aKey === bKey) return 0; // empate → ordem estável
+    // Crescente = mais antigo primeiro; "entryNewest" inverte.
+    return mode === "entryNewest" ? bKey - aKey : aKey - bKey;
+  });
+}
+
 export function statusOrder(status: ProjectStatus): number {
   const order: Record<ProjectStatus, number> = {
     "CADASTRO INICIAL": 0,

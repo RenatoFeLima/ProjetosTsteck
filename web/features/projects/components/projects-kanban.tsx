@@ -26,7 +26,12 @@ import {
   CODE_DESC_SORTED_COLUMNS,
   validateStatusTransition,
   DEFAULT_KANBAN_SORT_MODE,
+  sortProjectsByStatusEntry,
+  STATUS_ENTRY_SORTED_COLUMNS,
+  DEFAULT_STATUS_ENTRY_SORT_MODE,
   type KanbanSortMode,
+  type StatusEntrySortMode,
+  type ColumnSortMode,
 } from "@/features/projects/domain/project-rules";
 import { getStatusTheme } from "@/features/projects/domain/status-theme";
 import { PrazoBadge, UrgenteBadge, formatUrgentDeadline } from "./pill-badges";
@@ -56,26 +61,33 @@ const COLUMNS: ProjectStatus[] = [
   "REVISAO DE PROJETO FINAL",
 ];
 
-// Colunas que exibem o controle de ordenação. Foco inicial em ELABORAR
-// ANTE-PROJETO; preparado para ampliar sem quebrar (a coluna terminal PROJETO
-// APROVADO mantém sua própria ordem fixa e não recebe o controle).
-const SORTABLE_COLUMNS: ProjectStatus[] = ["ELABORAR ANTE-PROJETO"];
+// Colunas que exibem o controle de ordenação. ELABORAR ANTE-PROJETO ordena por
+// VENCIMENTO; ANTE-PROJETO APROVADO (sem SLA/prazo) ordena por DATA DE ENTRADA
+// no status. A coluna terminal PROJETO APROVADO mantém ordem fixa por código e
+// não recebe o controle.
+const SORTABLE_COLUMNS: ProjectStatus[] = ["ELABORAR ANTE-PROJETO", "ANTE-PROJETO APROVADO"];
 
 const SORT_MODE_STORAGE_KEY = "tsteck:kanban:sortModes";
-const SORT_MODE_VALUES: KanbanSortMode[] = ["deadline", "oldest", "newest"];
+const SORT_MODE_VALUES: ColumnSortMode[] = [
+  "deadline",
+  "oldest",
+  "newest",
+  "entryNewest",
+  "entryOldest",
+];
 
 /** Lê os modos de ordenação persistidos (por status) do localStorage. Seguro em
  *  SSR/erros: retorna {} se indisponível. */
-function readPersistedSortModes(): Partial<Record<ProjectStatus, KanbanSortMode>> {
+function readPersistedSortModes(): Partial<Record<ProjectStatus, ColumnSortMode>> {
   if (typeof window === "undefined") return {};
   try {
     const raw = window.localStorage.getItem(SORT_MODE_STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const result: Partial<Record<ProjectStatus, KanbanSortMode>> = {};
+    const result: Partial<Record<ProjectStatus, ColumnSortMode>> = {};
     for (const [status, mode] of Object.entries(parsed)) {
-      if (SORT_MODE_VALUES.includes(mode as KanbanSortMode)) {
-        result[status as ProjectStatus] = mode as KanbanSortMode;
+      if (SORT_MODE_VALUES.includes(mode as ColumnSortMode)) {
+        result[status as ProjectStatus] = mode as ColumnSortMode;
       }
     }
     return result;
@@ -456,16 +468,55 @@ const SORT_OPTIONS: Array<{ value: KanbanSortMode; label: string }> = [
   { value: "newest", label: "Vencimento: novo → antigo" },
 ];
 
+// ANTE-PROJETO APROVADO não tem prazo/SLA: ordena pela DATA DE ENTRADA no status.
+// Rótulos curtos e sem os termos "vencimento"/"prazo"/"SLA", que ali não existem.
+const STATUS_ENTRY_SORT_OPTIONS: Array<{ value: StatusEntrySortMode; label: string }> = [
+  { value: "entryNewest", label: "Entrada: mais recentes" },
+  { value: "entryOldest", label: "Entrada: mais antigos" },
+];
+
+/** Opções do menu de ordenação da coluna (por vencimento ou por entrada). */
+function sortOptionsForColumn(status: ProjectStatus): Array<{ value: ColumnSortMode; label: string }> {
+  return STATUS_ENTRY_SORTED_COLUMNS.includes(status) ? STATUS_ENTRY_SORT_OPTIONS : SORT_OPTIONS;
+}
+
+/** Modo padrão da coluna: entrada mais recente onde a ordenação é por entrada. */
+function defaultSortModeForColumn(status: ProjectStatus): ColumnSortMode {
+  return STATUS_ENTRY_SORTED_COLUMNS.includes(status)
+    ? DEFAULT_STATUS_ENTRY_SORT_MODE
+    : DEFAULT_KANBAN_SORT_MODE;
+}
+
+/**
+ * Resolve o modo efetivo da coluna. Um modo persistido que não pertença ao
+ * conjunto de opções DESTA coluna (ex.: "deadline" guardado para uma coluna que
+ * ordena por entrada) é descartado em favor do padrão — evita ordenação
+ * silenciosamente errada e menu sem opção ativa.
+ */
+function resolveSortMode(
+  status: ProjectStatus,
+  persisted: Partial<Record<ProjectStatus, ColumnSortMode>>,
+): ColumnSortMode {
+  const stored = persisted[status];
+  const allowed = sortOptionsForColumn(status);
+  return stored && allowed.some((opt) => opt.value === stored)
+    ? stored
+    : defaultSortModeForColumn(status);
+}
+
 /** Dropdown discreto de ordenação no cabeçalho da coluna. Estado é controlado
  *  pelo Board (value/onChange); este componente só lida com abrir/fechar o menu. */
 function ColumnSortMenu({
   value,
   onChange,
   columnLabel,
+  options,
 }: {
-  value: KanbanSortMode;
-  onChange: (mode: KanbanSortMode) => void;
+  value: ColumnSortMode;
+  onChange: (mode: ColumnSortMode) => void;
   columnLabel: string;
+  /** Opções da coluna: por vencimento ou por data de entrada no status. */
+  options: Array<{ value: ColumnSortMode; label: string }>;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -506,7 +557,7 @@ function ColumnSortMenu({
           role="menu"
           className="absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden rounded-xl border border-zinc-200/70 dark:border-white/10 bg-white dark:bg-panel shadow-[0_8px_24px_-6px_rgba(0,0,0,0.18)]"
         >
-          {SORT_OPTIONS.map((opt) => {
+          {options.map((opt) => {
             const active = opt.value === value;
             return (
               <button
@@ -555,8 +606,8 @@ function KanbanColumn({
   isDropTarget: boolean;
   recentlyMovedProjectId: string | null;
   canDrag: boolean;
-  sortMode: KanbanSortMode;
-  onSortModeChange: (mode: KanbanSortMode) => void;
+  sortMode: ColumnSortMode;
+  onSortModeChange: (mode: ColumnSortMode) => void;
   /** Controla se o botão de ordenação aparece nesta coluna. */
   showSortControl: boolean;
   onCreateReminder?: (project: Project) => void;
@@ -606,7 +657,7 @@ function KanbanColumn({
             {theme.label}
           </h3>
           {showSortControl && (
-            <ColumnSortMenu value={sortMode} onChange={onSortModeChange} columnLabel={theme.label} />
+            <ColumnSortMenu value={sortMode} onChange={onSortModeChange} columnLabel={theme.label} options={sortOptionsForColumn(status)} />
           )}
         </div>
         <div className="mt-1.5 flex flex-wrap gap-1">
@@ -666,15 +717,15 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
   // Modo de ordenação POR coluna (estado local da tela). Inicializador preguiçoso
   // lê o localStorage (readPersistedSortModes é SSR-safe: retorna {} sem window).
   // Só afeta a exibição — nenhuma chamada a backend.
-  const [sortModes, setSortModes] = useState<Partial<Record<ProjectStatus, KanbanSortMode>>>(
+  const [sortModes, setSortModes] = useState<Partial<Record<ProjectStatus, ColumnSortMode>>>(
     () => readPersistedSortModes(),
   );
 
-  function getSortMode(status: ProjectStatus): KanbanSortMode {
-    return sortModes[status] ?? DEFAULT_KANBAN_SORT_MODE;
+  function getSortMode(status: ProjectStatus): ColumnSortMode {
+    return resolveSortMode(status, sortModes);
   }
 
-  function handleSortModeChange(status: ProjectStatus, mode: KanbanSortMode) {
+  function handleSortModeChange(status: ProjectStatus, mode: ColumnSortMode) {
     setSortModes((prev) => {
       const next = { ...prev, [status]: mode };
       if (typeof window !== "undefined") {
@@ -705,7 +756,13 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
           // (decrescente). Fallback estável usa a ordem por prazo já existente.
           return { status, projects: sortProjectsByCodeDesc(sortProjectsForKanban(list)) };
         }
-        const mode = sortModes[status] ?? DEFAULT_KANBAN_SORT_MODE;
+        if (STATUS_ENTRY_SORTED_COLUMNS.includes(status)) {
+          // ANTE-PROJETO APROVADO: sem prazo/SLA — ordena pela data de entrada
+          // no status (status_entered_at), nunca por vencimento/código/cadastro.
+          const entryMode = resolveSortMode(status, sortModes) as StatusEntrySortMode;
+          return { status, projects: sortProjectsByStatusEntry(list, entryMode) };
+        }
+        const mode = resolveSortMode(status, sortModes) as KanbanSortMode;
         return { status, projects: sortProjectsForKanban(list, mode) };
       }),
     [projects, sortModes],
