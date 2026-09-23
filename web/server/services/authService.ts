@@ -6,9 +6,13 @@ import { verifyPassword, hashPassword } from "@/features/auth/lib/password-utils
 import { toSessionUser, type SessionUser } from "@/server/auth/session";
 import { writeAudit } from "./auditService";
 
+// `ok: false` significa CREDENCIAL COMPROVADAMENTE INVÁLIDA — e só isso.
+// Falha de infraestrutura (banco fora, timeout) NÃO retorna por aqui: a
+// exceção sobe para o route handler, que responde 503. Essa distinção é o que
+// permite não penalizar a quota de tentativas durante uma indisponibilidade.
 export type LoginResult =
   | { ok: true; user: SessionUser; mustChangePassword: boolean }
-  | { ok: false; error: string };
+  | { ok: false; code: "INVALID_CREDENTIALS"; error: string };
 
 export async function login(username: string, password: string): Promise<LoginResult> {
   const uname = username.trim();
@@ -21,7 +25,7 @@ export async function login(username: string, password: string): Promise<LoginRe
       actorName: user?.name ?? null,
       message: `Tentativa de login com usuário "${uname}" — não encontrado ou inativo.`,
     });
-    return { ok: false, error: "Usuário ou senha inválidos." };
+    return { ok: false, code: "INVALID_CREDENTIALS", error: "Usuário ou senha incorretos." };
   }
 
   const valid = await verifyPassword(password, user.passwordHash);
@@ -32,7 +36,7 @@ export async function login(username: string, password: string): Promise<LoginRe
       actorName: user.name,
       message: `Login negado para ${user.name} — senha incorreta.`,
     });
-    return { ok: false, error: "Usuário ou senha inválidos." };
+    return { ok: false, code: "INVALID_CREDENTIALS", error: "Usuário ou senha incorretos." };
   }
 
   const updated = await prisma.user.update({

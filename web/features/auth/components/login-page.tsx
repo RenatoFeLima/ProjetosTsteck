@@ -1,10 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Eye, EyeOff, Lock, LogIn, User } from "lucide-react";
+import { AlertCircle, AlertTriangle, Eye, EyeOff, Lock, LogIn, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/features/auth/hooks/use-auth";
+import { AppErrorMessage } from "@/features/ui/app-error-message";
+import { useCountdown } from "@/features/ui/use-countdown";
+import {
+  formatCountdown,
+  getUserFriendlyError,
+  type FriendlyError,
+} from "@/lib/errors/error-catalog";
 
 // ─── Input field ──────────────────────────────────────────────────────────────
 type InputFieldProps = {
@@ -19,6 +26,7 @@ type InputFieldProps = {
   disabled?: boolean;
   suffix?: React.ReactNode;
   autoComplete?: string;
+  inputRef?: React.Ref<HTMLInputElement>;
 };
 
 function InputField({
@@ -33,6 +41,7 @@ function InputField({
   disabled,
   suffix,
   autoComplete,
+  inputRef,
 }: InputFieldProps) {
   return (
     <div>
@@ -46,6 +55,7 @@ function InputField({
           {icon}
         </span>
         <input
+          ref={inputRef}
           id={id}
           type={type}
           value={value}
@@ -76,6 +86,12 @@ function InputField({
   );
 }
 
+/** Mesma normalização do backend (buildCredentialIdentifier), para sabermos a
+ *  qual usuário o bloqueio de credencial se aplica. */
+function normalizeUsername(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 // ─── Login page ───────────────────────────────────────────────────────────────
 export function LoginPage() {
   const router = useRouter();
@@ -85,12 +101,39 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [globalError, setGlobalError] = useState<string | null>(null);
+  const [error, setError] = useState<FriendlyError | null>(null);
+  /** Epoch (ms) até quando o rate limit bloqueia. Só UX — o backend decide. */
+  const [blockedUntil, setBlockedUntil] = useState<number | null>(null);
+  /** Segundos informados pelo backend — usados até o contador sincronizar. */
+  const [blockedSeconds, setBlockedSeconds] = useState(0);
+  /** Username (normalizado) que recebeu o 429. O bloqueio do nível de
+   *  credencial é por IP+username, então trocar de usuário deve liberar. */
+  const [blockedUsername, setBlockedUsername] = useState<string | null>(null);
+  /** 503 ativo: impede o submit normal de martelar o servidor caído. */
+  const [serviceDown, setServiceDown] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({ username: "", password: "" });
   const [forgotMsg, setForgotMsg] = useState(false);
 
+  const passwordRef = useRef<HTMLInputElement>(null);
+
+  const secondsLeft = useCountdown(blockedUntil, blockedSeconds);
+  // Bloqueio só vale para o MESMO username que o backend bloqueou.
+  const isRateLimited =
+    secondsLeft > 0 && blockedUsername !== null && normalizeUsername(username) === blockedUsername;
+  const submitBlocked = loading || isRateLimited || serviceDown;
+
   function clearFieldError(field: "username" | "password") {
     if (fieldErrors[field]) setFieldErrors((prev) => ({ ...prev, [field]: "" }));
+  }
+
+  /** Trocar o username remove o bloqueio VISUAL do usuário anterior. O limite
+   *  no servidor continua valendo — aqui só deixamos de exibir o alerta. */
+  function handleUsernameChange(value: string) {
+    setUsername(value);
+    clearFieldError("username");
+    if (error?.code === "RATE_LIMIT" && normalizeUsername(value) !== blockedUsername) {
+      setError(null);
+    }
   }
 
   function validate(): boolean {
@@ -101,28 +144,64 @@ export function LoginPage() {
     return !errors.username && !errors.password;
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setGlobalError(null);
-    if (!validate()) return;
-
+  // Uma única tentativa por chamada — usada tanto pelo submit quanto pelo
+  // "Tentar novamente" do 503. Nunca dispara em paralelo nem em loop.
+  const attemptLogin = useCallback(async () => {
     setLoading(true);
+    setError(null);
+    setServiceDown(false);
     try {
-    const result = await login(username.trim(), password);
+      const result = await login(username.trim(), password);
       if (result.ok) {
-        if (result.mustChangePassword) {
-          router.push("/change-password");
-          return;
-        }
-        router.push("/");
+        router.push(result.mustChangePassword ? "/change-password" : "/");
         return;
       }
-      setGlobalError(result.error ?? "Credenciais inválidas.");
+
+      const friendly = getUserFriendlyError(result.code, {
+        status: result.status,
+        fallbackMessage: result.message,
+        requestId: result.requestId,
+        retryAfterSeconds: result.retryAfterSeconds,
+        surface: "login",
+      });
+      setError(friendly);
+
+      // Qualquer estado de erro re-mascara a senha: ela nunca fica à mostra
+      // depois de uma resposta de falha.
+      setShowPassword(false);
+
+      if (friendly.code === "RATE_LIMIT" && friendly.retryAfterSeconds) {
+        setBlockedUntil(Date.now() + friendly.retryAfterSeconds * 1000);
+        setBlockedSeconds(friendly.retryAfterSeconds);
+        setBlockedUsername(normalizeUsername(username));
+      } else {
+        setBlockedUntil(null);
+        setBlockedSeconds(0);
+        setBlockedUsername(null);
+      }
+
+      setServiceDown(friendly.code === "SERVICE_UNAVAILABLE");
+
+      // Credencial inválida: limpa só a senha e devolve o foco para ela.
+      if (friendly.code === "INVALID_CREDENTIALS") {
+        setPassword("");
+        passwordRef.current?.focus();
+      }
     } catch {
-      setGlobalError("Não foi possível conectar. Tente novamente.");
+      setShowPassword(false);
+      setError(getUserFriendlyError("INTERNAL_ERROR", { surface: "login" }));
     } finally {
       setLoading(false);
     }
+  }, [login, password, router, username]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    // Bloqueado, serviço fora ou já em voo: não envia nada — evita spam de POST.
+    if (submitBlocked) return;
+    setError(null);
+    if (!validate()) return;
+    await attemptLogin();
   }
 
   return (
@@ -184,16 +263,14 @@ export function LoginPage() {
               </p>
             </div>
 
-            {/* ── Global error ── */}
-            {globalError && (
-              <div
-                className="mb-5 flex items-start gap-2.5 rounded-xl border border-red-100 dark:border-red-700/40 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-[13px] text-red-600 dark:text-red-300"
-                role="alert"
-                style={{ animation: "fadeScaleIn 180ms ease-out both" }}
-              >
-                <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-                {globalError}
-              </div>
+            {/* ── Global error (componente único do design system) ── */}
+            {error && (
+              <AppErrorMessage
+                error={error}
+                countdownSeconds={secondsLeft}
+                onRetry={attemptLogin}
+                className="mb-5"
+              />
             )}
 
             {/* ── Form ── */}
@@ -204,11 +281,13 @@ export function LoginPage() {
                   id="login-username"
                   label="Usuário"
                   value={username}
-                  onChange={(v) => { setUsername(v); clearFieldError("username"); }}
+                  onChange={handleUsernameChange}
                   placeholder="Ex.: JoaoSilva"
                   icon={<User size={15} />}
                   error={fieldErrors.username}
-                  disabled={loading}
+                  // Os campos NUNCA são desabilitados: o limite de credencial é
+                  // por IP+username, então o usuário precisa poder corrigir o
+                  // nome durante um bloqueio. Quem impede o envio é o botão.
                   autoComplete="username"
                 />
 
@@ -232,13 +311,13 @@ export function LoginPage() {
                   <InputField
                     id="login-password"
                     label=""
+                    inputRef={passwordRef}
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(v) => { setPassword(v); clearFieldError("password"); }}
                     placeholder="••••••••"
                     icon={<Lock size={15} />}
                     error={fieldErrors.password}
-                    disabled={loading}
                     autoComplete="current-password"
                     suffix={
                       <button
@@ -263,15 +342,27 @@ export function LoginPage() {
               {/* Submit */}
               <button
                 type="submit"
-                disabled={loading}
+                disabled={submitBlocked}
                 className={cn(
                   "mt-6 flex h-[52px] w-full items-center justify-center gap-2 rounded-xl text-[14px] font-semibold text-white transition-all duration-150",
-                  loading
+                  submitBlocked
                     ? "cursor-not-allowed bg-brand/75"
                     : "bg-brand hover:bg-brand-dark active:scale-[0.99]",
                 )}
               >
-                {loading ? (
+                {isRateLimited ? (
+                  <>
+                    <Lock size={15} aria-hidden="true" />
+                    <span className="tabular-nums">
+                      Aguarde {formatCountdown(secondsLeft)}
+                    </span>
+                  </>
+                ) : serviceDown ? (
+                  <>
+                    <AlertTriangle size={15} aria-hidden="true" />
+                    Serviço indisponível
+                  </>
+                ) : loading ? (
                   <>
                     <svg
                       className="h-4 w-4 animate-spin"

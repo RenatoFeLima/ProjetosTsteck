@@ -86,6 +86,20 @@ export type AuthSession = {
   loggedInAt: string;
 };
 
-export type LoginResult =
-  | { ok: true; mustChangePassword: boolean }
-  | { ok: false; error: string };
+/** Falha de login já normalizada. Carrega o CÓDIGO técnico (não a frase) para
+ *  que a tela traduza pelo catálogo central — ver lib/errors/error-catalog. */
+export type LoginFailure = {
+  ok: false;
+  /** Código técnico do backend. NUNCA deve ser exibido cru ao usuário. */
+  code: string | null;
+  /** Mensagem amigável enviada pelo backend, quando houver. */
+  message: string | null;
+  /** Status HTTP (0 quando a requisição nem chegou ao servidor). */
+  status: number;
+  /** Correlation id do backend (500/503) — uso interno, NÃO é exibido na UI. */
+  requestId: string | null;
+  /** Segundos de bloqueio (429). */
+  retryAfterSeconds: number | null;
+};
+
+export type LoginResult = { ok: true; mustChangePassword: boolean } | LoginFailure;

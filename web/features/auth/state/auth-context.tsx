@@ -15,7 +15,14 @@ export type AuthContextValue = {
 export const AuthContext = createContext<AuthContextValue>({
   session: null,
   isLoading: true,
-  login: async () => ({ ok: false, error: "AuthProvider não inicializado." }),
+  login: async () => ({
+    ok: false,
+    code: "INTERNAL_ERROR",
+    message: null,
+    status: 500,
+    requestId: null,
+    retryAfterSeconds: null,
+  }),
   logout: () => {},
   changePassword: async () => ({ ok: false, error: "AuthProvider não inicializado." }),
   refreshSession: () => {},

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { AuthContext } from "../state/auth-context";
 import { mapApiUser, type ApiUser } from "../lib/api-user";
 import type { AuthSession, LoginResult } from "../lib/auth-types";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, readApiError } from "@/lib/api-client";
 
 /**
  * Provedor de autenticação — agora 100% integrado ao backend MySQL.
@@ -39,6 +39,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   // ── Login ─────────────────────────────────────────────────────────────────
+  // Devolve o CÓDIGO técnico + metadados (requestId, retryAfterSeconds) e deixa
+  // a tradução para o catálogo central. Antes esta função retornava `data.error`
+  // como texto — era isso que fazia "RATE_LIMIT"/"INTERNAL_ERROR" aparecerem
+  // literalmente na tela de login.
   const login = useCallback(
     async (username: string, password: string): Promise<LoginResult> => {
       try {
@@ -49,15 +53,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = (await res.json().catch(() => ({}))) as {
           user?: ApiUser;
           mustChangePassword?: boolean;
-          error?: string;
         };
         if (!res.ok || !data.user) {
-          return { ok: false, error: data.error ?? "Usuário ou senha inválidos." };
+          const payload = readApiError(res, data);
+          return {
+            ok: false,
+            code: payload.code,
+            message: payload.message,
+            status: payload.status,
+            requestId: payload.requestId,
+            retryAfterSeconds: payload.retryAfterSeconds,
+          };
         }
         applyUser(data.user);
         return { ok: true, mustChangePassword: !!data.mustChangePassword };
       } catch {
-        return { ok: false, error: "Não foi possível conectar ao servidor." };
+        // O fetch nem chegou ao servidor (offline, DNS, CORS…).
+        return {
+          ok: false,
+          code: "NETWORK_ERROR",
+          message: null,
+          status: 0,
+          requestId: null,
+          retryAfterSeconds: null,
+        };
       }
     },
     [applyUser],
