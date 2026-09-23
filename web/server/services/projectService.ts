@@ -103,6 +103,8 @@ function serializeProject(p: any) {
     engenheiro_celular: p.engineerPhone ?? p.engineer?.phone ?? "",
     equipamento: p.equipment?.code ?? "",
     tipo_cabine: p.cabinType?.name ?? "",
+    // ID já vem no PROJECT_INCLUDE — base do filtro por Tipo de Cabine (sem custo extra).
+    tipo_cabine_id: p.cabinType?.id ?? null,
     codigo_projeto: p.code,
     vendedor: p.seller?.name ?? "",
     proj_obra_recebido: p.projectReceived,

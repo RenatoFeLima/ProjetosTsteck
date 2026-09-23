@@ -411,6 +411,7 @@ export function ProjectsPageShell() {
       obra: "",
       vendedor: "",
       equipamento: "",
+      tipoCabineId: "",
       atrasadoOnly: false,
       urgenteOnly: false,
     });

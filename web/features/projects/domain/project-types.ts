@@ -38,6 +38,8 @@ export type Project = {
   engenheiro_celular?: string;
   equipamento: string;
   tipo_cabine?: string;
+  /** ID do Tipo de Cabine (CabinType.id). null/ausente = projeto sem tipo. */
+  tipo_cabine_id?: string | null;
   codigo_projeto: string;
   vendedor: string;
   proj_obra_recebido: boolean;

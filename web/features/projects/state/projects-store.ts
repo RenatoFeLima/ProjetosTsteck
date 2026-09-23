@@ -87,6 +87,9 @@ type Filters = {
   obra: string;
   vendedor: string;
   equipamento: string;
+  /** ID do Tipo de Cabine (CabinType.id). "" = sem filtro. Comparado por ID,
+   *  diferente dos filtros legados acima, que comparam por nome. */
+  tipoCabineId: string;
   atrasadoOnly: boolean;
   urgenteOnly: boolean;
 };
@@ -179,6 +182,7 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
     obra: "",
     vendedor: "",
     equipamento: "",
+    tipoCabineId: "",
     atrasadoOnly: false,
     urgenteOnly: false,
   },
@@ -202,6 +206,8 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       if (filters.obra && project.obra !== filters.obra) return false;
       if (filters.vendedor && project.vendedor !== filters.vendedor) return false;
       if (filters.equipamento && project.equipamento !== filters.equipamento) return false;
+      // Por ID: projeto sem tipo (null/ausente) nunca casa com um tipo específico.
+      if (filters.tipoCabineId && project.tipo_cabine_id !== filters.tipoCabineId) return false;
       if (filters.urgenteOnly && !project.urgente) return false;
 
       if (filters.atrasadoOnly) {

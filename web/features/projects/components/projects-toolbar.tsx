@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, BarChart3, Building2, ChevronDown, Download, Filter, Kanban, Loader2, Search, Table2, Upload, UserRound, Wrench, X } from "lucide-react";
+import { AlertTriangle, BarChart3, Building2, ChevronDown, Download, Filter, Kanban, Layers, Loader2, Search, Table2, Upload, UserRound, Wrench, X } from "lucide-react";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import type { ProjectStatus } from "@/features/projects/domain/project-types";
-import type { ProjectsView } from "@/features/projects/state/projects-store";
+import { buildCabinTypeFilterOptions } from "@/features/projects/domain/cabin-type-filter";
+import { useProjectsStore, type ProjectsView } from "@/features/projects/state/projects-store";
 import { SearchableCombobox } from "./searchable-combobox";
 
 type ToolbarProps = {
@@ -19,6 +20,8 @@ type ToolbarProps = {
     obra: string;
     vendedor: string;
     equipamento: string;
+    /** ID do Tipo de Cabine. Opcional para não quebrar chamadores existentes. */
+    tipoCabineId?: string;
     atrasadoOnly: boolean;
     urgenteOnly: boolean;
   };
@@ -64,6 +67,7 @@ export function ProjectsToolbar({
     if (filters.obra) count += 1;
     if (filters.vendedor) count += 1;
     if (filters.equipamento) count += 1;
+    if (filters.tipoCabineId) count += 1;
     if (filters.atrasadoOnly) count += 1;
     if (filters.urgenteOnly) count += 1;
     return count;
@@ -119,6 +123,15 @@ export function ProjectsToolbar({
     }
     return Array.from(new Set(list)).map((value) => ({ value }));
   }, [masterData, filters.equipamento]);
+
+  // Tipo de Cabine: valor = ID. Ativos + inativos ainda vinculados a projetos
+  // (ver cabin-type-filter.ts). Usa só dados já carregados — nenhuma request.
+  const allProjects = useProjectsStore((state) => state.projects);
+  const tipoCabineOptions = useMemo(
+    () =>
+      buildCabinTypeFilterOptions(masterData.tiposCabine, allProjects, filters.tipoCabineId ?? ""),
+    [masterData.tiposCabine, allProjects, filters.tipoCabineId],
+  );
 
   return (
     <div className="space-y-2.5">
@@ -307,6 +320,18 @@ export function ProjectsToolbar({
               />
               Apenas urgentes
             </label>
+
+            {/* 7º item da grade: ocupa a célula vazia da 2ª linha no desktop. */}
+            <SearchableCombobox
+              value={filters.tipoCabineId ?? ""}
+              options={tipoCabineOptions}
+              onChange={(value) => onFiltersChange({ tipoCabineId: value })}
+              placeholder="Filtrar por tipo de cabine"
+              searchPlaceholder="Buscar tipo de cabine..."
+              emptyMessage="Nenhum tipo de cabine encontrado."
+              ariaLabel="Filtrar por tipo de cabine"
+              leftIcon={<Layers size={15} />}
+            />
           </div>
         )}
 
