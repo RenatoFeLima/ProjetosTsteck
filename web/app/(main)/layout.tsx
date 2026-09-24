@@ -77,7 +77,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         />
       </div>
 
-      <main className="flex flex-1 flex-col">
+      {/* min-w-0: sem ele o flex item não encolhe abaixo do conteúdo mais largo
+          (ex.: tabelas) e a página inteira ganha rolagem horizontal. */}
+      <main className="flex min-w-0 flex-1 flex-col">
         {accessDenied ? <AccessDenied area={rule?.label} /> : children}
       </main>
     </div>

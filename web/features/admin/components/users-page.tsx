@@ -209,7 +209,7 @@ export function UsersPage() {
             <p className="text-[14px]">Nenhum usuário encontrado.</p>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-white/8">
+          <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-white/8">
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft">

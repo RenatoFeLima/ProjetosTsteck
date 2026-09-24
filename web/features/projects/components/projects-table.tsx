@@ -2,7 +2,8 @@
 import { useMemo, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { computeNextAction, getCodeSortableSuffix } from "@/features/projects/domain/project-rules";
-import { AlertTriangle, ArrowDownWideNarrow, ChevronLeft, ChevronRight, CircleDot, Copy, Eye, History, LoaderCircle, MoreHorizontal, PencilLine, RotateCcw, Workflow } from "lucide-react";
+import { AlertTriangle, ArrowDownWideNarrow, ChevronLeft, ChevronRight, CircleDot, Copy, Eye, History, MoreHorizontal, PencilLine, RotateCcw, Workflow } from "lucide-react";
+import { Skeleton } from "@/features/ui/skeleton";
 import { DeadlineBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { RemoveUrgencyConfirmDialog } from "./remove-urgency-confirm-dialog";
 
@@ -20,6 +21,19 @@ type ProjectsTableProps = {
 };
 
 type SortableKey = "codigo_projeto" | "external" | "vendedor" | "construtora" | "data_lancamento";
+
+// ─── Colunas por espaço disponível (container query) ─────────────────────────
+// As 7 colunas fixas somam 950px; "Construtora / Obra" (auto) fica com o resto.
+// Os limiares medem o espaço REAL da tabela (muda com a sidebar aberta/colapsada),
+// garantindo ≥ ~180px para Construtora / Obra:
+//   ≥ 1130px → todas as colunas (desktop, idêntico ao anterior)
+//   ≥  940px → oculta Próxima ação
+//   <  940px → oculta também Vendedor e Prioridade (dados seguem no drawer)
+//   <  700px → mesma grade, com rolagem horizontal DENTRO da tabela
+const SECONDARY_COL = "hidden @min-[940px]:table-column";
+const SECONDARY_CELL = "hidden @min-[940px]:table-cell";
+const TERTIARY_COL = "hidden @min-[1130px]:table-column";
+const TERTIARY_CELL = "hidden @min-[1130px]:table-cell";
 
 function copyText(value: string) {
   if (typeof navigator === "undefined") return;
@@ -78,10 +92,10 @@ export function ProjectsTable({
   const end = Math.min(start + pageSize, total);
   const pageRows = sortedProjects.slice(start, end);
 
-  const sortableHeaders: Array<{ key: SortableKey; label: string; tooltip?: string }> = [
+  const sortableHeaders: Array<{ key: SortableKey; label: string; tooltip?: string; className?: string }> = [
     { key: "codigo_projeto", label: "CODIGO", tooltip: "Ordenar pelos últimos dígitos do código." },
     { key: "construtora", label: "CONSTRUTORA / OBRA" },
-    { key: "vendedor", label: "VENDEDOR" },
+    { key: "vendedor", label: "VENDEDOR", className: SECONDARY_CELL },
     { key: "external", label: "STATUS" },
     { key: "data_lancamento", label: "PRAZO" },
   ];
@@ -96,14 +110,29 @@ export function ProjectsTable({
   }
 
   if (state === "loading") {
+    // Skeleton no formato da tabela: faixa do cabeçalho + linhas. Nada de
+    // "0 projetos"/"Nenhum projeto" antes da consulta terminar.
     return (
-      <div className="grid gap-2 rounded-3xl border border-line bg-white dark:bg-panel p-4 shadow-[0_16px_30px_-24px_rgba(0,0,0,0.4)]">
-        <p className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-foreground">
-          <LoaderCircle size={16} className="animate-spin" />
-          Carregando pipeline...
-        </p>
-        {Array.from({ length: 5 }).map((_, index) => (
-          <div key={index} className="h-12 animate-pulse rounded-xl bg-zinc-100 dark:bg-white/8" />
+      <div
+        role="status"
+        aria-busy="true"
+        className="overflow-hidden rounded-3xl border border-line bg-white dark:bg-panel shadow-[0_18px_32px_-28px_rgba(0,0,0,0.6)]"
+      >
+        <span className="sr-only">Carregando projetos...</span>
+        <div className="flex h-10 items-center gap-4 bg-zinc-100/90 dark:bg-zinc-800/90 px-3">
+          <Skeleton className="h-3 w-20 bg-zinc-200 dark:bg-white/10" />
+          <Skeleton className="h-3 w-32 bg-zinc-200 dark:bg-white/10" />
+          <Skeleton className="ml-auto h-3 w-16 bg-zinc-200 dark:bg-white/10" />
+        </div>
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="flex items-center gap-4 border-t border-zinc-100 dark:border-white/5 px-3 py-3">
+            <Skeleton className="h-7 w-28 shrink-0" />
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Skeleton className="h-3.5 w-2/5" />
+              <Skeleton className="h-3 w-1/4" />
+            </div>
+            <Skeleton className="h-7 w-24 shrink-0 rounded-full" />
+          </div>
         ))}
       </div>
     );
@@ -151,22 +180,25 @@ export function ProjectsTable({
 
   return (
     <>
-      <div className="overflow-x-auto lg:overflow-visible rounded-3xl border border-line bg-white dark:bg-panel shadow-[0_18px_32px_-28px_rgba(0,0,0,0.6)]">
-        <table className="w-full table-fixed text-sm">
+      <div className="@container">
+      {/* Rolagem horizontal confinada à tabela. Com todas as colunas visíveis
+          (desktop) mantém overflow-visible, preservando o thead sticky na página. */}
+      <div className="overflow-x-auto @min-[1130px]:overflow-visible rounded-3xl border border-line bg-white dark:bg-panel shadow-[0_18px_32px_-28px_rgba(0,0,0,0.6)]">
+        <table className="w-full min-w-[700px] table-fixed text-sm">
           <colgroup>
             <col style={{ width: "170px" }} />
             <col style={{ width: "auto" }} />
-            <col style={{ width: "130px" }} />
+            <col className={SECONDARY_COL} style={{ width: "130px" }} />
             <col style={{ width: "170px" }} />
             <col style={{ width: "120px" }} />
-            <col style={{ width: "110px" }} />
-            <col style={{ width: "190px" }} />
+            <col className={SECONDARY_COL} style={{ width: "110px" }} />
+            <col className={TERTIARY_COL} style={{ width: "190px" }} />
             <col style={{ width: "60px" }} />
           </colgroup>
           <thead className="sticky top-0 z-10 bg-zinc-100/90 dark:bg-zinc-800/90 text-left text-xs tracking-wide text-zinc-600 dark:text-zinc-400 uppercase backdrop-blur-sm">
             <tr>
               {sortableHeaders.map((header) => (
-                <th key={header.key} className="px-3 py-2.5 whitespace-nowrap">
+                <th key={header.key} className={`px-3 py-2.5 whitespace-nowrap ${header.className ?? ""}`}>
                   <button
                     type="button"
                     title={header.tooltip}
@@ -178,8 +210,8 @@ export function ProjectsTable({
                   </button>
                 </th>
               ))}
-              <th className="px-3 py-2.5 whitespace-nowrap">PRIORIDADE</th>
-              <th className="px-3 py-2.5 whitespace-nowrap">PROXIMA ACAO</th>
+              <th className={`px-3 py-2.5 whitespace-nowrap ${SECONDARY_CELL}`}>PRIORIDADE</th>
+              <th className={`px-3 py-2.5 whitespace-nowrap ${TERTIARY_CELL}`}>PROXIMA ACAO</th>
               <th className="px-3 py-2.5 text-right whitespace-nowrap">ACOES</th>
             </tr>
           </thead>
@@ -219,21 +251,22 @@ export function ProjectsTable({
                     )}
                   </div>
                 </td>
-                <td title={project.vendedor} className="px-3 py-3 text-zinc-700 dark:text-zinc-300 whitespace-nowrap truncate">{project.vendedor}</td>
-                <td className="px-3 py-3 whitespace-nowrap">
+                <td title={project.vendedor} className={`px-3 py-3 text-zinc-700 dark:text-zinc-300 whitespace-nowrap truncate ${SECONDARY_CELL}`}>{project.vendedor}</td>
+                {/* [&>span]:max-w-full mantém o badge dentro da coluna (trunca com reticências). */}
+                <td className="px-3 py-3 whitespace-nowrap [&>span]:max-w-full">
                   <StatusBadge status={project.status_atual} />
                 </td>
                 <td className="px-3 py-3 text-left whitespace-nowrap">
                   <DeadlineBadge project={project} />
                 </td>
-                <td className="px-3 py-3 text-left whitespace-nowrap">
+                <td className={`px-3 py-3 text-left whitespace-nowrap ${SECONDARY_CELL}`}>
                   {project.urgente ? (
                     <UrgenteBadge urgente={true} urgentDeadline={project.urgentDeadline} />
                   ) : (
                     <span className="inline-flex h-7 items-center rounded-full border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-2.5 text-[11px] font-semibold tracking-wide text-zinc-600 dark:text-zinc-400 whitespace-nowrap">Normal</span>
                   )}
                 </td>
-                <td className="px-3 py-3 whitespace-nowrap">
+                <td className={`px-3 py-3 whitespace-nowrap ${TERTIARY_CELL}`}>
                   <span title={computeNextAction(project)} className="inline-flex h-7 max-w-[180px] items-center rounded-full border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft px-2.5 text-[11px] font-semibold tracking-wide text-zinc-700 dark:text-zinc-300 whitespace-nowrap overflow-hidden text-ellipsis">
                     {computeNextAction(project)}
                   </span>
@@ -361,6 +394,7 @@ export function ProjectsTable({
             </button>
           </div>
         </div>
+      </div>
       </div>
 
       <RemoveUrgencyConfirmDialog

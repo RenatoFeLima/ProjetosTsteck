@@ -80,6 +80,13 @@ function onPersistFailure(action: string, friendly: string) {
 
 export type ProjectsView = "table" | "kanban" | "kpis" | "alerts";
 
+/**
+ * Estado da carga de projetos (UI). "loading"/"error" só se aplicam enquanto
+ * nenhuma carga teve sucesso: recargas em segundo plano (ex.: rollback após
+ * falha de persistência) mantêm "ready" e os dados atuais na tela.
+ */
+export type ProjectsLoadStatus = "idle" | "loading" | "ready" | "error";
+
 type Filters = {
   search: string;
   status: "all" | ProjectStatus;
@@ -102,6 +109,7 @@ type ProjectInput = Pick<
 
 type StoreState = {
   projects: Project[];
+  loadStatus: ProjectsLoadStatus;
   observations: ProjectObservation[];
   statusHistory: StatusHistoryItem[];
   /** Lembretes operacionais de todos os projetos visíveis (fonte: MySQL). */
@@ -169,6 +177,7 @@ const initialProjects: Project[] = [];
 
 export const useProjectsStore = create<StoreState>((set, get) => ({
   projects: initialProjects,
+  loadStatus: "idle",
   observations: [],
   statusHistory: buildInitialHistory(initialProjects),
   reminders: [],
@@ -641,11 +650,14 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       .sort((a, b) => (a.criado_em < b.criado_em ? 1 : -1)),
 
   hydrate: async () => {
+    const firstLoad = get().loadStatus !== "ready";
+    if (firstLoad) set({ loadStatus: "loading" });
     try {
       const projects = await apiListProjects();
-      set({ projects });
+      set({ projects, loadStatus: "ready" });
     } catch (e) {
       debugLog("falha ao listar projetos", e);
+      if (firstLoad) set({ loadStatus: "error" });
     }
   },
 

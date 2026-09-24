@@ -40,6 +40,7 @@ import { FinalCodeDialog } from "./final-code-dialog";
 import { ReminderPill } from "./reminder-badges";
 import { activeRemindersForProject } from "@/features/projects/domain/project-reminders";
 import { useProjectsStore } from "@/features/projects/state/projects-store";
+import { Skeleton } from "@/features/ui/skeleton";
 
 /** Cadastro Inicial com documentação + local da cabine recebidos → pronto p/ alinhamento. */
 function isReadyForAlignment(project: Project): boolean {
@@ -703,6 +704,39 @@ function KanbanColumn({
 }
 
 // ─── Board ────────────────────────────────────────────────────────────────────
+
+/**
+ * Placeholder da 1ª carga: mesma grade e cabeçalhos reais das colunas, sem
+ * contadores ("0 projetos" seria um estado falso enquanto os dados não chegam).
+ */
+export function KanbanSkeleton() {
+  return (
+    <div role="status" aria-busy="true" className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <span className="sr-only">Carregando projetos...</span>
+      {COLUMNS.map((status) => {
+        const theme = getStatusTheme(status);
+        return (
+          <section
+            key={status}
+            className={`flex min-h-44 flex-col overflow-hidden rounded-2xl border ${theme.columnBg} ${theme.columnBorder}`}
+          >
+            <div className={`h-[3px] w-full flex-none ${theme.accentBg}`} />
+            <header className="flex-none border-b border-zinc-200/60 px-3 pt-2.5 pb-2.5 dark:border-white/[0.07]">
+              <h3 className="truncate text-[11px] font-bold uppercase tracking-widest text-zinc-600 dark:text-zinc-400">
+                {theme.label}
+              </h3>
+              <Skeleton className="mt-1.5 h-5 w-20 rounded-full" />
+            </header>
+            <div className="space-y-2 px-3 py-3">
+              <Skeleton className="h-20 rounded-xl" />
+              <Skeleton className="h-20 rounded-xl" />
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
 
 export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodigoDuplicado, canDrag = true, onCreateReminder }: ProjectsKanbanProps) {
   const [activeId, setActiveId] = useState<string | null>(null);

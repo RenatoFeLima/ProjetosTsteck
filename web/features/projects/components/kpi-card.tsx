@@ -2,6 +2,7 @@
 
 import { type ComponentType } from "react";
 import { Info } from "lucide-react";
+import { Skeleton } from "@/features/ui/skeleton";
 
 export type KpiCardVariant = "neutral" | "info" | "warning" | "danger" | "success" | "brand";
 
@@ -16,6 +17,8 @@ type KpiCardProps = {
   /** Linha curta de base de cálculo, sempre visível (ex.: "Base: 21 finalizados no período"). */
   base?: string;
   active?: boolean;
+  /** Carregando: exibe placeholder no lugar do valor (evita um "0" falso). */
+  loading?: boolean;
   onClick?: () => void;
   className?: string;
   style?: React.CSSProperties;
@@ -74,6 +77,7 @@ export function KpiCard({
   tooltip,
   base,
   active = false,
+  loading = false,
   onClick,
   className,
   style,
@@ -86,7 +90,8 @@ export function KpiCard({
       <div className={`absolute inset-x-0 top-0 h-[3px] ${styles.stripe}`} />
       <div className="flex h-full min-h-[108px] flex-col p-3.5">
         <div className="flex items-start justify-between gap-2">
-          <p className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+          {/* min-w-0: permite ao título encolher (truncate) sem empurrar o ícone para fora do card. */}
+          <p className="inline-flex min-w-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
             <span className="truncate">{title}</span>
             {tooltip && (
               <span title={tooltip} className="shrink-0">
@@ -98,9 +103,13 @@ export function KpiCard({
             <Icon size={14} />
           </span>
         </div>
-        <p className="mt-1.5 font-display text-[1.9rem] font-bold leading-none tracking-tight text-zinc-900 dark:text-foreground">
-          {value}
-        </p>
+        {loading ? (
+          <Skeleton className="mt-1.5 h-[1.9rem] w-14" />
+        ) : (
+          <p className="mt-1.5 font-display text-[1.9rem] font-bold leading-none tracking-tight text-zinc-900 dark:text-foreground">
+            {value}
+          </p>
+        )}
         <div className="mt-auto pt-2">
           {base && (
             <p className="text-[10px] font-semibold leading-4 text-zinc-500 dark:text-zinc-400">{base}</p>

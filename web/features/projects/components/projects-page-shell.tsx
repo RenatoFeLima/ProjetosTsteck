@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, ChevronDown, ClipboardList, Plus, Zap } from "lucide-react";
 import { ProjectsAlerts } from "./projects-alerts";
 import { ProjectFormModal } from "./project-form-modal";
-import { ProjectsKanban } from "./projects-kanban";
+import { KanbanSkeleton, ProjectsKanban } from "./projects-kanban";
 import { ProjectsKpiCards } from "./projects-kpi-cards";
 import { ProjectsTable } from "./projects-table";
 import { ProjectsToolbar } from "./projects-toolbar";
@@ -29,6 +29,7 @@ import { ReminderFormDialog } from "./reminder-form-dialog";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
 import { sendProjectNotification } from "@/features/projects/services/project-notification-service";
 import { useAuth } from "@/features/auth/hooks/use-auth";
+import { Skeleton } from "@/features/ui/skeleton";
 
 // Chave de sessão do modal de lembretes (1 exibição por sessão do navegador).
 const REMINDER_ALERT_SESSION_KEY = "tsteck:reminders:alerted";
@@ -36,6 +37,7 @@ const REMINDER_ALERT_SESSION_KEY = "tsteck:reminders:alerted";
 export function ProjectsPageShell() {
   const {
     projects: allProjects,
+    loadStatus,
     activeView,
     setActiveView,
     filters,
@@ -120,7 +122,10 @@ export function ProjectsPageShell() {
   const [selectedUrgencyProject, setSelectedUrgencyProject] = useState<Project | undefined>(undefined);
   const [anteProjFinalCodePending, setAnteProjFinalCodePending] = useState<{ project: Project; observation?: string } | null>(null);
   const [toast, setToast] = useState<string>("");
-  const [tableState, setTableState] = useState<"loading" | "ready" | "error">("loading");
+  // Estado real da carga (store). Antes da 1ª carga concluir, nada de "0 projetos".
+  const tableState: "loading" | "ready" | "error" =
+    loadStatus === "ready" ? "ready" : loadStatus === "error" ? "error" : "loading";
+  const isLoading = tableState === "loading";
   const [kpiFilter, setKpiFilter] = useState<"all" | "total" | "andamento" | "atrasados" | "urgentes" | "finalizados">("all");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string>("");
   const [newProjectDropOpen, setNewProjectDropOpen] = useState(false);
@@ -188,19 +193,22 @@ export function ProjectsPageShell() {
   }, [visibleViews, activeView, setActiveView]);
 
   useEffect(() => {
-    setLastUpdatedAt(new Date().toLocaleString());
     // Erros de ação real do store (ex.: validação 400 ao salvar) viram toast.
     setProjectsErrorSink((message) => {
       setToast(message);
       window.setTimeout(() => setToast(""), 4000);
     });
     // Hidrata projetos, cadastros mestres e lembretes a partir do MySQL.
-    void useProjectsStore.getState().hydrate();
+    // "Atualizado" reflete quando os dados chegaram, não a montagem da tela.
+    void useProjectsStore
+      .getState()
+      .hydrate()
+      .then(() => {
+        if (useProjectsStore.getState().loadStatus === "ready") setLastUpdatedAt(new Date().toLocaleString());
+      });
     void hydrateMasterDataFromApi();
     void useProjectsStore.getState().loadReminders();
-    const timer = window.setTimeout(() => setTableState("ready"), 420);
     return () => {
-      window.clearTimeout(timer);
       setProjectsErrorSink(null);
     };
   }, []);
@@ -396,11 +404,12 @@ export function ProjectsPageShell() {
   }
 
   function retryTableLoad() {
-    setTableState("loading");
-    window.setTimeout(() => {
-      setTableState("ready");
-      touchLastUpdated();
-    }, 500);
+    void useProjectsStore
+      .getState()
+      .hydrate()
+      .then(() => {
+        if (useProjectsStore.getState().loadStatus === "ready") touchLastUpdated();
+      });
   }
 
   function clearAllFilters() {
@@ -420,7 +429,8 @@ export function ProjectsPageShell() {
   }
 
   return (
-    <main className="py-4 md:py-6">
+    // <div>, não <main>: o layout já renderiza o <main> da página.
+    <div className="py-4 md:py-6">
       <PageContainer>
         {/* Header compacto */}
         <div className="mb-4 flex items-center justify-between gap-4">
@@ -451,7 +461,7 @@ export function ProjectsPageShell() {
                 onClick={() => setNewProjectDropOpen((o) => !o)}
                 aria-label="Novo projeto"
                 aria-expanded={newProjectDropOpen}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-brand-dark"
+                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-brand px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-brand-dark"
               >
                 <Plus size={14} />
                 Novo projeto
@@ -503,6 +513,7 @@ export function ProjectsPageShell() {
           onViewChange={setActiveView}
           onClearFilters={clearAllFilters}
           tabCounts={tabCounts}
+          countsLoading={tableState !== "ready"}
           filters={filters}
           onFiltersChange={handleFiltersChange}
           visibleViews={visibleViews}
@@ -512,7 +523,8 @@ export function ProjectsPageShell() {
         />
 
         {/* Cards de KPI: ocultos para quem não tem KPI (ex.: vendedor). */}
-        {canViewKpis && (
+        {/* Em erro de carga os valores seriam "0" falsos — o estado de erro já é exibido. */}
+        {canViewKpis && tableState !== "error" && (
           <section className="mt-4">
             <ProjectsKpiCards
               total={kpis.total}
@@ -520,6 +532,7 @@ export function ProjectsPageShell() {
               atrasados={kpis.atrasados}
               urgentes={kpis.urgentes}
               finalizados={kpis.finalizados}
+              loading={isLoading}
               active={kpiFilter}
               onSelect={(key) => {
                 setKpiFilter(key === "total" ? "all" : key);
@@ -544,7 +557,8 @@ export function ProjectsPageShell() {
             onRetry={retryTableLoad}
           />
         )}
-          {activeView === "kanban" && (
+          {activeView === "kanban" && isLoading && <KanbanSkeleton />}
+          {activeView === "kanban" && tableState === "ready" && (
           <ProjectsKanban
             projects={projects}
             onOpen={openDetails}
@@ -591,7 +605,14 @@ export function ProjectsPageShell() {
             }}
           />
         )}
-          {activeView === "kpis" && canViewKpis && (
+          {activeView === "kpis" && canViewKpis && isLoading && (
+            <div role="status" aria-busy="true" className="grid gap-3">
+              <span className="sr-only">Carregando indicadores...</span>
+              <Skeleton className="h-24 rounded-2xl" />
+              <Skeleton className="h-64 rounded-2xl" />
+            </div>
+          )}
+          {activeView === "kpis" && canViewKpis && tableState === "ready" && (
             <KpiDashboardErrorBoundary>
               <ProjectsKpiDashboard
                 projects={allProjects}
@@ -611,12 +632,20 @@ export function ProjectsPageShell() {
           )}
         </section>
 
-        {tableState === "error" && (
-          <section className="mt-6 rounded-2xl border border-red-200 dark:border-red-700/50 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+        {/* Tabela e Alertas têm estado de erro próprio; nas demais views, banner com retry. */}
+        {tableState === "error" && activeView !== "table" && activeView !== "alerts" && (
+          <section className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-200 dark:border-red-700/50 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300">
             <p className="inline-flex items-center gap-2 font-semibold">
               <AlertTriangle size={16} />
-              Erro ao sincronizar dados locais desta visualizacao.
+              Nao foi possivel carregar os projetos.
             </p>
+            <button
+              type="button"
+              onClick={retryTableLoad}
+              className="inline-flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-700/50 bg-white dark:bg-panel px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-300"
+            >
+              Tentar novamente
+            </button>
           </section>
         )}
 
@@ -755,6 +784,6 @@ export function ProjectsPageShell() {
           <div className="fixed right-4 bottom-4 rounded-xl bg-zinc-900 px-4 py-2 text-sm text-white shadow-lg">{toast}</div>
         )}
       </PageContainer>
-    </main>
+    </div>
   );
 }

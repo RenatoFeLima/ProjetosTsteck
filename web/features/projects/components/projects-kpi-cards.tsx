@@ -7,6 +7,8 @@ type ProjectsKpiCardsProps = {
   atrasados: number;
   urgentes: number;
   finalizados: number;
+  /** 1ª carga em andamento: valores em skeleton. */
+  loading?: boolean;
   active?: "all" | KpiKey;
   onSelect?: (key: "all" | "total" | "andamento" | "atrasados" | "urgentes" | "finalizados") => void;
 };
@@ -27,11 +29,11 @@ const KPI_META: Array<{
   { key: "finalizados", label: "Finalizados", helper: "Concluidos", icon: CheckCircle2, accent: "from-emerald-200/70 to-emerald-100" },
 ];
 
-export function ProjectsKpiCards({ total, andamento, atrasados, urgentes, finalizados, active = "all", onSelect }: ProjectsKpiCardsProps) {
+export function ProjectsKpiCards({ total, andamento, atrasados, urgentes, finalizados, loading = false, active = "all", onSelect }: ProjectsKpiCardsProps) {
   const values: Record<KpiKey, number> = { total, andamento, atrasados, urgentes, finalizados };
 
   return (
-    <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+    <section aria-busy={loading || undefined} className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       {KPI_META.map((item, index) => {
         return (
           <KpiCard
@@ -42,6 +44,7 @@ export function ProjectsKpiCards({ total, andamento, atrasados, urgentes, finali
             icon={item.icon}
             variant={item.key === "atrasados" ? "danger" : item.key === "urgentes" ? "brand" : item.key === "finalizados" ? "success" : item.key === "andamento" ? "info" : "neutral"}
             active={active === item.key}
+            loading={loading}
             onClick={() => onSelect?.(item.key)}
             className="animate-[fadeScaleIn_220ms_ease-out]"
             style={{ animationDelay: `${index * 60}ms` }}

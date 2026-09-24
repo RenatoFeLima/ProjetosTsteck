@@ -13,6 +13,8 @@ type ToolbarProps = {
   onViewChange: (view: ProjectsView) => void;
   onClearFilters: () => void;
   tabCounts: { table: number; kanban: number; kpis: number; alerts: number };
+  /** Dados ainda não prontos (carregando ou erro): contadores mostram "–" em vez de um 0 falso. */
+  countsLoading?: boolean;
   filters: {
     search: string;
     status: "all" | ProjectStatus;
@@ -51,6 +53,7 @@ export function ProjectsToolbar({
   onViewChange,
   onClearFilters,
   tabCounts,
+  countsLoading = false,
   filters,
   onFiltersChange,
   onExport,
@@ -163,7 +166,7 @@ export function ProjectsToolbar({
                   active ? "font-bold text-brand" : "text-zinc-400 dark:text-zinc-600"
                 }`}
               >
-                {count}
+                {countsLoading ? "–" : count}
               </span>
             </button>
           );
@@ -173,7 +176,8 @@ export function ProjectsToolbar({
       {/* Filtros */}
       <div className="rounded-xl border border-zinc-100 dark:border-white/8 bg-zinc-50/40 dark:bg-panel-soft/40 p-3">
         <div className="flex flex-wrap gap-2">
-          <label className="group relative block min-w-0 flex-1">
+          {/* min-w-[12rem]: sem espaço, a linha quebra (flex-wrap) em vez de esmagar a busca. */}
+          <label className="group relative block min-w-[12rem] flex-1">
             <Search
               size={14}
               className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-zinc-400 transition group-focus-within:text-brand"

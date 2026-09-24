@@ -46,7 +46,7 @@ export default function AuditoriaPage() {
           Nenhuma alteração registrada ainda.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-line bg-white dark:bg-panel">
+        <div className="overflow-x-auto rounded-2xl border border-line bg-white dark:bg-panel">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line bg-zinc-50 dark:bg-panel-soft">
