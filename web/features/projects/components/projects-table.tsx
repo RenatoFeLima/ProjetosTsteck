@@ -1,10 +1,12 @@
 ﻿import type { Project } from "@/features/projects/domain/project-types";
 import { useMemo, useState } from "react";
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { computeNextAction, getCodeSortableSuffix } from "@/features/projects/domain/project-rules";
-import { AlertTriangle, ArrowDownWideNarrow, ChevronLeft, ChevronRight, CircleDot, Copy, Eye, History, MoreHorizontal, PencilLine, RotateCcw, Workflow } from "lucide-react";
+import { AlertTriangle, ArrowDownWideNarrow, ChevronLeft, ChevronRight, Copy, RotateCcw } from "lucide-react";
+import { useViewportMode } from "@/features/sidebar/hooks/use-viewport-mode";
 import { Skeleton } from "@/features/ui/skeleton";
 import { DeadlineBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
+import { ProjectActionsMenu } from "./project-actions-menu";
+import { ProjectCard, ProjectCardSkeleton } from "./project-card";
 import { RemoveUrgencyConfirmDialog } from "./remove-urgency-confirm-dialog";
 
 type ProjectsTableProps = {
@@ -57,6 +59,10 @@ export function ProjectsTable({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
   const [removeUrgencyProject, setRemoveUrgencyProject] = useState<Project | undefined>(undefined);
+  // < 768px: cards; ≥ 768px: tabela. Uma apresentação por vez, a partir dos
+  // MESMOS pageRows — ordenação/paginação continuam só neste componente, então
+  // trocar de faixa não reordena, não reinicia a página e não busca dados.
+  const isMobile = useViewportMode() === "mobile";
 
   const sortedProjects = useMemo(() => {
     const copy = [...projects];
@@ -107,6 +113,17 @@ export function ProjectsTable({
     }
     setSortKey(next);
     setSortDir("asc");
+  }
+
+  if (state === "loading" && isMobile) {
+    return (
+      <div role="status" aria-busy="true" className="grid gap-3">
+        <span className="sr-only">Carregando projetos...</span>
+        {Array.from({ length: 4 }).map((_, index) => (
+          <ProjectCardSkeleton key={index} />
+        ))}
+      </div>
+    );
   }
 
   if (state === "loading") {
@@ -175,6 +192,55 @@ export function ProjectsTable({
           </button>
         )}
       </div>
+    );
+  }
+
+  const actionHandlers = { onViewDetails, onEditProject, onChangeStatus, onMarkUrgente, onViewHistory };
+  const removeUrgencyDialog = (
+    <RemoveUrgencyConfirmDialog
+      open={Boolean(removeUrgencyProject)}
+      project={removeUrgencyProject}
+      onCancel={() => setRemoveUrgencyProject(undefined)}
+      onConfirm={() => {
+        if (removeUrgencyProject) onRemoveUrgente(removeUrgencyProject);
+        setRemoveUrgencyProject(undefined);
+      }}
+    />
+  );
+  // Mesmo rodapé (mesma página, pageSize e total) para tabela e cards.
+  const renderPagination = (className?: string) => (
+    <ProjectsPagination
+      className={className}
+      start={start}
+      end={end}
+      total={total}
+      pageSize={pageSize}
+      page={safePage}
+      totalPages={totalPages}
+      onPageSizeChange={(size) => {
+        setPageSize(size);
+        setPage(1);
+      }}
+      onPrevious={() => setPage((current) => Math.max(current - 1, 1))}
+      onNext={() => setPage((current) => Math.min(current + 1, totalPages))}
+    />
+  );
+
+  if (isMobile) {
+    return (
+      <>
+        {/* grid-cols-1 = minmax(0, 1fr): sem ele a coluna cresce até o texto
+            sem quebra (ex.: obra longa com truncate) e a página ganha overflow. */}
+        <ul aria-label="Projetos" className="grid grid-cols-1 gap-3">
+          {pageRows.map((project) => (
+            <li key={project.id}>
+              <ProjectCard project={project} {...actionHandlers} onRequestRemoveUrgency={setRemoveUrgencyProject} />
+            </li>
+          ))}
+        </ul>
+        <div className="mt-3 rounded-2xl border border-line bg-white dark:bg-panel">{renderPagination()}</div>
+        {removeUrgencyDialog}
+      </>
     );
   }
 
@@ -273,83 +339,7 @@ export function ProjectsTable({
                 </td>
                 <td className="px-3 py-3 text-right whitespace-nowrap">
                   <div className="flex items-center justify-end gap-2 whitespace-nowrap">
-                    <DropdownMenu.Root>
-                      <DropdownMenu.Trigger asChild>
-                        <button
-                          type="button"
-                          aria-label="Abrir acoes do projeto"
-                          onClick={(event) => event.stopPropagation()}
-                          className="rounded-lg border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel-soft p-1.5 text-zinc-600 dark:text-zinc-400 transition hover:text-zinc-900 dark:hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
-                          title="Mais acoes"
-                        >
-                          <MoreHorizontal size={14} />
-                        </button>
-                      </DropdownMenu.Trigger>
-                      <DropdownMenu.Portal>
-                        <DropdownMenu.Content
-                          side="bottom"
-                          align="end"
-                          sideOffset={8}
-                          collisionPadding={16}
-                          avoidCollisions={true}
-                          sticky="always"
-                          className="z-[120] min-w-[190px] rounded-xl border border-zinc-200 dark:border-white/8 bg-white dark:bg-panel p-1 shadow-[0_20px_45px_-24px_rgba(0,0,0,0.45)]"
-                        >
-                          <DropdownMenu.Group>
-                            <DropdownMenu.Item
-                              onSelect={() => onViewDetails(project)}
-                              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 dark:text-zinc-300 outline-none hover:bg-zinc-100 dark:hover:bg-white/8"
-                            >
-                              <Eye size={14} className="text-zinc-500 dark:text-zinc-500" />
-                              Ver detalhes
-                            </DropdownMenu.Item>
-                            <DropdownMenu.Item
-                              disabled={!onEditProject}
-                              onSelect={() => onEditProject?.(project)}
-                              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 dark:text-zinc-300 outline-none hover:bg-zinc-100 dark:hover:bg-white/8 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
-                            >
-                              <PencilLine size={14} className="text-zinc-500 dark:text-zinc-500" />
-                              Editar projeto
-                            </DropdownMenu.Item>
-                          </DropdownMenu.Group>
-                          <DropdownMenu.Separator className="my-1 h-px bg-zinc-100 dark:bg-white/8" />
-                          <DropdownMenu.Group>
-                            <DropdownMenu.Item
-                              disabled={project.status_atual === "PROJETO APROVADO" || !onChangeStatus}
-                              onSelect={() => onChangeStatus?.(project)}
-                              className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 dark:text-zinc-300 outline-none hover:bg-zinc-100 dark:hover:bg-white/8 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
-                            >
-                              <Workflow size={14} className="text-zinc-500 dark:text-zinc-500" />
-                              Alterar status
-                            </DropdownMenu.Item>
-                            <DropdownMenu.Item
-                              disabled={project.status_atual === "PROJETO APROVADO" || !onMarkUrgente}
-                              onSelect={() => {
-                                if (project.urgente) {
-                                  setRemoveUrgencyProject(project);
-                                  return;
-                                }
-                                onMarkUrgente?.(project);
-                              }}
-                              className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm outline-none hover:bg-zinc-100 dark:hover:bg-white/8 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
-                            >
-                              <CircleDot size={14} className={project.urgente ? "text-amber-600" : "text-zinc-500"} />
-                              {project.urgente ? "Remover urgencia" : "Marcar como urgente"}
-                            </DropdownMenu.Item>
-                          </DropdownMenu.Group>
-                          <DropdownMenu.Separator className="my-1 h-px bg-zinc-100 dark:bg-white/8" />
-                          <DropdownMenu.Group>
-                            <DropdownMenu.Item
-                              onSelect={() => onViewHistory(project)}
-                              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-800 dark:text-zinc-300 outline-none hover:bg-zinc-100 dark:hover:bg-white/8"
-                            >
-                              <History size={14} className="text-zinc-500 dark:text-zinc-500" />
-                              Ver historico
-                            </DropdownMenu.Item>
-                          </DropdownMenu.Group>
-                        </DropdownMenu.Content>
-                      </DropdownMenu.Portal>
-                    </DropdownMenu.Root>
+                    <ProjectActionsMenu project={project} {...actionHandlers} onRequestRemoveUrgency={setRemoveUrgencyProject} />
                   </div>
                 </td>
               </tr>
@@ -357,55 +347,81 @@ export function ProjectsTable({
           </tbody>
         </table>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 dark:border-white/8 px-3 py-3 text-sm">
-          <p className="text-zinc-600 dark:text-zinc-400">Exibindo {start + 1}-{end} de {total} registros</p>
-          <div className="flex items-center gap-2">
-            <label className="inline-flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
-              Itens por pagina
-              <select
-                value={pageSize}
-                onChange={(event) => {
-                  setPageSize(Number(event.target.value));
-                  setPage(1);
-                }}
-                className="h-9 rounded-lg border border-line bg-white dark:bg-panel-soft px-2 dark:text-foreground"
-              >
-                {[10, 20, 30].map((size) => (
-                  <option key={size} value={size}>{size}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={() => setPage((current) => Math.max(current - 1, 1))}
-              disabled={safePage <= 1}
-              className="rounded-lg border border-line bg-white dark:bg-panel-soft p-2 text-zinc-700 dark:text-zinc-400 disabled:opacity-40"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <span className="min-w-12 text-center text-zinc-700 dark:text-zinc-400">{safePage}/{totalPages}</span>
-            <button
-              type="button"
-              onClick={() => setPage((current) => Math.min(current + 1, totalPages))}
-              disabled={safePage >= totalPages}
-              className="rounded-lg border border-line bg-white dark:bg-panel-soft p-2 text-zinc-700 dark:text-zinc-400 disabled:opacity-40"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        </div>
+        {renderPagination("border-t border-zinc-100 dark:border-white/8")}
       </div>
       </div>
 
-      <RemoveUrgencyConfirmDialog
-        open={Boolean(removeUrgencyProject)}
-        project={removeUrgencyProject}
-        onCancel={() => setRemoveUrgencyProject(undefined)}
-        onConfirm={() => {
-          if (removeUrgencyProject) onRemoveUrgente(removeUrgencyProject);
-          setRemoveUrgencyProject(undefined);
-        }}
-      />
+      {removeUrgencyDialog}
     </>
+  );
+}
+
+type ProjectsPaginationProps = {
+  start: number;
+  end: number;
+  total: number;
+  pageSize: number;
+  page: number;
+  totalPages: number;
+  onPageSizeChange: (size: number) => void;
+  onPrevious: () => void;
+  onNext: () => void;
+  className?: string;
+};
+
+/**
+ * Rodapé de paginação compartilhado por tabela e cards (estado único na
+ * ProjectsTable). Com toque (pointer-coarse), alvos de 44px; com mouse, a
+ * densidade é a mesma de antes.
+ */
+function ProjectsPagination({
+  start,
+  end,
+  total,
+  pageSize,
+  page,
+  totalPages,
+  onPageSizeChange,
+  onPrevious,
+  onNext,
+  className,
+}: ProjectsPaginationProps) {
+  return (
+    <div className={`flex flex-wrap items-center justify-between gap-3 px-3 py-3 text-sm ${className ?? ""}`}>
+      <p className="text-zinc-600 dark:text-zinc-400">Exibindo {start + 1}-{end} de {total} registros</p>
+      <div className="flex items-center gap-2">
+        <label className="inline-flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+          Itens por pagina
+          <select
+            value={pageSize}
+            onChange={(event) => onPageSizeChange(Number(event.target.value))}
+            className="h-9 rounded-lg border border-line bg-white dark:bg-panel-soft px-2 dark:text-foreground pointer-coarse:h-11"
+          >
+            {[10, 20, 30].map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          aria-label="Pagina anterior"
+          onClick={onPrevious}
+          disabled={page <= 1}
+          className="inline-flex items-center justify-center rounded-lg border border-line bg-white dark:bg-panel-soft p-2 text-zinc-700 dark:text-zinc-400 disabled:opacity-40 pointer-coarse:h-11 pointer-coarse:w-11"
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <span className="min-w-12 text-center text-zinc-700 dark:text-zinc-400">{page}/{totalPages}</span>
+        <button
+          type="button"
+          aria-label="Proxima pagina"
+          onClick={onNext}
+          disabled={page >= totalPages}
+          className="inline-flex items-center justify-center rounded-lg border border-line bg-white dark:bg-panel-soft p-2 text-zinc-700 dark:text-zinc-400 disabled:opacity-40 pointer-coarse:h-11 pointer-coarse:w-11"
+        >
+          <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
   );
 }
