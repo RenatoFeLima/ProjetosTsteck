@@ -134,6 +134,28 @@ describe("toolbar e KPIs — sem esmagar conteúdo", () => {
     expect(label.parentElement).toHaveClass("flex-wrap");
   });
 
+  it("abas rolam na horizontal; no mobile a barra de rolagem fica oculta (sem travar o scroll)", () => {
+    render(
+      <ProjectsToolbar
+        view="table"
+        onViewChange={vi.fn()}
+        onClearFilters={vi.fn()}
+        tabCounts={{ table: 1, kanban: 1, kpis: 1, alerts: 0 }}
+        filters={{ search: "", status: "all", construtora: "", obra: "", vendedor: "", equipamento: "", atrasadoOnly: false, urgenteOnly: false }}
+        onFiltersChange={vi.fn()}
+      />,
+    );
+    const tabsBar = screen.getByRole("button", { name: /Tabela/ }).parentElement!;
+    expect(tabsBar).toHaveClass("overflow-x-auto", "max-md:[scrollbar-width:none]", "max-md:[&::-webkit-scrollbar]:hidden");
+    expect(tabsBar).not.toHaveClass("overflow-hidden");
+
+    // Teclado: a aba focada é trazida inteira para a área visível da barra.
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    screen.getByRole("button", { name: /Alertas/ }).focus();
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest", inline: "nearest" });
+  });
+
   it("título do KPI pode encolher (min-w-0) e o ícone fica no card", () => {
     render(<KpiCard title="Total de Projetos" value="6" icon={FolderKanban} />);
     const title = screen.getByText("Total de Projetos");

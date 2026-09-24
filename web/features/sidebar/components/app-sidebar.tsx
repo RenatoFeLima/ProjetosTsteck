@@ -15,13 +15,18 @@ import type { NavGroup } from "../nav-config";
 
 type Props = {
   collapsed: boolean;
-  onToggle: () => void;
+  /** Recolher/expandir (desktop). Omitido quando a rail é forçada compacta. */
+  onToggle?: () => void;
+  /** Ação no lugar do recolher/expandir (☰ na rail do tablet, X no drawer). */
+  brandAction?: React.ReactNode;
+  /** Chamado ao selecionar um item (ex.: fechar o drawer). */
+  onNavigate?: () => void;
   user: CurrentUser | null;
   onIdentify: () => void;
   onLogout: () => void;
 };
 
-export function AppSidebar({ collapsed, onToggle, user, onIdentify, onLogout }: Props) {
+export function AppSidebar({ collapsed, onToggle, brandAction, onNavigate, user, onIdentify, onLogout }: Props) {
   const { session } = useAuth();
   const role = session?.user.role;
   // Perfis comerciais (SELLER/COMMERCIAL) usam as permissões CANÔNICAS do role
@@ -55,7 +60,7 @@ export function AppSidebar({ collapsed, onToggle, user, onIdentify, onLogout }: 
       aria-label="Menu de navegação"
     >
       {/* Brand + toggle */}
-      <SidebarBrand collapsed={collapsed} onToggle={onToggle} />
+      <SidebarBrand collapsed={collapsed} onToggle={onToggle} action={brandAction} />
 
       <div className="mx-3 h-px bg-zinc-100 dark:bg-white/8" />
 
@@ -65,7 +70,7 @@ export function AppSidebar({ collapsed, onToggle, user, onIdentify, onLogout }: 
         aria-label="Navegação principal"
       >
         {allGroups.map((group, i) => (
-          <SidebarNavGroup key={i} group={group} collapsed={collapsed} />
+          <SidebarNavGroup key={i} group={group} collapsed={collapsed} onNavigate={onNavigate} />
         ))}
       </nav>
 

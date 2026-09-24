@@ -7,9 +7,10 @@ import { SidebarNavItem } from "./sidebar-nav-item";
 type Props = {
   group: NavGroup;
   collapsed: boolean;
+  onNavigate?: () => void;
 };
 
-export function SidebarNavGroup({ group, collapsed }: Props) {
+export function SidebarNavGroup({ group, collapsed, onNavigate }: Props) {
   return (
     <div className="flex flex-col gap-0.5">
       {group.title && !collapsed && (
@@ -24,7 +25,7 @@ export function SidebarNavGroup({ group, collapsed }: Props) {
         <div className={cn("mx-auto my-1 h-px w-6 bg-zinc-100 dark:bg-white/8")} />
       )}
       {group.items.map((item) => (
-        <SidebarNavItem key={item.label} item={item} collapsed={collapsed} />
+        <SidebarNavItem key={item.label} item={item} collapsed={collapsed} onNavigate={onNavigate} />
       ))}
     </div>
   );

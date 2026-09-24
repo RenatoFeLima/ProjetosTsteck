@@ -10,9 +10,11 @@ import type { NavItem } from "../nav-config";
 type Props = {
   item: NavItem;
   collapsed: boolean;
+  /** Chamado após a navegação (ex.: fechar o drawer). Não altera a navegação. */
+  onNavigate?: () => void;
 };
 
-export function SidebarNavItem({ item, collapsed }: Props) {
+export function SidebarNavItem({ item, collapsed, onNavigate }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const activeView = useProjectsStore((s) => s.activeView);
@@ -29,14 +31,20 @@ export function SidebarNavItem({ item, collapsed }: Props) {
       setActiveView(item.view);
       if (pathname !== "/") router.push("/");
     }
+    onNavigate?.();
   }
 
   const linkContent = (
     <Link
       href={item.href}
       onClick={handleClick}
+      // Compacta: o rótulo não é renderizado, então o nome acessível vem daqui
+      // (o tooltip só descreve enquanto aberto e depende de hover).
+      aria-label={collapsed ? item.label : undefined}
       className={cn(
         "group relative flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150",
+        // Toque: alvo de 44px de altura (densidade com mouse inalterada).
+        "pointer-coarse:min-h-11",
         collapsed ? "justify-center px-0" : "",
         isActive
           ? "bg-brand/8 dark:bg-brand/15 text-brand"

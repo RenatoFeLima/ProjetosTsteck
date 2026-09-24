@@ -49,7 +49,7 @@ export function SidebarUserProfile({ user, collapsed, onIdentify, onLogout }: Pr
         <button
           type="button"
           onClick={onLogout}
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 dark:text-zinc-500 transition hover:bg-brand/10 hover:text-brand"
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-zinc-400 dark:text-zinc-500 transition hover:bg-brand/10 hover:text-brand pointer-coarse:h-11 pointer-coarse:w-11"
           aria-label="Sair"
         >
           <LogOut size={13} />
@@ -75,7 +75,7 @@ export function SidebarUserProfile({ user, collapsed, onIdentify, onLogout }: Pr
         <button
           type="button"
           onClick={onLogout}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-400 dark:text-zinc-500 transition hover:bg-brand/10 hover:text-brand"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-400 dark:text-zinc-500 transition hover:bg-brand/10 hover:text-brand pointer-coarse:h-11 pointer-coarse:w-11"
           aria-label="Sair"
         >
           <LogOut size={13} />

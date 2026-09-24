@@ -139,7 +139,8 @@ export function ProjectsToolbar({
   return (
     <div className="space-y-2.5">
       {/* Abas de navegação */}
-      <div className="flex items-center gap-0.5 overflow-x-auto rounded-xl border border-zinc-200/60 dark:border-white/8 bg-zinc-50/70 dark:bg-panel-soft/60 p-0.5">
+      {/* < md: continua rolando (toque, trackpad, mouse, Tab), só sem a barra visível. */}
+      <div className="flex items-center gap-0.5 overflow-x-auto rounded-xl border border-zinc-200/60 dark:border-white/8 bg-zinc-50/70 dark:bg-panel-soft/60 p-0.5 max-md:[scrollbar-width:none] max-md:[&::-webkit-scrollbar]:hidden">
         {viewButtons.map((item) => {
           const Icon = item.icon;
           const active = view === item.value;
@@ -150,6 +151,9 @@ export function ProjectsToolbar({
               key={item.value}
               type="button"
               onClick={() => onViewChange(item.value)}
+              // Teclado: a aba focada entra inteira na área visível da barra
+              // (o navegador não rola quando ela está só parcialmente visível).
+              onFocus={(event) => event.currentTarget.scrollIntoView?.({ block: "nearest", inline: "nearest" })}
               className={`inline-flex shrink-0 items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-[13px] font-medium transition-all duration-150 ${
                 active
                   ? "bg-white dark:bg-panel text-zinc-900 dark:text-foreground shadow-[0_1px_4px_rgba(0,0,0,0.10)] dark:shadow-none"

@@ -20,6 +20,8 @@ export function ThemeToggle({ className }: Props) {
       aria-label={isDark ? "Alternar para modo claro" : "Alternar para modo escuro"}
       className={cn(
         "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-all duration-150",
+        // Toque: alvo de 44px (o ícone continua pequeno).
+        "pointer-coarse:h-11 pointer-coarse:w-11",
         "text-zinc-400 hover:bg-brand/10 hover:text-brand",
         "dark:text-zinc-500 dark:hover:bg-white/8 dark:hover:text-zinc-300",
         className,
