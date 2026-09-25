@@ -287,44 +287,18 @@ export function ProjectsPageShell() {
       return;
     }
 
-    const oldStatus = project.status_atual;
-    // Observação vira o MOTIVO da revisão (reason) exigido pelo backend.
+    // Observação vira o MOTIVO da revisão (reason) exigido pelo backend. A
+    // observação da movimentação e o e-mail ao vendedor são feitos pelo SERVIDOR
+    // (source "acao-rapida"), só quando a transição é efetivada.
     const result = moveStatus(project.id, nextStatus, "acao-rapida", observation);
     if (!result.ok) {
       notify(result.error ?? "Nao foi possivel alterar o status.");
       return;
     }
 
-    if (observation?.trim()) {
-      addObservation(
-        project.id,
-        `Mudanca de status via menu de acoes: ${oldStatus} -> ${nextStatus}. Observacao: ${observation.trim()}`,
-        currentUserName,
-      );
-    }
-
     setStatusChangeProject(undefined);
     touchLastUpdated();
     notify("Status atualizado com sucesso.");
-
-    // Elaborar Ante-Projeto e Projeto Aprovado (terminal) têm e-mail próprio no
-    // backend (esteira/45d e finalização) — evita o e-mail genérico duplicado.
-    if (nextStatus !== "ELABORAR ANTE-PROJETO" && nextStatus !== "PROJETO APROVADO") {
-      dispatchSellerEmail(project.id, {
-        projectId: project.id,
-        projectCode: project.codigo_projeto,
-        constructorName: project.construtora,
-        workName: project.obra,
-        sellerName: project.vendedor,
-        sellerEmail: getVendorEmail(project.vendedor) ?? "",
-        oldStatus,
-        newStatus: nextStatus,
-        eventType: "STATUS_CHANGED",
-        changedBy: currentUserName,
-        changedAt: new Date().toISOString(),
-        notes: observation?.trim() || undefined,
-      });
-    }
   }
 
   function notify(message: string) {
@@ -568,39 +542,13 @@ export function ProjectsPageShell() {
             onCreateReminder={canManageRem ? (project) => setReminderFormProject(project) : undefined}
             onClearFilters={clearAllFilters}
             onMoveStatus={(projectId, status, observation, finalCode) => {
-              const current = projects.find((item) => item.id === projectId);
-              const oldStatus = current?.status_atual;
               // observation = MOTIVO da revisão (reason); finalCode = código final ao
               // concluir. O backend exige motivo p/ revisão e atualiza o código no final.
+              // A observação da movimentação e o e-mail ao vendedor são feitos pelo
+              // SERVIDOR (source "kanban"), só quando a transição é efetivada.
               const result = moveStatus(projectId, status, "kanban", observation, finalCode);
 
-              if (result.ok && current) {
-                const message = observation?.trim()
-                  ? `Mudanca de status via Kanban: ${oldStatus} -> ${status}. Observacao: ${observation.trim()}`
-                  : `Mudanca de status via Kanban: ${oldStatus} -> ${status}.`;
-                addObservation(projectId, message, currentUserName);
-                touchLastUpdated();
-
-                // ELABORAR e PROJETO APROVADO (terminal) têm e-mail próprio no
-                // backend (esteira/45d e finalização com o código final). Evita duplicidade.
-                if (status !== "ELABORAR ANTE-PROJETO" && status !== "PROJETO APROVADO") {
-                  dispatchSellerEmail(projectId, {
-                    projectId: current.id,
-                    projectCode: current.codigo_projeto,
-                    constructorName: current.construtora,
-                    workName: current.obra,
-                    sellerName: current.vendedor,
-                    sellerEmail: getVendorEmail(current.vendedor) ?? "",
-                    oldStatus,
-                    newStatus: status,
-                    eventType: "STATUS_CHANGED",
-                    changedBy: currentUserName,
-                    changedAt: new Date().toISOString(),
-                    notes: observation?.trim() || undefined,
-                  });
-                }
-              }
-
+              if (result.ok) touchLastUpdated();
               if (!result.ok) notify(result.error ?? "Falha na movimentacao");
               return result;
             }}
@@ -752,18 +700,11 @@ export function ProjectsPageShell() {
             const pending = anteProjFinalCodePending;
             if (!pending) return;
             const { project, observation } = pending;
-            const oldStatus = project.status_atual;
+            // Observação da movimentação: feita pelo SERVIDOR (source "acao-rapida").
             const result = moveStatus(project.id, "PROJETO FINAL ENVIADO", "acao-rapida", observation, finalCode);
             if (!result.ok) {
               notify(result.error ?? "Falha ao atualizar status.");
             } else {
-              if (observation?.trim()) {
-                addObservation(
-                  project.id,
-                  `Mudanca de status via menu de acoes: ${oldStatus} -> PROJETO FINAL ENVIADO. Observacao: ${observation.trim()}`,
-                  currentUserName,
-                );
-              }
               touchLastUpdated();
               notify(`Projeto final enviado com o codigo ${finalCode}.`);
             }

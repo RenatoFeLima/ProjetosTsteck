@@ -482,6 +482,48 @@ export async function updateProject(actor: SessionUser, id: string, data: Projec
   return serializeProject(updated);
 }
 
+/**
+ * Efeitos de uma mudança de status por origem — as MESMAS regras que antes o
+ * navegador aplicava por conta própria (observação + e-mail ao vendedor), agora
+ * decididas aqui para só existirem quando a transição é efetivada. Função PURA.
+ *  - "kanban": registra sempre a observação da movimentação; e-mail ao vendedor,
+ *    exceto ELABORAR ANTE-PROJETO e PROJETO APROVADO (que têm e-mail próprio).
+ *  - "acao-rapida" (menu da tabela): observação só com texto informado; e-mail
+ *    nas mesmas condições, e nunca ao entrar em PROJETO FINAL ENVIADO (esse
+ *    caminho passa pelo modal de código final, que não notificava).
+ *  - demais origens (formulário, alinhamento automático, sistema): nenhum efeito extra.
+ */
+export function statusChangeSideEffects(input: {
+  source?: string;
+  from: DbStatus;
+  to: DbStatus;
+  note?: string;
+}): { observation: string | null; notifySeller: boolean } {
+  const fromUi = DB_TO_UI_STATUS[input.from];
+  const toUi = DB_TO_UI_STATUS[input.to];
+  const note = input.note?.trim() || "";
+  const hasOwnEmail = input.to === "ELABORAR_ANTE_PROJETO" || input.to === "PROJETO_APROVADO";
+
+  if (input.source === "kanban") {
+    return {
+      observation: note
+        ? `Mudanca de status via Kanban: ${fromUi} -> ${toUi}. Observacao: ${note}`
+        : `Mudanca de status via Kanban: ${fromUi} -> ${toUi}.`,
+      notifySeller: !hasOwnEmail,
+    };
+  }
+  if (input.source === "acao-rapida") {
+    return {
+      observation: note ? `Mudanca de status via menu de acoes: ${fromUi} -> ${toUi}. Observacao: ${note}` : null,
+      notifySeller: !hasOwnEmail && input.to !== "PROJETO_FINAL_ENVIADO",
+    };
+  }
+  return { observation: null, notifySeller: false };
+}
+
+/** Outra operação mudou o status entre a leitura e a transação (desfaz tudo). */
+class StatusChangedConcurrently extends Error {}
+
 export async function changeStatus(
   actor: SessionUser,
   id: string,
@@ -529,61 +571,84 @@ export async function changeStatus(
   }
 
   const now = new Date();
+  const effects = statusChangeSideEffects({ source: opts.source, from, to, note: opts.note });
 
+  // Tudo que é banco e pertence à transição acontece numa ÚNICA transação:
+  // status, histórico, revisões, código final e a observação da movimentação.
+  // Se qualquer passo falhar, nada disso permanece. E-mail só depois do commit.
   const tTx = startTimer();
-  await prisma.$transaction(async (tx) => {
-    // Fecha o registro de histórico aberto do status anterior.
-    await tx.projectStatusHistory.updateMany({
-      where: { projectId: id, exitedAt: null },
-      data: { exitedAt: now },
-    });
-    await tx.projectStatusHistory.create({
-      data: {
-        projectId: id,
-        fromStatus: from,
-        toStatus: to,
-        enteredAt: now,
-        source: opts.source ?? "sistema",
-        note: opts.note ?? null,
-        changedById: actor.id,
-      },
-    });
-
-    // Revisão de Estudo
-    if (to === REVIEW_STUDY) {
-      await tx.projectReviewStudyHistory.create({
-        data: { projectId: id, enteredAt: now, reason: opts.reason ?? null, requestedBy: actor.name, changedById: actor.id },
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Guarda de concorrência: só aplica se o status ainda é o lido acima. Um
+      // segundo pedido simultâneo (duplo clique, retry) encontra 0 linhas e desfaz.
+      // Ao sair de CADASTRO_INICIAL, as 3 flags de pré-requisito são marcadas true.
+      const leavingCadastroInicial = from === "CADASTRO_INICIAL";
+      const applied = await tx.project.updateMany({
+        where: { id, status: from },
+        data: {
+          status: to,
+          currentStatusEnteredAt: now,
+          updatedById: actor.id,
+          ...(leavingCadastroInicial ? { projectReceived: true, cabinLocationDefined: true, alignmentCompleted: true } : {}),
+          ...(finalCodeToApply ? { code: finalCodeToApply } : {}),
+          // Efeitos por status (contadores de revisão, limpeza de urgência ao
+          // enviar ante-projeto / aprovar). Pura e testável: ver statusUpdateExtras.
+          ...statusUpdateExtras(to),
+        },
       });
-    }
-    if (from === REVIEW_STUDY) {
-      await tx.projectReviewStudyHistory.updateMany({ where: { projectId: id, exitedAt: null }, data: { exitedAt: now } });
-    }
-    // Revisão de Projeto Final
-    if (to === REVIEW_FINAL) {
-      await tx.projectFinalReviewHistory.create({
-        data: { projectId: id, enteredAt: now, reason: opts.reason ?? null, requestedBy: actor.name, changedById: actor.id },
-      });
-    }
-    if (from === REVIEW_FINAL) {
-      await tx.projectFinalReviewHistory.updateMany({ where: { projectId: id, exitedAt: null }, data: { exitedAt: now } });
-    }
+      if (applied.count !== 1) throw new StatusChangedConcurrently();
 
-    // Ao sair de CADASTRO_INICIAL, as 3 flags de pré-requisito são marcadas true.
-    const leavingCadastroInicial = from === "CADASTRO_INICIAL";
-    await tx.project.update({
-      where: { id },
-      data: {
-        status: to,
-        currentStatusEnteredAt: now,
-        updatedById: actor.id,
-        ...(leavingCadastroInicial ? { projectReceived: true, cabinLocationDefined: true, alignmentCompleted: true } : {}),
-        ...(finalCodeToApply ? { code: finalCodeToApply } : {}),
-        // Efeitos por status (contadores de revisão, limpeza de urgência ao
-        // enviar ante-projeto / aprovar). Pura e testável: ver statusUpdateExtras.
-        ...statusUpdateExtras(to),
-      },
+      // Fecha o registro de histórico aberto do status anterior.
+      await tx.projectStatusHistory.updateMany({
+        where: { projectId: id, exitedAt: null },
+        data: { exitedAt: now },
+      });
+      await tx.projectStatusHistory.create({
+        data: {
+          projectId: id,
+          fromStatus: from,
+          toStatus: to,
+          enteredAt: now,
+          source: opts.source ?? "sistema",
+          note: opts.note ?? null,
+          changedById: actor.id,
+        },
+      });
+
+      // Revisão de Estudo
+      if (to === REVIEW_STUDY) {
+        await tx.projectReviewStudyHistory.create({
+          data: { projectId: id, enteredAt: now, reason: opts.reason ?? null, requestedBy: actor.name, changedById: actor.id },
+        });
+      }
+      if (from === REVIEW_STUDY) {
+        await tx.projectReviewStudyHistory.updateMany({ where: { projectId: id, exitedAt: null }, data: { exitedAt: now } });
+      }
+      // Revisão de Projeto Final
+      if (to === REVIEW_FINAL) {
+        await tx.projectFinalReviewHistory.create({
+          data: { projectId: id, enteredAt: now, reason: opts.reason ?? null, requestedBy: actor.name, changedById: actor.id },
+        });
+      }
+      if (from === REVIEW_FINAL) {
+        await tx.projectFinalReviewHistory.updateMany({ where: { projectId: id, exitedAt: null }, data: { exitedAt: now } });
+      }
+
+      // Observação da movimentação (antes gravada pelo navegador em outra chamada).
+      if (effects.observation) {
+        await tx.projectObservation.create({
+          data: { projectId: id, author: actor.name, text: effects.observation },
+        });
+      }
     });
-  });
+  } catch (e) {
+    if (!(e instanceof StatusChangedConcurrently)) throw e;
+    // Nada foi aplicado. Se o status já é o destino (pedido repetido que chegou
+    // junto), responde como sucesso SEM repetir efeitos; senão, conflito.
+    const current = await prisma.project.findUnique({ where: { id }, select: { status: true } });
+    if (current?.status === to) return serializeProject(await reload(id));
+    throw new HttpError(409, "O status do projeto foi alterado por outra operação. Atualize a tela e tente novamente.");
+  }
   const txMs = tTx();
 
   const tAudit = startTimer();
@@ -626,6 +691,38 @@ export async function changeStatus(
       changedAt: now.toISOString(),
       notes: isFinal ? undefined : ELABORATE_MESSAGE,
     });
+  }
+
+  // E-mail de movimentação ao vendedor — SÓ depois do commit (antes era disparado
+  // pelo navegador mesmo quando a transição falhava). Destinatário como antes: o
+  // e-mail do vendedor ativo. O resultado vira observação, como no fluxo anterior.
+  if (effects.notifySeller) {
+    const rel = relProject(reloaded);
+    const seller = project.sellerId
+      ? await prisma.seller.findUnique({ where: { id: project.sellerId }, select: { email: true, active: true } })
+      : null;
+    const sent = await dispatchProjectNotification({
+      projectId: id,
+      projectCode: project.code,
+      constructorName: rel.builder?.name ?? "",
+      workName: rel.work?.name ?? "",
+      sellerName: rel.seller?.name ?? "",
+      sellerEmail: seller?.active ? (seller.email?.trim() ?? "") : "",
+      oldStatus: DB_TO_UI_STATUS[from],
+      newStatus: DB_TO_UI_STATUS[to],
+      eventType: "STATUS_CHANGED",
+      changedBy: actor.name,
+      changedAt: now.toISOString(),
+      notes: opts.note?.trim() || undefined,
+    });
+    try {
+      await prisma.projectObservation.create({
+        data: { projectId: id, author: actor.name, text: `Notificacao por e-mail ao vendedor: ${sent.message}` },
+      });
+    } catch (e) {
+      // Registro secundário de um e-mail já tratado: nunca desfaz a transição.
+      console.error("[changeStatus] falha ao registrar observação da notificação:", (e as Error)?.message);
+    }
   }
 
   return result;

@@ -35,21 +35,26 @@ function sanitize(payload: ProjectNotificationPayload): ProjectNotificationPaylo
   };
 }
 
+export type DispatchResult = { success: boolean; message: string };
+
 /**
  * Envia (somente ao vendedor) e registra o resultado. Idempotente por
- * notificationKey. Best-effort: qualquer erro é apenas logado.
+ * notificationKey. Best-effort: qualquer erro é apenas logado — NUNCA lança.
  * Deve ser AWAITADO (serverless pode encerrar a função após a resposta).
+ * Retorna o resultado com as mesmas mensagens de /api/notifications/project-movement.
  */
-export async function dispatchProjectNotification(payload: ProjectNotificationPayload): Promise<void> {
+export async function dispatchProjectNotification(payload: ProjectNotificationPayload): Promise<DispatchResult> {
   try {
     const recipients = getProjectNotificationRecipients(payload.sellerEmail || undefined);
     const key = notificationKeyFor(payload);
 
     if (recipients.to.length === 0) {
       await recordNotification({ payload, key, sentTo: [], success: false, ignored: true });
-      return;
+      return { success: false, message: "Notificação ignorada: vendedor sem e-mail cadastrado." };
     }
-    if (await notificationAlreadySent(key)) return;
+    if (await notificationAlreadySent(key)) {
+      return { success: true, message: "Notificação já enviada anteriormente (sem duplicar)." };
+    }
 
     const send = payload.eventType === "PROJECT_CREATED" ? sendProjectCreatedEmail : sendProjectMovementEmail;
     const result = await send(sanitize(payload), recipients.to);
@@ -60,7 +65,9 @@ export async function dispatchProjectNotification(payload: ProjectNotificationPa
       success: result.success,
       error: result.success ? undefined : result.message,
     });
+    return result;
   } catch (e) {
     console.error("[notify-project] falha ao despachar notificação:", (e as Error)?.message);
+    return { success: false, message: "Falha ao enviar e-mail (registrada, fluxo não afetado)." };
   }
 }
