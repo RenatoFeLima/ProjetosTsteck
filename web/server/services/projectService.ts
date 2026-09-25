@@ -33,6 +33,8 @@ import {
   type ProjectExportRow,
 } from "@/features/projects/domain/project-export";
 import { resolveProjectScope, canViewKpis, canMutateProjects, isReadOnlyRole } from "@/features/auth/lib/project-scope";
+import { validateStatusTransition } from "@/features/projects/domain/project-rules";
+import type { Project } from "@/features/projects/domain/project-types";
 
 // Cláusula Prisma `where` derivada do escopo de visibilidade do usuário.
 // SELLER vê só os projetos do seu vendedor; demais veem tudo. Vendedor sem
@@ -580,6 +582,26 @@ export async function changeStatus(
     );
   }
 
+  // Cadastro Inicial → Elaborar: MESMA regra do Kanban/cliente (pré-requisitos
+  // de alinhamento), agora também no servidor — uma chamada direta à API não
+  // contorna mais o bloqueio.
+  const leavingCadastroInicial = from === "CADASTRO_INICIAL";
+  if (leavingCadastroInicial) {
+    const check = validateStatusTransition(
+      {
+        status_atual: DB_TO_UI_STATUS[from],
+        proj_obra_recebido: project.projectReceived,
+        local_cabine_definido: project.cabinLocationDefined,
+        alinhamento: project.alignmentCompleted,
+      } as Project,
+      DB_TO_UI_STATUS[to],
+    );
+    if (!check.allowed) {
+      const missing = check.missingFields?.length ? ` Pendências: ${check.missingFields.join(", ")}.` : "";
+      throw new HttpError(400, `${check.reason ?? "Transição não permitida."}${missing}`);
+    }
+  }
+
   const enteringReview = to === REVIEW_STUDY || to === REVIEW_FINAL;
   if (enteringReview && !opts.reason?.trim()) {
     throw new HttpError(400, "Informe o motivo da revisão.");
@@ -611,10 +633,14 @@ export async function changeStatus(
     await prisma.$transaction(async (tx) => {
       // Guarda de concorrência: só aplica se o status ainda é o lido acima. Um
       // segundo pedido simultâneo (duplo clique, retry) encontra 0 linhas e desfaz.
-      // Ao sair de CADASTRO_INICIAL, as 3 flags de pré-requisito são marcadas true.
-      const leavingCadastroInicial = from === "CADASTRO_INICIAL";
+      // Ao sair de CADASTRO_INICIAL, as 3 flags de pré-requisito continuam true
+      // (e precisam seguir true até aqui: fazem parte da guarda).
       const applied = await tx.project.updateMany({
-        where: { id, status: from },
+        where: {
+          id,
+          status: from,
+          ...(leavingCadastroInicial ? { projectReceived: true, cabinLocationDefined: true, alignmentCompleted: true } : {}),
+        },
         data: {
           status: to,
           currentStatusEnteredAt: now,

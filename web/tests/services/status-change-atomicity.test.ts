@@ -311,7 +311,8 @@ describe("1. movimento normal", () => {
   });
 
   it("Kanban → Elaborar: observação + SÓ o e-mail próprio de liberação (sem o genérico)", async () => {
-    S.db = seed("CADASTRO_INICIAL", { projectReceived: false, cabinLocationDefined: false, alignmentCompleted: false });
+    // Pré-requisitos cumpridos: sem eles o servidor recusa (Backlog U).
+    S.db = seed("CADASTRO_INICIAL", { projectReceived: true, cabinLocationDefined: true, alignmentCompleted: true });
     await changeStatus(PROJECTS, "p1", "ELABORAR ANTE-PROJETO", { source: "kanban" });
     expect(obsTexts()).toEqual(["Mudanca de status via Kanban: CADASTRO INICIAL -> ELABORAR ANTE-PROJETO."]);
     expect(mail.sendProjectMovementEmail).toHaveBeenCalledTimes(1);
