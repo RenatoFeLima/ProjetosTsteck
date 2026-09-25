@@ -43,7 +43,8 @@ export type DispatchResult = { success: boolean; message: string };
  * Envia (somente ao vendedor) e registra o resultado. Idempotente por
  * notificationKey. Best-effort: qualquer erro é apenas logado — NUNCA lança.
  * Deve ser AWAITADO (serverless pode encerrar a função após a resposta).
- * Retorna o resultado com as mesmas mensagens de /api/notifications/project-movement.
+ * Retorna o resultado ({ success, message }) — a mensagem vira a observação
+ * "Notificacao por e-mail ao vendedor: …" nos fluxos de status e urgência.
  */
 export async function dispatchProjectNotification(payload: ProjectNotificationPayload): Promise<DispatchResult> {
   try {

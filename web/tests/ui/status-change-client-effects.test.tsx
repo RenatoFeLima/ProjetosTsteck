@@ -45,15 +45,17 @@ vi.mock("@/features/master-data/lib/master-data-hydrate", () => ({
   hydrateMasterDataFromApi: vi.fn(async () => {}),
 }));
 
-vi.mock("@/features/projects/services/project-notification-service", async (orig) => ({
-  ...(await orig<typeof import("@/features/projects/services/project-notification-service")>()),
-  sendProjectNotification: vi.fn(async () => ({ success: true, message: "ok" })),
-}));
-
 import { ProjectsPageShell } from "@/features/projects/components/projects-page-shell";
 import { useProjectsStore } from "@/features/projects/state/projects-store";
 import * as api from "@/features/projects/lib/projects-api";
-import * as notifications from "@/features/projects/services/project-notification-service";
+
+// Nenhum pedido do navegador pode ir para /api/notifications/* — a rota de
+// movimentação foi removida (Backlog V); os e-mails saem do servidor.
+const fetchSpy = vi.spyOn(globalThis, "fetch");
+const notificationRequests = () =>
+  fetchSpy.mock.calls
+    .map(([input]) => (input instanceof Request ? input.url : String(input)))
+    .filter((url) => url.includes("/api/notifications/"));
 
 // ── matchMedia controlável ────────────────────────────────────────────────────
 let width = 1280;
@@ -119,7 +121,7 @@ async function expectOnlyStatusRequest(expected: Parameters<typeof api.apiChange
     await new Promise((r) => setTimeout(r, 50));
   });
   expect(api.apiAddObservation).not.toHaveBeenCalled();
-  expect(notifications.sendProjectNotification).not.toHaveBeenCalled();
+  expect(notificationRequests()).toEqual([]);
 }
 
 beforeEach(() => {
@@ -135,7 +137,7 @@ beforeEach(() => {
   });
   vi.mocked(api.apiChangeStatus).mockReset();
   vi.mocked(api.apiAddObservation).mockClear();
-  vi.mocked(notifications.sendProjectNotification).mockClear();
+  fetchSpy.mockClear();
 });
 
 afterEach(() => {

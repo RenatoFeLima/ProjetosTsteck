@@ -85,26 +85,6 @@ export function getProjectNotificationRecipients(
 }
 
 /**
- * Envia notificação de movimentação de projeto via API route do Next.js.
- * Fire-and-forget: nunca lança exceção — retorna resultado silenciosamente.
- */
-export async function sendProjectNotification(
-  payload: ProjectNotificationPayload,
-): Promise<ProjectNotificationResult> {
-  try {
-    const response = await apiFetch("/api/notifications/project-movement", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-
-    const data = await response.json();
-    return data as ProjectNotificationResult;
-  } catch {
-    return { success: false, message: "Falha na conexão com o servidor de e-mail." };
-  }
-}
-
-/**
  * Envia notificação de projeto cadastrado via API route do Next.js.
  * Fire-and-forget: nunca lança exceção.
  */
@@ -141,25 +121,5 @@ export async function sendDeadlineNotification(
     return data as ProjectNotificationResult;
   } catch {
     return { success: false, message: "Falha na conexão com o servidor de e-mail." };
-  }
-}
-
-/**
- * Ponto central de notificação de eventos do projeto.
- * Despacha para o endpoint correto com base no tipo de evento.
- * Fire-and-forget: nunca lança exceção.
- */
-export async function notifyProjectEvent(
-  payload: ProjectNotificationPayload,
-): Promise<ProjectNotificationResult> {
-  switch (payload.eventType) {
-    case "PROJECT_CREATED":
-      return sendProjectCreatedNotification(payload);
-    case "DEADLINE_7_DAYS_LEFT":
-    case "DEADLINE_DUE_TODAY":
-    case "DEADLINE_OVERDUE":
-      return sendDeadlineNotification(payload);
-    default:
-      return sendProjectNotification(payload);
   }
 }

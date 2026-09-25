@@ -45,10 +45,6 @@ vi.mock("@/features/master-data/lib/master-data-hydrate", () => ({
   hydrateMasterDataFromApi: vi.fn(async () => {}),
 }));
 
-vi.mock("@/features/projects/services/project-notification-service", () => ({
-  sendProjectNotification: vi.fn(async () => ({ ok: true, message: "ok" })),
-}));
-
 import { ProjectsKanban } from "@/features/projects/components/projects-kanban";
 import { ProjectsPageShell } from "@/features/projects/components/projects-page-shell";
 import { useProjectsStore } from "@/features/projects/state/projects-store";
