@@ -566,6 +566,7 @@ export function ProjectsPageShell() {
             isCodigoDuplicado={isCodigoProjetoDuplicado}
             canDrag={canMove}
             onCreateReminder={canManageRem ? (project) => setReminderFormProject(project) : undefined}
+            onClearFilters={clearAllFilters}
             onMoveStatus={(projectId, status, observation, finalCode) => {
               const current = projects.find((item) => item.id === projectId);
               const oldStatus = current?.status_atual;

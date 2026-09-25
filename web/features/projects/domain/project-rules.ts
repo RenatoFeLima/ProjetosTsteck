@@ -150,6 +150,14 @@ const ALLOWED_TRANSITIONS: Record<ProjectStatus, ProjectStatus[]> = {
   "PROJETO APROVADO": [],
 };
 
+/**
+ * Destinos do fluxo a partir de um status (somente leitura, cópia do mapa acima).
+ * Não considera pré-requisitos: esses continuam em validateStatusTransition.
+ */
+export function getAllowedStatusTransitions(status: ProjectStatus): ProjectStatus[] {
+  return [...(ALLOWED_TRANSITIONS[status] ?? [])];
+}
+
 export type StatusTransitionValidation = {
   allowed: boolean;
   reason?: string;

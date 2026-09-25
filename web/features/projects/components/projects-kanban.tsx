@@ -14,12 +14,13 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, ArrowDownUp, BellPlus, Check, CheckCircle2, ChevronDown, GripVertical } from "lucide-react";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
 import {
   computeNextAction,
+  getAllowedStatusTransitions,
   getCurrentStatusDeadline,
   sortProjectsForKanban,
   sortProjectsByCodeDesc,
@@ -41,6 +42,9 @@ import { ReminderPill } from "./reminder-badges";
 import { activeRemindersForProject } from "@/features/projects/domain/project-reminders";
 import { useProjectsStore } from "@/features/projects/state/projects-store";
 import { Skeleton } from "@/features/ui/skeleton";
+import { useViewportMode } from "@/features/sidebar/hooks/use-viewport-mode";
+import { KanbanCardActionsMenu, hasKanbanCardActions } from "./kanban-card-actions-menu";
+import { KanbanStageSelector } from "./kanban-stage-selector";
 
 /** Cadastro Inicial com documentação + local da cabine recebidos → pronto p/ alinhamento. */
 function isReadyForAlignment(project: Project): boolean {
@@ -128,6 +132,8 @@ type ProjectsKanbanProps = {
   canDrag?: boolean;
   /** Abre o modal de criação de lembrete (presente só para ADMIN/Projetos). */
   onCreateReminder?: (project: Project) => void;
+  /** Mesma ação "limpar filtros" da tela (estado vazio do celular). */
+  onClearFilters?: () => void;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -142,16 +148,30 @@ function getReviewOrdinal(count: number): string {
 function CardContent({
   project,
   onCreateReminder,
+  onOpen,
+  actions,
+  showGrip = true,
 }: {
   project: Project;
   /** Presente somente para quem pode gerenciar lembretes — mostra o botão de pin. */
   onCreateReminder?: (project: Project) => void;
+  /**
+   * Card do celular: o código vira um <button> cuja camada ::after cobre o card
+   * (toque simples abre os detalhes). O <article> pai precisa ser `relative`.
+   */
+  onOpen?: (project: Project) => void;
+  /** Menu ⋯ (fica acima da camada clicável). */
+  actions?: ReactNode;
+  /** Alça de arraste — só onde o card é arrastável. */
+  showGrip?: boolean;
 }) {
   const theme = getStatusTheme(project.status_atual);
   const nextAction = computeNextAction(project);
   const isInReview = project.status_atual === "REVISAO DE ESTUDO";
   const isInFinalReview = project.status_atual === "REVISAO DE PROJETO FINAL";
   const accentBg = project.urgente ? "bg-[#9e0b0f] dark:bg-red-600" : theme.accentBg;
+  // Recuo das linhas alinhado ao código (depois da alça, quando ela existe).
+  const indent = showGrip ? "pl-[19px]" : "";
 
   // Lembretes ativos do projeto (indicador discreto — NÃO pinta o card inteiro
   // nem interfere em urgência/status/SLA/ordenação). Mostra o mais crítico + "+N".
@@ -168,10 +188,28 @@ function CardContent({
       <div className="flex-1 min-w-0 p-3">
         {/* Row 1: grip handle + project code + urgente badge + pin de lembrete */}
         <div className="mb-0.5 flex items-start gap-1.5">
-          <GripVertical size={13} className="mt-[2px] shrink-0 text-zinc-300 dark:text-zinc-600" />
-          <span className="flex-1 min-w-0 font-mono text-[12.5px] font-bold leading-tight text-zinc-900 dark:text-foreground">
-            {project.codigo_projeto}
-          </span>
+          {showGrip && <GripVertical size={13} className="mt-[2px] shrink-0 text-zinc-300 dark:text-zinc-600" />}
+          {onOpen ? (
+            <button
+              type="button"
+              aria-label={`Abrir projeto ${project.codigo_projeto}`}
+              onClick={() => onOpen(project)}
+              className={[
+                "flex-1 min-w-0 text-left font-mono text-[12.5px] font-bold leading-tight break-all text-zinc-900 dark:text-foreground",
+                "after:absolute after:inset-0 after:rounded-xl after:content-['']",
+                // Sem o scale(.98) global de button:active: a camada ::after encolheria
+                // e o "soltar" do toque cairia fora do botão (mesma correção da Fase 3).
+                "active:transform-none!",
+                "focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-brand/40",
+              ].join(" ")}
+            >
+              {project.codigo_projeto}
+            </button>
+          ) : (
+            <span className="flex-1 min-w-0 font-mono text-[12.5px] font-bold leading-tight text-zinc-900 dark:text-foreground">
+              {project.codigo_projeto}
+            </span>
+          )}
           {onCreateReminder && (
             <button
               type="button"
@@ -190,16 +228,17 @@ function CardContent({
             </button>
           )}
           {project.urgente && <UrgenteBadge urgente urgentDeadline={project.urgentDeadline} />}
+          {actions}
         </div>
 
         {/* Row 2: construtora */}
-        <p className="pl-[19px] text-[12px] font-semibold leading-snug text-zinc-800 dark:text-zinc-200">
+        <p className={`${indent} text-[12px] font-semibold leading-snug text-zinc-800 dark:text-zinc-200`}>
           {project.construtora}
         </p>
 
         {/* Row 3: obra · unidade (unidade só aparece quando existir) */}
         <p
-          className="pl-[19px] mt-0.5 truncate text-[11px] leading-snug text-zinc-500 dark:text-muted"
+          className={`${indent} mt-0.5 truncate text-[11px] leading-snug text-zinc-500 dark:text-muted`}
           title={project.unidade_obra ? `${project.obra} · ${project.unidade_obra}` : project.obra}
         >
           {project.obra}
@@ -210,7 +249,7 @@ function CardContent({
 
         {/* Row 3b: prazo de urgência (data discreta, só para projetos urgentes com deadline) */}
         {project.urgente && project.urgentDeadline && (
-          <p className="pl-[19px] mt-0.5 text-right text-[10px] leading-snug text-red-500 dark:text-red-400">
+          <p className={`${indent} mt-0.5 text-right text-[10px] leading-snug text-red-500 dark:text-red-400`}>
             {formatUrgentDeadline(project.urgentDeadline)}
           </p>
         )}
@@ -277,12 +316,15 @@ function KanbanCard({
   recentlyMoved,
   canDrag,
   onCreateReminder,
+  actions,
 }: {
   project: Project;
   onOpen: (project: Project) => void;
   recentlyMoved: boolean;
   canDrag: boolean;
   onCreateReminder?: (project: Project) => void;
+  /** Menu ⋯ de fallback para toque (oculto em ponteiro fino). */
+  actions?: ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: project.id,
@@ -317,7 +359,39 @@ function KanbanCard({
       ].join(" ")}
       style={isDragging ? { minHeight: CARD_HEIGHT } : undefined}
     >
-      <CardContent project={project} onCreateReminder={onCreateReminder} />
+      <CardContent project={project} onCreateReminder={onCreateReminder} actions={actions} />
+      {recentlyMoved && <SuccessOverlay />}
+    </article>
+  );
+}
+
+/**
+ * Card do celular (< 768px): as mesmas informações do card de mesa, sem arraste
+ * (não usa useDraggable — nenhum arraste acidental). Toque simples abre os
+ * detalhes; o ⋯ fica acima da camada clicável e não abre o projeto.
+ */
+function KanbanMobileCard({
+  project,
+  onOpen,
+  recentlyMoved,
+  actions,
+}: {
+  project: Project;
+  onOpen: (project: Project) => void;
+  recentlyMoved: boolean;
+  actions?: ReactNode;
+}) {
+  const ready = isReadyForAlignment(project);
+  return (
+    <article
+      className={[
+        "relative overflow-hidden rounded-xl border shadow-[0_1px_4px_-1px_rgba(0,0,0,0.06),0_4px_16px_-6px_rgba(0,0,0,0.10)]",
+        ready
+          ? "border-emerald-300 bg-emerald-50/60 dark:border-emerald-700/50 dark:bg-emerald-900/[0.12]"
+          : "border-zinc-200 bg-white dark:border-white/8 dark:bg-panel-soft",
+      ].join(" ")}
+    >
+      <CardContent project={project} onOpen={onOpen} actions={actions} showGrip={false} />
       {recentlyMoved && <SuccessOverlay />}
     </article>
   );
@@ -547,7 +621,7 @@ function ColumnSortMenu({
         aria-expanded={open}
         aria-label={`Ordenar coluna ${columnLabel}`}
         title="Ordenar coluna"
-        className="inline-flex items-center gap-1 rounded-lg border border-zinc-200/70 dark:border-white/10 bg-white/70 dark:bg-panel-soft/70 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 transition hover:text-zinc-800 dark:hover:text-zinc-200 hover:border-zinc-300 dark:hover:border-white/20"
+        className="inline-flex items-center gap-1 rounded-lg border border-zinc-200/70 dark:border-white/10 bg-white/70 dark:bg-panel-soft/70 px-1.5 py-0.5 pointer-coarse:min-h-11 pointer-coarse:px-3 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 transition hover:text-zinc-800 dark:hover:text-zinc-200 hover:border-zinc-300 dark:hover:border-white/20"
       >
         <ArrowDownUp size={11} />
         Ordenar
@@ -570,7 +644,7 @@ function ColumnSortMenu({
                   onChange(opt.value);
                   setOpen(false);
                 }}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition hover:bg-zinc-50 dark:hover:bg-white/5 ${
+                className={`flex w-full items-center gap-2 px-3 py-2 pointer-coarse:min-h-11 text-left text-[12px] transition hover:bg-zinc-50 dark:hover:bg-white/5 ${
                   active ? "font-semibold text-zinc-900 dark:text-foreground" : "text-zinc-600 dark:text-zinc-400"
                 }`}
               >
@@ -587,6 +661,66 @@ function ColumnSortMenu({
 
 // ─── Column ───────────────────────────────────────────────────────────────────
 
+/** Cabeçalho da coluna (identidade, contagem, urgentes/críticos e ordenação) —
+ *  o MESMO na coluna de mesa e na etapa do celular. */
+function KanbanColumnHeader({
+  status,
+  projects,
+  sortMode,
+  onSortModeChange,
+  showSortControl,
+}: {
+  status: ProjectStatus;
+  projects: Project[];
+  sortMode: ColumnSortMode;
+  onSortModeChange: (mode: ColumnSortMode) => void;
+  showSortControl: boolean;
+}) {
+  const theme = getStatusTheme(status);
+
+  const urgentCount = useMemo(() => projects.filter((p) => p.urgente).length, [projects]);
+  const nearDeadlineCount = useMemo(
+    () =>
+      projects.filter((p) => {
+        if (p.status_atual !== "ELABORAR ANTE-PROJETO") return false;
+        const dl = getCurrentStatusDeadline(p);
+        return dl.isOverdue || (dl.hasDeadline && (dl.daysRemaining ?? 999) <= 15);
+      }).length,
+    [projects],
+  );
+
+  return (
+    <header className="flex-none px-3 pt-2.5 pb-2.5 border-b border-zinc-200/60 dark:border-white/[0.07]">
+      <div className="flex items-start justify-between gap-2">
+        <h3
+          className="min-w-0 flex-1 text-[11px] font-bold uppercase tracking-widest text-zinc-600 dark:text-zinc-400 truncate"
+          title={theme.label}
+        >
+          {theme.label}
+        </h3>
+        {showSortControl && (
+          <ColumnSortMenu value={sortMode} onChange={onSortModeChange} columnLabel={theme.label} options={sortOptionsForColumn(status)} />
+        )}
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-1">
+        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${theme.countPill}`}>
+          {projects.length} {projects.length === 1 ? "projeto" : "projetos"}
+        </span>
+        {urgentCount > 0 && (
+          <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-[#9e0b0f] dark:border-red-700/40 dark:bg-red-900/15 dark:text-red-300">
+            {urgentCount} urg.
+          </span>
+        )}
+        {nearDeadlineCount > 0 && (
+          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-700/40 dark:bg-amber-900/15 dark:text-amber-300">
+            {nearDeadlineCount} crít{nearDeadlineCount !== 1 ? "icos" : "ico"}
+          </span>
+        )}
+      </div>
+    </header>
+  );
+}
+
 function KanbanColumn({
   status,
   projects,
@@ -599,6 +733,7 @@ function KanbanColumn({
   onSortModeChange,
   showSortControl,
   onCreateReminder,
+  renderActions,
 }: {
   status: ProjectStatus;
   projects: Project[];
@@ -612,6 +747,8 @@ function KanbanColumn({
   /** Controla se o botão de ordenação aparece nesta coluna. */
   showSortControl: boolean;
   onCreateReminder?: (project: Project) => void;
+  /** Menu ⋯ de fallback para toque, por card. */
+  renderActions: (project: Project) => ReactNode;
 }) {
   const { setNodeRef } = useDroppable({ id: status });
   const [scrollTop, setScrollTop] = useState(0);
@@ -622,17 +759,6 @@ function KanbanColumn({
   const effectiveBottom = isDragActive ? 0 : bottom;
 
   const theme = getStatusTheme(status);
-
-  const urgentCount = useMemo(() => projects.filter((p) => p.urgente).length, [projects]);
-  const nearDeadlineCount = useMemo(
-    () =>
-      projects.filter((p) => {
-        if (p.status_atual !== "ELABORAR ANTE-PROJETO") return false;
-        const dl = getCurrentStatusDeadline(p);
-        return dl.isOverdue || (dl.hasDeadline && (dl.daysRemaining ?? 999) <= 15);
-      }).length,
-    [projects],
-  );
 
   const sectionClass = [
     "flex flex-col min-h-44 rounded-2xl border overflow-hidden transition-colors duration-150",
@@ -648,35 +774,13 @@ function KanbanColumn({
       {/* Colored top strip — status identity */}
       <div className={`h-[3px] w-full flex-none ${theme.accentBg}`} />
 
-      {/* Column header */}
-      <header className="flex-none px-3 pt-2.5 pb-2.5 border-b border-zinc-200/60 dark:border-white/[0.07]">
-        <div className="flex items-start justify-between gap-2">
-          <h3
-            className="min-w-0 flex-1 text-[11px] font-bold uppercase tracking-widest text-zinc-600 dark:text-zinc-400 truncate"
-            title={theme.label}
-          >
-            {theme.label}
-          </h3>
-          {showSortControl && (
-            <ColumnSortMenu value={sortMode} onChange={onSortModeChange} columnLabel={theme.label} options={sortOptionsForColumn(status)} />
-          )}
-        </div>
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${theme.countPill}`}>
-            {projects.length} {projects.length === 1 ? "projeto" : "projetos"}
-          </span>
-          {urgentCount > 0 && (
-            <span className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-[#9e0b0f] dark:border-red-700/40 dark:bg-red-900/15 dark:text-red-300">
-              {urgentCount} urg.
-            </span>
-          )}
-          {nearDeadlineCount > 0 && (
-            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-700/40 dark:bg-amber-900/15 dark:text-amber-300">
-              {nearDeadlineCount} crít{nearDeadlineCount !== 1 ? "icos" : "ico"}
-            </span>
-          )}
-        </div>
-      </header>
+      <KanbanColumnHeader
+        status={status}
+        projects={projects}
+        sortMode={sortMode}
+        onSortModeChange={onSortModeChange}
+        showSortControl={showSortControl}
+      />
 
       {/* Cards scroll area */}
       <div
@@ -694,10 +798,89 @@ function KanbanColumn({
               recentlyMoved={recentlyMovedProjectId === project.id}
               canDrag={canDrag}
               onCreateReminder={onCreateReminder}
+              actions={renderActions(project)}
             />
           ))}
         </div>
         {effectiveBottom > 0 && <div style={{ height: effectiveBottom }} />}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Etapa única do celular: mesmo cabeçalho da coluna de mesa e os cards da etapa
+ * em rolagem natural da página (sem a área interna de 520px nem virtualização).
+ */
+function KanbanMobileStage({
+  status,
+  projects,
+  totalProjects,
+  onOpen,
+  recentlyMovedProjectId,
+  sortMode,
+  onSortModeChange,
+  showSortControl,
+  renderActions,
+  onClearFilters,
+}: {
+  status: ProjectStatus;
+  projects: Project[];
+  /** Tamanho da lista filtrada inteira (todas as etapas). */
+  totalProjects: number;
+  onOpen: (project: Project) => void;
+  recentlyMovedProjectId: string | null;
+  sortMode: ColumnSortMode;
+  onSortModeChange: (mode: ColumnSortMode) => void;
+  showSortControl: boolean;
+  renderActions: (project: Project) => ReactNode;
+  onClearFilters?: () => void;
+}) {
+  const theme = getStatusTheme(status);
+
+  return (
+    <section
+      aria-label={`Etapa ${theme.label}`}
+      className={`flex flex-col overflow-hidden rounded-2xl border ${theme.columnBg} ${theme.columnBorder}`}
+    >
+      <div className={`h-[3px] w-full flex-none ${theme.accentBg}`} />
+      <KanbanColumnHeader
+        status={status}
+        projects={projects}
+        sortMode={sortMode}
+        onSortModeChange={onSortModeChange}
+        showSortControl={showSortControl}
+      />
+      <div className="px-3 py-3">
+        {totalProjects === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-8 text-center">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">Nenhum projeto corresponde aos filtros.</p>
+            {onClearFilters && (
+              <button
+                type="button"
+                onClick={onClearFilters}
+                className="inline-flex h-11 items-center rounded-xl border border-zinc-300 bg-white px-4 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 dark:border-white/15 dark:bg-panel-soft dark:text-zinc-300 dark:hover:bg-white/8"
+              >
+                Limpar filtros
+              </button>
+            )}
+          </div>
+        ) : projects.length === 0 ? (
+          <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">Nenhum projeto nesta etapa.</p>
+        ) : (
+          <ul aria-label={`Projetos em ${theme.label}`} className="grid grid-cols-1 gap-2">
+            {projects.map((project) => (
+              <li key={project.id} className="min-w-0">
+                <KanbanMobileCard
+                  project={project}
+                  onOpen={onOpen}
+                  recentlyMoved={recentlyMovedProjectId === project.id}
+                  actions={renderActions(project)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </section>
   );
@@ -710,6 +893,33 @@ function KanbanColumn({
  * contadores ("0 projetos" seria um estado falso enquanto os dados não chegam).
  */
 export function KanbanSkeleton() {
+  const isMobile = useViewportMode() === "mobile";
+
+  // Celular: seletor + uma etapa, sem rótulo/contagem (a etapa inicial depende dos dados).
+  if (isMobile) {
+    return (
+      <div role="status" aria-busy="true" className="space-y-3">
+        <span className="sr-only">Carregando projetos...</span>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-11 w-11 rounded-xl" />
+          <Skeleton className="h-11 flex-1 rounded-xl" />
+          <Skeleton className="h-11 w-11 rounded-xl" />
+        </div>
+        <section className="overflow-hidden rounded-2xl border border-zinc-200/70 bg-zinc-50 dark:border-white/8 dark:bg-zinc-900/20">
+          <header className="border-b border-zinc-200/60 px-3 pt-2.5 pb-2.5 dark:border-white/[0.07]">
+            <Skeleton className="h-3.5 w-32" />
+            <Skeleton className="mt-1.5 h-5 w-20 rounded-full" />
+          </header>
+          <div className="space-y-2 px-3 py-3">
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div role="status" aria-busy="true" className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       <span className="sr-only">Carregando projetos...</span>
@@ -738,7 +948,7 @@ export function KanbanSkeleton() {
   );
 }
 
-export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodigoDuplicado, canDrag = true, onCreateReminder }: ProjectsKanbanProps) {
+export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodigoDuplicado, canDrag = true, onCreateReminder, onClearFilters }: ProjectsKanbanProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overStatus, setOverStatus] = useState<ProjectStatus | null>(null);
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
@@ -747,6 +957,28 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
   const [recentlyMovedProjectId, setRecentlyMovedProjectId] = useState<string | null>(null);
   // Bug #4: capture the dragged card's measured width for the overlay
   const [dragCardWidth, setDragCardWidth] = useState<number | undefined>(undefined);
+
+  // Celular (< 768px): uma etapa por vez, sem arraste. O componente continua
+  // montado ao cruzar 767/768 — etapa, ordenação e diálogos se preservam.
+  const isMobile = useViewportMode() === "mobile";
+  const [layoutIsMobile, setLayoutIsMobile] = useState(isMobile);
+  if (layoutIsMobile !== isMobile) {
+    // Troca de apresentação: nenhum estado transitório de arraste sobrevive.
+    setLayoutIsMobile(isMobile);
+    setActiveId(null);
+    setOverStatus(null);
+    setDragCardWidth(undefined);
+  }
+
+  // Etapa ativa do celular: só em memória. Com filtro global de status X, a etapa
+  // é X e a navegação trava; trocar a etapa nunca altera os filtros.
+  const statusFilter = useProjectsStore((s) => s.filters.status);
+  const [selectedStage, setSelectedStage] = useState<ProjectStatus | null>(null);
+  const [syncedStatusFilter, setSyncedStatusFilter] = useState(statusFilter);
+  if (syncedStatusFilter !== statusFilter) {
+    setSyncedStatusFilter(statusFilter);
+    if (statusFilter !== "all") setSelectedStage(statusFilter);
+  }
 
   // Modo de ordenação POR coluna (estado local da tela). Inicializador preguiçoso
   // lê o localStorage (readPersistedSortModes é SSR-safe: retorna {} sem window).
@@ -802,6 +1034,14 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
     [projects, sortModes],
   );
 
+  // Etapa inicial (1ª vez no celular): a primeira com projetos na ordem das colunas.
+  const firstStageWithProjects = byStatus.find((column) => column.projects.length > 0)?.status ?? COLUMNS[0];
+  if (isMobile && selectedStage === null) {
+    setSelectedStage(statusFilter !== "all" ? statusFilter : firstStageWithProjects);
+  }
+  const stageLocked = statusFilter !== "all";
+  const activeStage: ProjectStatus = stageLocked ? statusFilter : (selectedStage ?? firstStageWithProjects);
+
   const activeProject = useMemo(
     () => (activeId ? (projects.find((p) => p.id === activeId) ?? null) : null),
     [projects, activeId],
@@ -833,7 +1073,18 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
     if (!targetStatus) return;
 
     const current = projects.find((p) => p.id === projectId);
-    if (!current || current.status_atual === targetStatus) return;
+    if (!current) return;
+    requestMove(current, targetStatus);
+  }
+
+  /**
+   * Ponto ÚNICO de pedido de movimentação do Kanban — o arraste (destino = coluna
+   * onde o card foi solto) e o "Mover para" do menu ⋯ chamam esta função. Daqui
+   * seguem os mesmos bloqueios e diálogos; a confirmação vai para onMoveStatus →
+   * store.moveStatus (validação, otimista, API, rollback).
+   */
+  function requestMove(current: Project, targetStatus: ProjectStatus) {
+    if (current.status_atual === targetStatus) return;
 
     const blockReasons = getBlockReasons(current, targetStatus);
     if (blockReasons.length > 0) {
@@ -842,7 +1093,7 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
     }
 
     const move: PendingMove = {
-      projectId,
+      projectId: current.id,
       projectCode: current.codigo_projeto,
       fromStatus: current.status_atual,
       nextStatus: targetStatus,
@@ -853,13 +1104,39 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
       return;
     }
     setPendingMove({
-      projectId,
+      projectId: current.id,
       projectCode: current.codigo_projeto,
       construtora: current.construtora,
       obra: current.obra,
       fromStatus: current.status_atual,
       nextStatus: targetStatus,
     });
+  }
+
+  /** Menu ⋯: sempre com a versão atual do projeto na lista (como no arraste). */
+  function requestMoveFromMenu(project: Project, targetStatus: ProjectStatus) {
+    const current = projects.find((p) => p.id === project.id);
+    if (current) requestMove(current, targetStatus);
+  }
+
+  /**
+   * Menu ⋯ do card. Destinos só para quem já pode mover hoje (canDrag = canMove
+   * da tela), vindos do mesmo mapa do fluxo. Sem nada além de "Ver detalhes",
+   * não há menu. `className` controla onde ele aparece (ex.: só toque na mesa).
+   */
+  function renderCardActions(project: Project, className?: string): ReactNode {
+    const destinations = canDrag ? getAllowedStatusTransitions(project.status_atual) : [];
+    if (!hasKanbanCardActions(destinations, onCreateReminder)) return null;
+    return (
+      <KanbanCardActionsMenu
+        project={project}
+        onOpen={onOpen}
+        destinations={destinations}
+        onMove={requestMoveFromMenu}
+        onCreateReminder={onCreateReminder}
+        className={className}
+      />
+    );
   }
 
   function handleDragCancel() {
@@ -913,65 +1190,97 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
     notify("Movimentacao cancelada.");
   }
 
+  const mobileColumn = byStatus.find((column) => column.status === activeStage) ?? byStatus[0];
+
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={pointerWithin}
-      // Bug #1A: getBoundingClientRect() gives viewport-relative coords, fixing the
-      // overlay offset that occurs when ancestor scroll containers are present
-      measuring={{
-        draggable: { measure: (el) => el.getBoundingClientRect() },
-        droppable: { strategy: MeasuringStrategy.Always },
-        dragOverlay: { measure: (el) => el.getBoundingClientRect() },
-      }}
-      // Bug #7: screen reader announcements for WCAG compliance
-      accessibility={{
-        announcements: {
-          onDragStart: ({ active }) =>
-            `Iniciando arraste do projeto ${active.id}.`,
-          onDragOver: ({ active, over }) =>
-            over
-              ? `Projeto ${active.id} sobre a coluna ${String(over.id)}.`
-              : `Projeto ${active.id} fora de qualquer coluna.`,
-          onDragEnd: ({ active, over }) =>
-            over
-              ? `Projeto ${active.id} solto na coluna ${String(over.id)}.`
-              : `Projeto ${active.id} retornou a posicao original.`,
-          onDragCancel: ({ active }) =>
-            `Arraste do projeto ${active.id} cancelado.`,
-        },
-      }}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
-    >
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {byStatus.map((column) => (
-          <KanbanColumn
-            key={column.status}
-            status={column.status}
-            projects={column.projects}
-            onOpen={onOpen}
-            isDragActive={activeId !== null}
-            isDropTarget={overStatus === column.status && activeId !== null}
-            recentlyMovedProjectId={recentlyMovedProjectId}
-            canDrag={canDrag}
-            sortMode={getSortMode(column.status)}
-            onSortModeChange={(mode) => handleSortModeChange(column.status, mode)}
-            showSortControl={SORTABLE_COLUMNS.includes(column.status)}
-            onCreateReminder={onCreateReminder}
+    <>
+      {isMobile ? (
+        // Celular: sem DndContext/useDraggable — nenhum arraste possível.
+        <div className="space-y-3">
+          <KanbanStageSelector
+            stages={byStatus.map((column) => ({ status: column.status, count: column.projects.length }))}
+            value={mobileColumn.status}
+            onChange={setSelectedStage}
+            locked={stageLocked}
           />
-        ))}
-      </div>
+          <KanbanMobileStage
+            status={mobileColumn.status}
+            projects={mobileColumn.projects}
+            totalProjects={projects.length}
+            onOpen={onOpen}
+            recentlyMovedProjectId={recentlyMovedProjectId}
+            sortMode={getSortMode(mobileColumn.status)}
+            onSortModeChange={(mode) => handleSortModeChange(mobileColumn.status, mode)}
+            showSortControl={SORTABLE_COLUMNS.includes(mobileColumn.status)}
+            renderActions={(project) => renderCardActions(project)}
+            onClearFilters={onClearFilters}
+          />
+        </div>
+      ) : (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={pointerWithin}
+          // Bug #1A: getBoundingClientRect() gives viewport-relative coords, fixing the
+          // overlay offset that occurs when ancestor scroll containers are present
+          measuring={{
+            draggable: { measure: (el) => el.getBoundingClientRect() },
+            droppable: { strategy: MeasuringStrategy.Always },
+            dragOverlay: { measure: (el) => el.getBoundingClientRect() },
+          }}
+          // Bug #7: screen reader announcements for WCAG compliance
+          accessibility={{
+            announcements: {
+              onDragStart: ({ active }) =>
+                `Iniciando arraste do projeto ${active.id}.`,
+              onDragOver: ({ active, over }) =>
+                over
+                  ? `Projeto ${active.id} sobre a coluna ${String(over.id)}.`
+                  : `Projeto ${active.id} fora de qualquer coluna.`,
+              onDragEnd: ({ active, over }) =>
+                over
+                  ? `Projeto ${active.id} solto na coluna ${String(over.id)}.`
+                  : `Projeto ${active.id} retornou a posicao original.`,
+              onDragCancel: ({ active }) =>
+                `Arraste do projeto ${active.id} cancelado.`,
+            },
+          }}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {byStatus.map((column) => (
+              <KanbanColumn
+                key={column.status}
+                status={column.status}
+                projects={column.projects}
+                onOpen={onOpen}
+                isDragActive={activeId !== null}
+                isDropTarget={overStatus === column.status && activeId !== null}
+                recentlyMovedProjectId={recentlyMovedProjectId}
+                canDrag={canDrag}
+                sortMode={getSortMode(column.status)}
+                onSortModeChange={(mode) => handleSortModeChange(column.status, mode)}
+                showSortControl={SORTABLE_COLUMNS.includes(column.status)}
+                onCreateReminder={onCreateReminder}
+                // Fallback de movimentação para toque (DnD não inicia no toque):
+                // invisível em ponteiro fino, onde a mesa segue idêntica.
+                renderActions={(project) => renderCardActions(project, "hidden pointer-coarse:inline-flex")}
+              />
+            ))}
+          </div>
 
-      {/* dropAnimation=null: overlay disappears instantly on drop, card returns cleanly */}
-      <DragOverlay dropAnimation={null}>
-        {activeProject ? (
-          <DragOverlayCard project={activeProject} width={dragCardWidth} />
-        ) : null}
-      </DragOverlay>
+          {/* dropAnimation=null: overlay disappears instantly on drop, card returns cleanly */}
+          <DragOverlay dropAnimation={null}>
+            {activeProject ? (
+              <DragOverlayCard project={activeProject} width={dragCardWidth} />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      )}
 
+      {/* Diálogos fora do ramo: os MESMOS para arraste e "Mover para". */}
       <KanbanStatusChangeDialog
         open={Boolean(pendingMove)}
         projectCode={pendingMove?.projectCode}
@@ -1004,6 +1313,6 @@ export function ProjectsKanban({ projects, onMoveStatus, onOpen, notify, isCodig
             : undefined
         }
       />
-    </DndContext>
+    </>
   );
 }
