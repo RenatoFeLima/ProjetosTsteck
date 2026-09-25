@@ -19,7 +19,6 @@ import { KpiDashboardErrorBoundary } from "./kpi-dashboard-error-boundary";
 import { PageContainer } from "./page-container";
 import { useProjectsStore, setProjectsErrorSink, type ProjectsView } from "@/features/projects/state/projects-store";
 import { apiExportProjects } from "@/features/projects/lib/projects-api";
-import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import { hydrateMasterDataFromApi } from "@/features/master-data/lib/master-data-hydrate";
 import { getCurrentStatusDeadline } from "@/features/projects/domain/project-rules";
 import { countAlerts } from "@/features/projects/domain/project-alerts";
@@ -27,7 +26,6 @@ import { canManageReminders, dueReminders } from "@/features/projects/domain/pro
 import { ReminderAlertDialog } from "./reminder-alert-dialog";
 import { ReminderFormDialog } from "./reminder-form-dialog";
 import type { Project, ProjectStatus } from "@/features/projects/domain/project-types";
-import { sendProjectNotification } from "@/features/projects/services/project-notification-service";
 import { useAuth } from "@/features/auth/hooks/use-auth";
 import { Skeleton } from "@/features/ui/skeleton";
 
@@ -60,8 +58,6 @@ export function ProjectsPageShell() {
     resolveReminder,
   } = useProjectsStore();
 
-  const { vendedores } = useMasterDataStore();
-
   // Autor das observações/ações = usuário autenticado da sessão (não placeholder).
   const { session } = useAuth();
   const currentUserName =
@@ -90,26 +86,6 @@ export function ProjectsPageShell() {
     if (canViewAlerts) views.push("alerts");
     return views;
   }, [canViewKpis, canViewAlerts]);
-
-  /** Retorna e-mail do vendedor pelo nome cadastrado. */
-  function getVendorEmail(vendedorName: string): string | undefined {
-    const found = vendedores.find(
-      (v) => v.name.toLowerCase().trim() === vendedorName.toLowerCase().trim() && v.active,
-    );
-    return found?.email?.trim() || undefined;
-  }
-
-  // Notifica SOMENTE o vendedor (fire-and-forget). Chama sempre o backend, que
-  // decide enviar (vendedor com e-mail) ou ignorar (sem e-mail) e registra o
-  // resultado; nunca bloqueia o fluxo. A observação reflete a mensagem retornada.
-  function dispatchSellerEmail(
-    projectId: string,
-    payload: Parameters<typeof sendProjectNotification>[0],
-  ) {
-    void sendProjectNotification(payload).then((emailResult) => {
-      addObservation(projectId, `Notificacao por e-mail ao vendedor: ${emailResult.message}`, "sistema");
-    });
-  }
 
   const [modalOpen, setModalOpen] = useState(false);
   const [quickCreate, setQuickCreate] = useState(false);
@@ -332,49 +308,22 @@ export function ProjectsPageShell() {
     const target = baseProjects.find((project) => project.id === payload.projectId);
     if (!target || target.urgente) return;
 
+    // Observação e e-mail ao vendedor são feitos pelo SERVIDOR, só depois de a
+    // urgência ser gravada (antes o navegador os disparava por conta própria).
     toggleUrgente(payload.projectId, { reason: payload.urgencyReason, deadline: payload.urgentDeadline });
 
     touchLastUpdated();
     notify("Projeto marcado como urgente.");
-
-    dispatchSellerEmail(target.id, {
-      projectId: target.id,
-      projectCode: target.codigo_projeto,
-      constructorName: target.construtora,
-      workName: target.obra,
-      sellerName: target.vendedor,
-      sellerEmail: getVendorEmail(target.vendedor) ?? "",
-      newStatus: target.status_atual,
-      eventType: "MARKED_URGENT",
-      changedBy: currentUserName,
-      changedAt: payload.updatedAt,
-      urgencyReason: payload.urgencyReason,
-    });
   }
 
   function removeUrgent(project: Project) {
     if (!project.urgente) return;
 
+    // Observação e e-mail ao vendedor: feitos pelo SERVIDOR após gravar.
     toggleUrgente(project.id);
-    const by = currentUserName;
-    const when = new Date().toLocaleString();
-    addObservation(project.id, `Urgencia removida por ${by} em ${when}.`, by);
 
     touchLastUpdated();
     notify("Urgencia removida do projeto.");
-
-    dispatchSellerEmail(project.id, {
-      projectId: project.id,
-      projectCode: project.codigo_projeto,
-      constructorName: project.construtora,
-      workName: project.obra,
-      sellerName: project.vendedor,
-      sellerEmail: getVendorEmail(project.vendedor) ?? "",
-      newStatus: project.status_atual,
-      eventType: "URGENCY_REMOVED",
-      changedBy: by,
-      changedAt: new Date().toISOString(),
-    });
   }
 
   function retryTableLoad() {

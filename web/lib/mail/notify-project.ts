@@ -32,6 +32,8 @@ function sanitize(payload: ProjectNotificationPayload): ProjectNotificationPaylo
     changedBy: escapeHtml(payload.changedBy),
     notes: payload.notes ? escapeHtml(payload.notes) : undefined,
     nextAction: payload.nextAction ? escapeHtml(payload.nextAction) : undefined,
+    // Motivo de urgência é texto livre e vai direto no HTML do e-mail.
+    urgencyReason: payload.urgencyReason ? escapeHtml(payload.urgencyReason) : undefined,
   };
 }
 

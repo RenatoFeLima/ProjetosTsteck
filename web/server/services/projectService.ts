@@ -728,6 +728,9 @@ export async function changeStatus(
   return result;
 }
 
+/** Outra operação mudou a urgência entre a leitura e a transação (desfaz tudo). */
+class UrgencyChangedConcurrently extends Error {}
+
 export async function setUrgency(
   actor: SessionUser,
   id: string,
@@ -745,14 +748,12 @@ export async function setUrgency(
   }
   if (urgent && !deadline) throw new HttpError(400, "Informe o prazo de urgência.");
 
-  const trimmedReason = reason?.trim() || null;
+  // Já no estado pedido (retry, duplo clique, pedido repetido): responde sem
+  // repetir nenhum efeito.
+  const desired = urgent ? "URGENTE" : "NORMAL";
+  if (project.priority === desired) return serializeProject(await reload(id));
 
-  await prisma.project.update({
-    where: { id },
-    data: urgent
-      ? { priority: "URGENTE", urgentDeadline: new Date(deadline!), urgentReason: trimmedReason, updatedById: actor.id }
-      : { priority: "NORMAL", urgentDeadline: null, urgentReason: null, updatedById: actor.id },
-  });
+  const trimmedReason = reason?.trim() || null;
 
   const obsText = urgent
     ? trimmedReason
@@ -762,9 +763,38 @@ export async function setUrgency(
       ? `Urgência removida: ${trimmedReason}`
       : "Urgência removida.";
 
-  await prisma.projectObservation.create({
-    data: { projectId: id, author: actor.name, text: obsText },
-  });
+  // Urgência + observação numa ÚNICA transação (antes eram escritas soltas).
+  // Guarda de concorrência: só aplica se a prioridade ainda é a lida acima (e,
+  // ao marcar, se o projeto não virou PROJETO APROVADO nesse meio-tempo).
+  try {
+    await prisma.$transaction(async (tx) => {
+      const applied = await tx.project.updateMany({
+        where: {
+          id,
+          priority: urgent ? "NORMAL" : "URGENTE",
+          ...(urgent ? { status: { not: "PROJETO_APROVADO" } } : {}),
+        },
+        data: urgent
+          ? { priority: "URGENTE", urgentDeadline: new Date(deadline!), urgentReason: trimmedReason, updatedById: actor.id }
+          : { priority: "NORMAL", urgentDeadline: null, urgentReason: null, updatedById: actor.id },
+      });
+      if (applied.count !== 1) throw new UrgencyChangedConcurrently();
+
+      await tx.projectObservation.create({
+        data: { projectId: id, author: actor.name, text: obsText },
+      });
+    });
+  } catch (e) {
+    if (!(e instanceof UrgencyChangedConcurrently)) throw e;
+    // Nada foi aplicado. Outro pedido já deixou no estado pedido → sucesso sem
+    // repetir efeitos; projeto aprovado nesse meio-tempo → mesma regra de antes.
+    const current = await prisma.project.findUnique({ where: { id }, select: { priority: true, status: true } });
+    if (current?.priority === desired) return serializeProject(await reload(id));
+    if (urgent && current?.status === "PROJETO_APROVADO") {
+      throw new HttpError(400, "Projetos aprovados não podem ser marcados como urgentes.");
+    }
+    throw new HttpError(409, "A urgência do projeto foi alterada por outra operação. Atualize a tela e tente novamente.");
+  }
 
   await writeAudit({
     action: urgent ? "PROJECT_MARKED_URGENT" : "PROJECT_URGENCY_REMOVED",
@@ -775,7 +805,38 @@ export async function setUrgency(
     message: `${actor.name} ${urgent ? `marcou como urgente (prazo: ${deadline})` : "removeu a urgência d"}o projeto ${project.code}.`,
   });
 
-  return serializeProject(await reload(id));
+  const reloaded = await reload(id);
+
+  // E-mail ao vendedor — SÓ depois do commit (antes era disparado pelo navegador
+  // mesmo se a gravação falhasse). Mesmo destinatário (vendedor ativo) e mesmo
+  // registro do resultado em observação que o navegador fazia.
+  const rel = relProject(reloaded);
+  const seller = project.sellerId
+    ? await prisma.seller.findUnique({ where: { id: project.sellerId }, select: { email: true, active: true } })
+    : null;
+  const sent = await dispatchProjectNotification({
+    projectId: id,
+    projectCode: project.code,
+    constructorName: rel.builder?.name ?? "",
+    workName: rel.work?.name ?? "",
+    sellerName: rel.seller?.name ?? "",
+    sellerEmail: seller?.active ? (seller.email?.trim() ?? "") : "",
+    newStatus: DB_TO_UI_STATUS[project.status as DbStatus],
+    eventType: urgent ? "MARKED_URGENT" : "URGENCY_REMOVED",
+    changedBy: actor.name,
+    changedAt: new Date().toISOString(),
+    ...(urgent && trimmedReason ? { urgencyReason: trimmedReason } : {}),
+  });
+  try {
+    await prisma.projectObservation.create({
+      data: { projectId: id, author: actor.name, text: `Notificacao por e-mail ao vendedor: ${sent.message}` },
+    });
+  } catch (e) {
+    // Registro secundário de um e-mail já tratado: nunca desfaz a urgência.
+    console.error("[setUrgency] falha ao registrar observação da notificação:", (e as Error)?.message);
+  }
+
+  return serializeProject(reloaded);
 }
 
 export async function addObservation(actor: SessionUser, id: string, text: string) {
