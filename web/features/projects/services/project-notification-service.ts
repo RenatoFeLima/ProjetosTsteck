@@ -1,8 +1,7 @@
-// ─── Tipos compartilhados entre frontend e API route ─────────────────────────
-// Este arquivo é importado tanto pelo client quanto pelo server (rota API).
+// ─── Tipos e regras de destinatário das notificações de projeto ─────────────
+// Usado pelo envio no SERVIDOR (lib/mail, jobs). O navegador não dispara mais
+// e-mails: não há rotas /api/notifications/* chamadas pelo cliente.
 // Não importar aqui nada que seja server-only.
-
-import { apiFetch } from "@/lib/api-client";
 
 export type ProjectNotificationEventType =
   | "STATUS_CHANGED"
@@ -56,11 +55,6 @@ export type ProjectNotificationRecord = {
   dedupeKey: string;
 };
 
-export type ProjectNotificationResult = {
-  success: boolean;
-  message: string;
-};
-
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function isValidEmail(email: string): boolean {
@@ -82,44 +76,4 @@ export function getProjectNotificationRecipients(
     return { to: [sellerEmail] };
   }
   return { to: [] };
-}
-
-/**
- * Envia notificação de projeto cadastrado via API route do Next.js.
- * Fire-and-forget: nunca lança exceção.
- */
-export async function sendProjectCreatedNotification(
-  payload: ProjectNotificationPayload,
-): Promise<ProjectNotificationResult> {
-  try {
-    const response = await apiFetch("/api/notifications/project-created", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-
-    const data = await response.json();
-    return data as ProjectNotificationResult;
-  } catch {
-    return { success: false, message: "Falha na conexão com o servidor de e-mail." };
-  }
-}
-
-/**
- * Envia alerta de prazo via API route do Next.js.
- * Fire-and-forget: nunca lança exceção.
- */
-export async function sendDeadlineNotification(
-  payload: ProjectNotificationPayload,
-): Promise<ProjectNotificationResult> {
-  try {
-    const response = await apiFetch("/api/notifications/deadline-warning", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-
-    const data = await response.json();
-    return data as ProjectNotificationResult;
-  } catch {
-    return { success: false, message: "Falha na conexão com o servidor de e-mail." };
-  }
 }
