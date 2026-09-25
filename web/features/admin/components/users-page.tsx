@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ROLE_COLORS, ROLE_LABELS } from "@/features/auth/lib/permissions";
 import { useAuth } from "@/features/auth/hooks/use-auth";
+import { useViewportMode } from "@/features/sidebar/hooks/use-viewport-mode";
 import * as usersApi from "@/features/admin/lib/users-api";
 import { UserFormDialog } from "./user-form-dialog";
 import { ResetPasswordDialog } from "./reset-password-dialog";
@@ -107,6 +108,31 @@ export function UsersPage() {
   const handleRequirePwdChange = (u: User) =>
     run(() => usersApi.updateUser(u.id, { mustChangePassword: true }), `${u.name} deverá trocar a senha no próximo login.`);
 
+  // < 768px: cards; ≥ 768px: tabela. Uma apresentação por vez, a partir da
+  // MESMA lista `filtered` (busca/filtros/ordem da API); o resize não recarrega.
+  const isMobile = useViewportMode() === "mobile";
+
+  /** Menu ⋯ com os MESMOS props de permissão para a linha e para o card. */
+  function renderActions(u: User, triggerClassName?: string) {
+    return (
+      <UserActionsMenu
+        user={u}
+        isSelf={isSelf(u)}
+        canEdit={canEdit || canManage}
+        canResetPwd={canResetPwd}
+        canPromote={canPromote}
+        onEdit={() => setEditUser(u)}
+        onReset={() => setResetUser(u)}
+        onRequirePwdChange={() => handleRequirePwdChange(u)}
+        onPromote={() => handlePromote(u)}
+        onRevoke={() => handleRevoke(u)}
+        onInactivate={() => handleInactivate(u)}
+        onActivate={() => handleActivate(u)}
+        triggerClassName={triggerClassName}
+      />
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Toast */}
@@ -140,7 +166,7 @@ export function UsersPage() {
         {canCreate && (
           <button
             onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-brand/90 active:scale-[0.99] transition-all shrink-0"
+            className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-[13px] font-semibold text-white hover:bg-brand/90 active:scale-[0.99] transition-all shrink-0 pointer-coarse:min-h-11"
           >
             <Plus size={14} />
             Novo usuário
@@ -157,7 +183,7 @@ export function UsersPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nome, usuário ou e-mail…"
-            className="h-9 w-full rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-panel-soft pl-8 pr-3 text-[13px] text-zinc-900 dark:text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 placeholder:text-zinc-400"
+            className="h-9 w-full rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-panel-soft pl-8 pr-3 text-[13px] text-zinc-900 dark:text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/10 placeholder:text-zinc-400 pointer-coarse:h-11"
           />
         </div>
 
@@ -208,6 +234,19 @@ export function UsersPage() {
             <UserX size={32} className="opacity-40" />
             <p className="text-[14px]">Nenhum usuário encontrado.</p>
           </div>
+        ) : isMobile ? (
+          // grid-cols-1 = minmax(0, 1fr): textos longos com truncate não alargam a lista.
+          <ul aria-label="Usuários" className="grid grid-cols-1 gap-3">
+            {filtered.map((u) => (
+              <li key={u.id}>
+                <UserCard
+                  user={u}
+                  isSelf={isSelf(u)}
+                  actions={renderActions(u, "inline-flex h-11 w-11 items-center justify-center p-0")}
+                />
+              </li>
+            ))}
+          </ul>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-white/8">
             <table className="w-full border-collapse">
@@ -233,24 +272,13 @@ export function UsersPage() {
                     {/* Nome */}
                     <td className="px-4 py-3.5">
                       <div className="flex items-center gap-2.5">
-                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand/10 text-[11px] font-bold text-brand">
-                          {u.name.slice(0, 2).toUpperCase()}
-                        </span>
+                        <UserAvatar user={u} />
                         <div>
                           <p className="text-[13px] font-medium text-zinc-900 dark:text-foreground leading-tight">
                             {u.name}
-                            {isSelf(u) && (
-                              <span className="ml-1.5 rounded bg-brand/10 px-1 py-0.5 text-[10px] font-semibold text-brand">
-                                você
-                              </span>
-                            )}
+                            {isSelf(u) && <SelfBadge />}
                           </p>
-                          {u.mustChangePassword && (
-                            <span className="flex items-center gap-1 text-[11px] text-amber-500">
-                              <Clock3 size={10} />
-                              Troca pendente
-                            </span>
-                          )}
+                          {u.mustChangePassword && <PendingPasswordNote />}
                         </div>
                       </div>
                     </td>
@@ -267,47 +295,22 @@ export function UsersPage() {
 
                     {/* Perfil */}
                     <td className="px-4 py-3.5">
-                      <span className={cn("rounded-md border px-2.5 py-1 text-[11px] font-semibold", ROLE_COLORS[u.role])}>
-                        {ROLE_LABELS[u.role]}
-                      </span>
+                      <UserRoleBadge role={u.role} />
                     </td>
 
                     {/* Status */}
                     <td className="px-4 py-3.5">
-                      <span className={cn(
-                        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium",
-                        u.active
-                          ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
-                          : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500",
-                      )}>
-                        <span className={cn("h-1.5 w-1.5 rounded-full", u.active ? "bg-emerald-500" : "bg-zinc-400")} />
-                        {u.active ? "Ativo" : "Inativo"}
-                      </span>
+                      <UserStatusBadge active={u.active} />
                     </td>
 
                     {/* Último acesso */}
                     <td className="px-4 py-3.5 text-[13px] text-zinc-500">
-                      {u.lastLoginAt
-                        ? format(parseISO(u.lastLoginAt), "dd/MM/yyyy HH:mm", { locale: ptBR })
-                        : <span className="text-zinc-300 dark:text-zinc-600">Nunca</span>}
+                      <LastLogin user={u} />
                     </td>
 
                     {/* Ações */}
                     <td className="px-4 py-3.5">
-                      <UserActionsMenu
-                        user={u}
-                        isSelf={isSelf(u)}
-                        canEdit={canEdit || canManage}
-                        canResetPwd={canResetPwd}
-                        canPromote={canPromote}
-                        onEdit={() => setEditUser(u)}
-                        onReset={() => setResetUser(u)}
-                        onRequirePwdChange={() => handleRequirePwdChange(u)}
-                        onPromote={() => handlePromote(u)}
-                        onRevoke={() => handleRevoke(u)}
-                        onInactivate={() => handleInactivate(u)}
-                        onActivate={() => handleActivate(u)}
-                      />
+                      {renderActions(u)}
                     </td>
                   </tr>
                 ))}
@@ -322,6 +325,103 @@ export function UsersPage() {
 
 // ─── Sub-componentes ──────────────────────────────────────────────────────────
 
+// Peças visuais compartilhadas pela linha da tabela e pelo card mobile (mesma
+// marcação — nenhuma regra visual duplicada).
+
+function UserAvatar({ user }: { user: User }) {
+  return (
+    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand/10 text-[11px] font-bold text-brand">
+      {user.name.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
+
+function SelfBadge() {
+  return (
+    <span className="ml-1.5 rounded bg-brand/10 px-1 py-0.5 text-[10px] font-semibold text-brand">
+      você
+    </span>
+  );
+}
+
+function PendingPasswordNote() {
+  return (
+    <span className="flex items-center gap-1 text-[11px] text-amber-500">
+      <Clock3 size={10} />
+      Troca pendente
+    </span>
+  );
+}
+
+function UserRoleBadge({ role }: { role: UserRole }) {
+  return (
+    <span className={cn("rounded-md border px-2.5 py-1 text-[11px] font-semibold", ROLE_COLORS[role])}>
+      {ROLE_LABELS[role]}
+    </span>
+  );
+}
+
+function UserStatusBadge({ active }: { active: boolean }) {
+  return (
+    <span className={cn(
+      "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium",
+      active
+        ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
+        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500",
+    )}>
+      <span className={cn("h-1.5 w-1.5 rounded-full", active ? "bg-emerald-500" : "bg-zinc-400")} />
+      {active ? "Ativo" : "Inativo"}
+    </span>
+  );
+}
+
+function LastLogin({ user }: { user: User }) {
+  return user.lastLoginAt
+    ? <>{format(parseISO(user.lastLoginAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}</>
+    : <span className="text-zinc-300 dark:text-zinc-600">Nunca</span>;
+}
+
+/**
+ * Card de usuário no celular (< 768px). Não é clicável — como a linha da
+ * tabela; a única interação é o menu ⋯ (o MESMO componente e os MESMOS props
+ * de permissão da linha, montado por quem chama).
+ */
+function UserCard({ user, isSelf, actions }: { user: User; isSelf: boolean; actions: React.ReactNode }) {
+  return (
+    <article
+      className={cn(
+        "rounded-2xl border border-zinc-200 bg-white p-4 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.04)] dark:border-white/8 dark:bg-panel",
+        !user.active && "opacity-60",
+      )}
+    >
+      <div className="flex items-start gap-2.5">
+        <div className="pt-0.5">
+          <UserAvatar user={user} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="line-clamp-2 break-words text-[14px] font-medium leading-snug text-zinc-900 dark:text-foreground">
+            {user.name}
+            {isSelf && <SelfBadge />}
+          </h3>
+          <p title={`@${user.username}`} className="truncate text-[13px] text-zinc-600 dark:text-zinc-400">@{user.username}</p>
+          {user.email && (
+            <p title={user.email} className="truncate text-[13px] text-zinc-500">{user.email}</p>
+          )}
+          {user.mustChangePassword && <PendingPasswordNote />}
+        </div>
+        <div className="-mt-1 -mr-1 shrink-0">{actions}</div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <UserRoleBadge role={user.role} />
+        <UserStatusBadge active={user.active} />
+      </div>
+      <p className="mt-2 text-[12px] text-zinc-500">
+        Último acesso: <LastLogin user={user} />
+      </p>
+    </article>
+  );
+}
+
 type UserActionsMenuProps = {
   user: User;
   isSelf: boolean;
@@ -335,6 +435,8 @@ type UserActionsMenuProps = {
   onRevoke: () => void;
   onInactivate: () => void;
   onActivate: () => void;
+  /** Classes extras do botão ⋯ (ex.: alvo de 44px no card mobile). */
+  triggerClassName?: string;
 };
 
 /**
@@ -346,7 +448,7 @@ type UserActionsMenuProps = {
  */
 function UserActionsMenu({
   user, isSelf, canEdit, canResetPwd, canPromote,
-  onEdit, onReset, onRequirePwdChange, onPromote, onRevoke, onInactivate, onActivate,
+  onEdit, onReset, onRequirePwdChange, onPromote, onRevoke, onInactivate, onActivate, triggerClassName,
 }: UserActionsMenuProps) {
   // Itens visíveis dependem das permissões do usuário logado.
   const showEdit = canEdit;
@@ -368,7 +470,12 @@ function UserActionsMenu({
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
         <button
-          className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/8 hover:text-zinc-600 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand/30 data-[state=open]:bg-zinc-100 dark:data-[state=open]:bg-white/8"
+          className={cn(
+            "rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/8 hover:text-zinc-600 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand/30 data-[state=open]:bg-zinc-100 dark:data-[state=open]:bg-white/8",
+            // Toque: alvo de 44px (o ícone continua pequeno; mouse mantém a densidade).
+            "pointer-coarse:inline-flex pointer-coarse:h-11 pointer-coarse:w-11 pointer-coarse:items-center pointer-coarse:justify-center",
+            triggerClassName,
+          )}
           aria-label="Ações do usuário"
         >
           <MoreHorizontal size={15} />
@@ -442,6 +549,7 @@ function ActionItem({
 
 const selectCls = cn(
   "h-9 rounded-xl border border-zinc-200 dark:border-white/10 bg-white dark:bg-panel-soft px-3 pr-7 text-[13px]",
+  "pointer-coarse:h-11",
   "text-zinc-900 dark:text-foreground outline-none cursor-pointer transition-all",
   "focus:border-brand focus:ring-2 focus:ring-brand/10",
   "appearance-none",
