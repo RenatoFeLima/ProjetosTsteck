@@ -115,6 +115,7 @@ export default function ObrasPage() {
           entityLabel="Obra"
           searchValue={search}
           onSearch={setSearch}
+          card={{ title: "name", subtitle: "construtoraName", details: ["city"], expandToggle: "unidades" }}
           expandLabel={(item) => `unidades de ${item.name}`}
           renderExpanded={(item) => {
             const units = unitsByWork.get(item.id) ?? [];
@@ -143,17 +144,17 @@ export default function ObrasPage() {
               </ul>
             );
           }}
-          extraActions={(item) => (
-            <button
-              type="button"
-              title="Gerenciar unidades da obra"
-              aria-label={`Gerenciar unidades da obra ${item.name}`}
-              onClick={() => setUnitsFor(item)}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/8 dark:hover:text-foreground"
-            >
-              <Layers size={14} />
-            </button>
-          )}
+          // Definição única: botão na tabela, item do menu ⋯ no card mobile.
+          rowActions={(item) => [
+            {
+              key: "units",
+              label: "Gerenciar unidades",
+              title: "Gerenciar unidades da obra",
+              ariaLabel: `Gerenciar unidades da obra ${item.name}`,
+              icon: Layers,
+              onSelect: () => setUnitsFor(item),
+            },
+          ]}
         />
       </MasterDataStates>
 

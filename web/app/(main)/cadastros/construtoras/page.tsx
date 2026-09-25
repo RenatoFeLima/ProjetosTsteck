@@ -69,6 +69,7 @@ export default function ConstrutorasPage() {
           entityLabel="Construtora"
           searchValue={search}
           onSearch={setSearch}
+          card={{ title: "name", subtitle: "cnpj", details: [["phone", "email"]] }}
         />
       </MasterDataStates>
 

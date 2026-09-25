@@ -60,6 +60,7 @@ export default function TiposCabinePage() {
           entityLabel="Tipo de Cabine"
           searchValue={search}
           onSearch={setSearch}
+          card={{ title: "name", subtitle: "description" }}
         />
       </MasterDataStates>
 

@@ -62,6 +62,7 @@ export default function VendedoresPage() {
           entityLabel="Vendedor"
           searchValue={search}
           onSearch={setSearch}
+          card={{ title: "name", subtitle: "email", details: ["phone"] }}
         />
       </MasterDataStates>
 

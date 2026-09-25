@@ -62,6 +62,7 @@ export default function EquipamentosPage() {
           entityLabel="Equipamento"
           searchValue={search}
           onSearch={setSearch}
+          card={{ title: "code", subtitle: "description", details: [["family", "capacity"]] }}
         />
       </MasterDataStates>
 

@@ -62,6 +62,7 @@ export default function EngenheirosPage() {
           entityLabel="Engenheiro"
           searchValue={search}
           onSearch={setSearch}
+          card={{ title: "name", subtitle: "email", details: ["phone"] }}
         />
       </MasterDataStates>
 
