@@ -71,6 +71,10 @@ export function ProjectsPageShell() {
   const readOnly = role === "SELLER" || role === "COMMERCIAL";
   const canMutate = !readOnly;
   const canMove = canMutate && Boolean(perms?.projects.changeStatus);
+  // Marcar/remover urgência pelo menu ⋯ = POST/DELETE /urgency, que o servidor
+  // só aceita com projects.markUrgent (PROJECTS não tem por padrão). Sem ela o
+  // item fica desabilitado, como "Alterar status" sem changeStatus.
+  const canMarkUrgent = canMutate && Boolean(perms?.projects.markUrgent);
   const canViewKpis = Boolean(perms?.kpis.view) && !isSeller;
   const canViewAlerts = Boolean(perms?.alerts.view) && !isSeller && !readOnly;
   // Exportação: alinhado ao backend (kpis.export; ADMIN sempre). SELLER/COMMERCIAL
@@ -473,8 +477,8 @@ export function ProjectsPageShell() {
             onEditProject={canMutate ? openEdit : undefined}
             onChangeStatus={canMove ? openStatusDialog : undefined}
             onViewHistory={openHistory}
-            onMarkUrgente={canMutate ? (project) => setSelectedUrgencyProject(project) : undefined}
-            onRemoveUrgente={canMutate ? removeUrgent : () => {}}
+            onMarkUrgente={canMarkUrgent ? (project) => setSelectedUrgencyProject(project) : undefined}
+            onRemoveUrgente={canMarkUrgent ? removeUrgent : () => {}}
             onClearFilters={clearAllFilters}
             state={tableState}
             onRetry={retryTableLoad}
