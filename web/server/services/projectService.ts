@@ -329,6 +329,8 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
   }
 
   if (data.urgente) {
+    // Criar já urgente também é definir urgência: exige projects.markUrgent.
+    assertPermission(actor, (p) => p.projects.markUrgent);
     if (!data.urgentDeadline) throw new HttpError(400, "Prazo de urgência é obrigatório ao marcar o projeto como urgente.");
   }
 
@@ -406,13 +408,40 @@ export async function createProject(actor: SessionUser, data: ProjectInput): Pro
   return serializeProject(created);
 }
 
+/**
+ * O pedido de edição muda de fato a urgência gravada (priority, urgentDeadline,
+ * urgentReason)? Compara com o banco: reenviar os MESMOS valores (o formulário
+ * manda o projeto inteiro a cada salvamento) não é alteração. Função PURA.
+ */
+export function urgencyChangeRequested(
+  existing: { priority: string; urgentDeadline: Date | null; urgentReason: string | null },
+  data: Pick<ProjectInput, "urgente" | "urgentDeadline" | "urgentReason">,
+): boolean {
+  if (data.urgente === undefined) return false;
+  const wantsUrgent = data.urgente === true;
+  if (wantsUrgent !== (existing.priority === "URGENTE")) return true;
+  if (!wantsUrgent) return false; // NORMAL → NORMAL
+  const day = (v: string | Date | null | undefined) =>
+    v ? (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10) : null;
+  // Mesma gravação do updateProject: prazo só se informado; motivo aparado (vazio = null).
+  const deadlineChanged = Boolean(data.urgentDeadline) && day(data.urgentDeadline) !== day(existing.urgentDeadline);
+  const reasonChanged = (data.urgentReason?.trim() || null) !== (existing.urgentReason ?? null);
+  return deadlineChanged || reasonChanged;
+}
+
 export async function updateProject(actor: SessionUser, id: string, data: ProjectInput): Promise<SerializedProject> {
   assertCanMutate(actor);
   assertPermission(actor, (p) => p.projects.edit);
   const existing = await prisma.project.findUnique({ where: { id } });
   if (!existing) throw new HttpError(404, "Projeto não encontrado.");
 
-  if (data.urgente === true) {
+  // Urgência exige projects.markUrgent em QUALQUER caminho (o menu usa /urgency).
+  // Editar os demais campos continua só com projects.edit; reenviar a urgência
+  // sem mudança não conta como alteração.
+  const changesUrgency = urgencyChangeRequested(existing, data);
+  if (changesUrgency) assertPermission(actor, (p) => p.projects.markUrgent);
+
+  if (changesUrgency && data.urgente === true) {
     if (!data.urgentDeadline) throw new HttpError(400, "Prazo de urgência é obrigatório ao marcar o projeto como urgente.");
   }
 
@@ -442,9 +471,10 @@ export async function updateProject(actor: SessionUser, id: string, data: Projec
       cabinLocationDefined: data.local_cabine_definido,
       alignmentCompleted: data.alinhamento,
       alignmentDate: data.data_alinhamento !== undefined ? (data.data_alinhamento ? new Date(data.data_alinhamento) : null) : undefined,
-      // Urgência editável pelo formulário: persiste priority + deadline + reason.
-      priority: data.urgente === undefined ? undefined : data.urgente ? "URGENTE" : "NORMAL",
-      ...(data.urgente === true ? {
+      // Urgência editável pelo formulário: persiste priority + deadline + reason,
+      // SÓ quando o pedido realmente a altera (e o usuário tem markUrgent).
+      priority: !changesUrgency ? undefined : data.urgente ? "URGENTE" : "NORMAL",
+      ...(!changesUrgency ? {} : data.urgente === true ? {
         urgentDeadline: data.urgentDeadline ? new Date(data.urgentDeadline) : undefined,
         urgentReason: data.urgentReason?.trim() || null,
       } : data.urgente === false ? {

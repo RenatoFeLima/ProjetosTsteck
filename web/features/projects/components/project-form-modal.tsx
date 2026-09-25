@@ -47,6 +47,8 @@ type ProjectFormModalProps = {
   isCodigoDuplicado: (codigo: string, ignoreId?: string) => boolean;
   onAddObservation: (projectId: string, text: string) => void;
   notify: (message: string) => void;
+  /** Alterar a urgência exige projects.markUrgent (o servidor recusa sem ela). Default true. */
+  canMarkUrgent?: boolean;
 };
 
 function blankProject(): Partial<Project> {
@@ -128,6 +130,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 export function ProjectFormModal(props: ProjectFormModalProps) {
+  const canMarkUrgent = props.canMarkUrgent ?? true;
   const [form, setForm] = useState<Partial<Project>>(blankProject());
   const [dirty, setDirty] = useState(false);
   const [obsText, setObsText] = useState("");
@@ -685,10 +688,14 @@ export function ProjectFormModal(props: ProjectFormModalProps) {
                         patch({ urgente: false, urgentDeadline: null, urgentReason: null });
                       }
                     }}
+                    disabled={!canMarkUrgent}
                   />
                   <div>
                     <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Marcar como urgente</span>
                     <p className="mt-0.5 text-xs text-zinc-500 dark:text-muted">Prioriza o projeto na fila de atendimento.</p>
+                    {!canMarkUrgent && (
+                      <p className="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">Sem permissão para alterar a urgência.</p>
+                    )}
                   </div>
                 </label>
                 {props.mode === "edit" && props.project && (

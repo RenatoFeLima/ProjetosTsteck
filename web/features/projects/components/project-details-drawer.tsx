@@ -37,6 +37,8 @@ type ProjectDetailsDrawerProps = {
   canEdit?: boolean;
   /** Gerenciar lembretes (criar/editar/adiar/resolver/remover) — ADMIN/Projetos. */
   canManageReminders?: boolean;
+  /** Alterar a urgência exige projects.markUrgent (o servidor recusa sem ela). Default true. */
+  canMarkUrgent?: boolean;
 };
 
 type DrawerMode = "view" | "edit";
@@ -155,6 +157,7 @@ export function ProjectDetailsDrawer({
   notify,
   canEdit = true,
   canManageReminders = false,
+  canMarkUrgent = true,
 }: ProjectDetailsDrawerProps) {
   // Perfil somente-leitura nunca entra em modo de edição, mesmo se solicitado.
   const safeInitialMode: DrawerMode = canEdit ? initialMode : "view";
@@ -802,11 +805,14 @@ export function ProjectDetailsDrawer({
                         patchEdit({ urgente: false, urgentDeadline: null, urgentReason: null });
                       }
                     }}
-                    disabled={project.status_atual === "PROJETO APROVADO"}
+                    disabled={project.status_atual === "PROJETO APROVADO" || !canMarkUrgent}
                   />
                   <div>
                     <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Marcar como urgente</span>
                     <p className="mt-0.5 text-xs text-zinc-500 dark:text-muted">Prioriza o projeto na fila de atendimento.</p>
+                    {!canMarkUrgent && (
+                      <p className="mt-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">Sem permissão para alterar a urgência.</p>
+                    )}
                   </div>
                 </label>
               </SectionCard>

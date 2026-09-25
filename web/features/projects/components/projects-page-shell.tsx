@@ -71,9 +71,10 @@ export function ProjectsPageShell() {
   const readOnly = role === "SELLER" || role === "COMMERCIAL";
   const canMutate = !readOnly;
   const canMove = canMutate && Boolean(perms?.projects.changeStatus);
-  // Marcar/remover urgência pelo menu ⋯ = POST/DELETE /urgency, que o servidor
-  // só aceita com projects.markUrgent (PROJECTS não tem por padrão). Sem ela o
-  // item fica desabilitado, como "Alterar status" sem changeStatus.
+  // Alterar urgência exige projects.markUrgent em todos os caminhos do servidor
+  // (/urgency e edição/criação do projeto); PROJECTS não tem por padrão. Sem ela
+  // o item do menu fica desabilitado (como "Alterar status" sem changeStatus) e o
+  // controle do drawer/formulário fica travado.
   const canMarkUrgent = canMutate && Boolean(perms?.projects.markUrgent);
   const canViewKpis = Boolean(perms?.kpis.view) && !isSeller;
   const canViewAlerts = Boolean(perms?.alerts.view) && !isSeller && !readOnly;
@@ -577,6 +578,7 @@ export function ProjectsPageShell() {
           isCodigoDuplicado={isCodigoProjetoDuplicado}
           onAddObservation={(id, text) => addObservation(id, text, currentUserName)}
           notify={notify}
+          canMarkUrgent={canMarkUrgent}
         />
 
         {detailsProject && (
@@ -595,6 +597,7 @@ export function ProjectsPageShell() {
             notify={notify}
             canEdit={canMutate}
             canManageReminders={canManageRem}
+            canMarkUrgent={canMarkUrgent}
           />
         )}
 
