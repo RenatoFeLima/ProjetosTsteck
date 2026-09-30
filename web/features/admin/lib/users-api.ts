@@ -19,7 +19,8 @@ export type CreateUserPayload = {
   active: boolean;
   mustChangePassword: boolean;
   permissions?: UserPermissions;
-  sellerId?: string | null;
+  /** Conjunto completo de vendedores vinculados (perfil Vendedor). */
+  sellerIds?: string[];
 };
 
 export async function createUser(payload: CreateUserPayload): Promise<User> {
@@ -37,7 +38,8 @@ export type UpdateUserPayload = {
   active?: boolean;
   mustChangePassword?: boolean;
   permissions?: UserPermissions;
-  sellerId?: string | null;
+  /** Conjunto completo de vendedores vinculados (perfil Vendedor). */
+  sellerIds?: string[];
 };
 
 export async function updateUser(id: string, patch: UpdateUserPayload): Promise<User> {

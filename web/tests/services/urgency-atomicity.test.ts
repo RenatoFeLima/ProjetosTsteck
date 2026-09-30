@@ -134,7 +134,7 @@ function makeUser(role: UserRole, patch?: (p: ReturnType<typeof getDefaultPermis
     mustChangePassword: false,
     permissions,
     lastLoginAt: null,
-    sellerId: role === "SELLER" ? "s1" : null,
+    sellerIds: role === "SELLER" ? ["s1"] : [],
   };
 }
 // Perfis padrão com projects.markUrgent: ADMIN e MANAGER (PROJECTS não tem).

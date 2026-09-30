@@ -13,6 +13,8 @@ export type ApiUser = {
   mustChangePassword: boolean;
   permissions: UserPermissions;
   lastLoginAt: string | null;
+  sellerIds?: string[];
+  /** @deprecated Espelho legado (Release 1) — o front novo ignora. */
   sellerId?: string | null;
 };
 
@@ -27,7 +29,7 @@ export function mapApiUser(u: ApiUser): User {
     active: u.active,
     mustChangePassword: u.mustChangePassword,
     permissions: u.permissions,
-    sellerId: u.sellerId ?? null,
+    sellerIds: u.sellerIds ?? [],
     createdAt: "",
     updatedAt: "",
     lastLoginAt: u.lastLoginAt ?? undefined,

@@ -132,7 +132,7 @@ function makeUser(role: UserRole, patch?: (p: ReturnType<typeof getDefaultPermis
     mustChangePassword: false,
     permissions,
     lastLoginAt: null,
-    sellerId: role === "SELLER" ? "s1" : null,
+    sellerIds: role === "SELLER" ? ["s1"] : [],
   };
 }
 const ADMIN = makeUser("ADMIN");

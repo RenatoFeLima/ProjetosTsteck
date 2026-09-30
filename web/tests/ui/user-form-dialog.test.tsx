@@ -43,14 +43,16 @@ describe("UserFormDialog — regressão do loop (React #185) e seletor de vended
 
     render(<UserFormDialog open mode="create" onClose={() => {}} />);
 
-    // Antes de escolher Vendedor, o seletor de vendedor não existe.
-    expect(screen.queryByText("Vendedor vinculado")).not.toBeInTheDocument();
+    // Antes de escolher Vendedor, o seletor de vendedores não existe.
+    expect(screen.queryByText(/Vendedores vinculados/)).not.toBeInTheDocument();
 
     // Seleciona o perfil "Vendedor" (o select de perfil é o primeiro combobox).
     const perfil = screen.getAllByRole("combobox")[0];
     await user.selectOptions(perfil, "SELLER");
 
-    expect(screen.getByText("Vendedor vinculado")).toBeInTheDocument();
+    expect(screen.getByText(/Vendedores vinculados/)).toBeInTheDocument();
+    // Abre a lista de busca do seletor múltiplo.
+    await user.click(screen.getByRole("combobox", { name: /Vendedores vinculados/ }));
     // Opções: só vendedores ativos (LUCIANO, ÉRICA), não o inativo.
     expect(screen.getByRole("option", { name: "LUCIANO" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "ÉRICA" })).toBeInTheDocument();

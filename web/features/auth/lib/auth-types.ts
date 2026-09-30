@@ -59,7 +59,9 @@ export type User = {
   active: boolean;
   mustChangePassword: boolean;
   permissions: UserPermissions;
-  /** Vendedor vinculado (quando role=SELLER). */
+  /** Vendedores vinculados (role=SELLER): vê a união dos projetos deles. */
+  sellerIds?: string[];
+  /** @deprecated Espelho legado da Release 1 — ignorar (não é fonte de verdade). */
   sellerId?: string | null;
   createdAt: string;
   updatedAt: string;

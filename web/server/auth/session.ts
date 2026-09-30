@@ -20,12 +20,21 @@ export type SessionUser = {
   mustChangePassword: boolean;
   permissions: UserPermissions;
   lastLoginAt: string | null;
-  /** Vendedor vinculado (quando role=SELLER) — base do filtro de visibilidade. */
-  sellerId: string | null;
+  /** Vendedores vinculados (role=SELLER) — ÚNICA base do escopo de visibilidade. */
+  sellerIds: string[];
+  /** @deprecated Espelho legado (Release 1), só leitura/compatibilidade. NUNCA usar em autorização. */
+  sellerId?: string | null;
 };
 
+/** Relação a carregar sempre que um usuário vira SessionUser (1 consulta extra, sem N+1). */
+export const USER_SELLER_LINKS = {
+  sellerLinks: { select: { sellerId: true }, orderBy: { sellerId: "asc" } },
+} as const;
+
+export type DbUserWithSellerLinks = DbUser & { sellerLinks: { sellerId: string }[] };
+
 /** Converte o registro do banco para o objeto de sessão (sem passwordHash). */
-export function toSessionUser(u: DbUser): SessionUser {
+export function toSessionUser(u: DbUserWithSellerLinks): SessionUser {
   return {
     id: u.id,
     username: u.username,
@@ -36,7 +45,9 @@ export function toSessionUser(u: DbUser): SessionUser {
     mustChangePassword: u.mustChangePassword,
     permissions: u.permissionsJson as unknown as UserPermissions,
     lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
-    sellerId: (u as DbUser & { sellerId: string | null }).sellerId ?? null,
+    // Sem a relação carregada → nenhum vendedor (falha fechada: SELLER fica bloqueado).
+    sellerIds: (u.sellerLinks ?? []).map((l) => l.sellerId),
+    sellerId: u.sellerId ?? null,
   };
 }
 
@@ -66,7 +77,7 @@ export async function getSession(): Promise<SessionUser | null> {
   const userId = await verifySessionToken(token);
   if (!userId) return null;
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await prisma.user.findUnique({ where: { id: userId }, include: USER_SELLER_LINKS });
   if (!user || !user.active) return null;
 
   return toSessionUser(user);

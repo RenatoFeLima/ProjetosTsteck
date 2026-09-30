@@ -84,16 +84,33 @@ model User {
   createdById        String?
   updatedById        String?
 
-  // Vínculo opcional com um Vendedor (cadastro mestre). Usado quando role=SELLER
-  // para restringir a visibilidade aos projetos desse vendedor.
+  // DEPRECATED (Release 1 de múltiplos vendedores): espelho de compatibilidade
+  // para rollback. NÃO é fonte de verdade nem participa de autorização — a
+  // fonte é `sellerLinks` (UserSeller). Será removido na Release 2.
   sellerId           String?
 
   projectsCreated Project[] @relation("ProjectCreatedBy")
   projectsUpdated Project[] @relation("ProjectUpdatedBy")
   seller          Seller?   @relation(fields: [sellerId], references: [id])
+  // Vendedores vinculados (role=SELLER): o usuário vê a união dos projetos deles.
+  sellerLinks     UserSeller[]
 
   @@index([role])
   @@index([active])
+  @@index([sellerId])
+}
+
+// Vínculo N:N User ↔ Seller (perfil Vendedor). Um projeto continua tendo um único
+// vendedor (Project.sellerId); aqui só muda quantos vendedores um usuário representa.
+model UserSeller {
+  userId    String
+  sellerId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@id([userId, sellerId])
   @@index([sellerId])
 }
 
@@ -202,8 +219,9 @@ model Seller {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  projects Project[]
-  users    User[]
+  projects  Project[]
+  users     User[]
+  userLinks UserSeller[]
 
   @@index([active])
   @@index([name])

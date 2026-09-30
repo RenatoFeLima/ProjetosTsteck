@@ -43,12 +43,13 @@ import {
 import type { Project } from "@/features/projects/domain/project-types";
 
 // Cláusula Prisma `where` derivada do escopo de visibilidade do usuário.
-// SELLER vê só os projetos do seu vendedor; demais veem tudo. Vendedor sem
-// vínculo é bloqueado (403) — defesa em profundidade, no backend.
+// SELLER vê só os projetos dos seus vendedores (uma consulta com IN, filtrada
+// no banco); demais veem tudo. Vendedor sem vínculo é bloqueado (403) — defesa
+// em profundidade, no backend.
 function scopeWhere(actor: SessionUser): Prisma.ProjectWhereInput {
   const scope = resolveProjectScope(actor);
   if (scope.kind === "blocked") throw new HttpError(403, scope.reason);
-  if (scope.kind === "own") return { sellerId: scope.sellerId };
+  if (scope.kind === "own") return { sellerId: { in: scope.sellerIds } };
   return {};
 }
 
@@ -304,7 +305,7 @@ export async function getProject(actor: SessionUser, id: string): Promise<Serial
 function assertProjectInScope(actor: SessionUser, projectSellerId: string | null): void {
   const scope = resolveProjectScope(actor);
   if (scope.kind === "blocked") throw new HttpError(403, scope.reason);
-  if (scope.kind === "own" && projectSellerId !== scope.sellerId) {
+  if (scope.kind === "own" && (!projectSellerId || !scope.sellerIds.includes(projectSellerId))) {
     throw new HttpError(404, "Projeto não encontrado.");
   }
 }

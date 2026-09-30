@@ -39,7 +39,7 @@ function makeUser(role: UserRole, permPatch?: (p: ReturnType<typeof getDefaultPe
     mustChangePassword: false,
     permissions,
     lastLoginAt: null,
-    sellerId: role === "SELLER" ? "seller-1" : null,
+    sellerIds: role === "SELLER" ? ["seller-1"] : [],
   };
 }
 
@@ -272,7 +272,7 @@ describe("Lembretes — visualização por quem vê o projeto", () => {
     const result = await listReminders(makeUser("SELLER"));
     expect(result).toHaveLength(1);
     expect(prismaMock.projectReminder.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { project: { sellerId: "seller-1" } } }),
+      expect.objectContaining({ where: { project: { sellerId: { in: ["seller-1"] } } } }),
     );
   });
 

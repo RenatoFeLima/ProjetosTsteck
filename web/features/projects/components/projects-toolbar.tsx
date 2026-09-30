@@ -35,6 +35,9 @@ type ToolbarProps = {
   onImport?: () => void;
   /** Views que o usuário pode ver (gating por permissão). Default: todas. */
   visibleViews?: ProjectsView[];
+  /** Opções do filtro "Vendedor" já calculadas (perfil Vendedor, que não lê os
+   *  cadastros mestres). Ausente = vendedores ativos do cadastro, como antes. */
+  vendedorOptionsOverride?: string[];
 };
 
 const STATUS_OPTIONS: Array<{ label: string; value: "all" | ProjectStatus }> = [
@@ -60,6 +63,7 @@ export function ProjectsToolbar({
   exporting = false,
   onImport,
   visibleViews,
+  vendedorOptionsOverride,
 }: ToolbarProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -112,12 +116,12 @@ export function ProjectsToolbar({
   }, [masterData, filters.obra]);
 
   const vendedorOptions = useMemo(() => {
-    const list = masterData.getActiveVendedorNames();
+    const list = vendedorOptionsOverride ? [...vendedorOptionsOverride] : masterData.getActiveVendedorNames();
     if (filters.vendedor && !list.includes(filters.vendedor)) {
       list.unshift(filters.vendedor);
     }
     return Array.from(new Set(list)).map((value) => ({ value }));
-  }, [masterData, filters.vendedor]);
+  }, [masterData, filters.vendedor, vendedorOptionsOverride]);
 
   const equipamentoOptions = useMemo(() => {
     const list = masterData.getActiveEquipamentoCodes();

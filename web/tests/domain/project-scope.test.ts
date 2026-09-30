@@ -12,13 +12,13 @@ import { getDefaultPermissions } from "@/features/auth/lib/permissions";
 import type { UserRole } from "@/features/auth/lib/auth-types";
 
 function user(role: UserRole, sellerId: string | null = null): ScopeUser {
-  return { role, permissions: getDefaultPermissions(role), sellerId };
+  return { role, permissions: getDefaultPermissions(role), sellerIds: sellerId ? [sellerId] : [] };
 }
 
 describe("project-scope — visibilidade por perfil", () => {
   it("vendedor com vínculo vê apenas os projetos do seu vendedor (own)", () => {
     const scope = resolveProjectScope(user("SELLER", "seller-1"));
-    expect(scope).toEqual({ kind: "own", sellerId: "seller-1" });
+    expect(scope).toEqual({ kind: "own", sellerIds: ["seller-1"] });
   });
 
   it("vendedor SEM vínculo é bloqueado com mensagem amigável", () => {
@@ -36,7 +36,7 @@ describe("project-scope — visibilidade por perfil", () => {
   it("vendedor nunca acessa KPI, mesmo com permissão marcada por engano", () => {
     const tampered: ScopeUser = {
       role: "SELLER",
-      sellerId: "s1",
+      sellerIds: ["s1"],
       permissions: { ...getDefaultPermissions("SELLER"), kpis: { view: true, export: true } },
     };
     expect(canViewKpis(tampered)).toBe(false);
@@ -95,7 +95,7 @@ describe("project-scope — mutação e movimentação (read-only por role)", ()
       // Mesmo com permissionsJson adulterado, não pode mutar/mover.
       const tampered: ScopeUser = {
         role,
-        sellerId: "s1",
+        sellerIds: ["s1"],
         permissions: {
           ...getDefaultPermissions(role),
           projects: { ...getDefaultPermissions(role).projects, edit: true, create: true, changeStatus: true, markUrgent: true },

@@ -3,7 +3,7 @@
 
 import { prisma } from "@/lib/db/prisma";
 import { verifyPassword, hashPassword } from "@/features/auth/lib/password-utils";
-import { toSessionUser, type SessionUser } from "@/server/auth/session";
+import { toSessionUser, USER_SELLER_LINKS, type SessionUser } from "@/server/auth/session";
 import { writeAudit } from "./auditService";
 
 // `ok: false` significa CREDENCIAL COMPROVADAMENTE INVÁLIDA — e só isso.
@@ -42,6 +42,7 @@ export async function login(username: string, password: string): Promise<LoginRe
   const updated = await prisma.user.update({
     where: { id: user.id },
     data: { lastLoginAt: new Date() },
+    include: USER_SELLER_LINKS,
   });
 
   await writeAudit({

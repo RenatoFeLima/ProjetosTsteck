@@ -24,7 +24,7 @@ function makeUser(role: UserRole): SessionUser {
     mustChangePassword: false,
     permissions: getDefaultPermissions(role),
     lastLoginAt: null,
-    sellerId: role === "SELLER" ? "seller-1" : null,
+    sellerIds: role === "SELLER" ? ["seller-1"] : [],
   };
 }
 

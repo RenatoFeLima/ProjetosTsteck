@@ -3,21 +3,23 @@
 // um usuário pode ver/baixar. Nunca confiar apenas no frontend.
 //
 // Regras:
-//   - role SELLER  → vê SOMENTE os projetos do seu vendedor (sellerId).
-//                    Sem vendedor vinculado → bloqueado (mensagem amigável).
+//   - role SELLER  → vê SOMENTE os projetos dos seus vendedores vinculados
+//                    (sellerIds, vindos de UserSeller). Nenhum vendedor →
+//                    bloqueado (mensagem amigável). Zero NUNCA significa "todos".
 //   - demais roles com projects.view → vê TODOS (escopo "all").
+// O espelho legado `sellerId` (Release 1) NÃO participa do escopo.
 
 import type { UserRole, UserPermissions } from "./auth-types";
 
 export type ScopeUser = {
   role: UserRole;
   permissions: UserPermissions;
-  sellerId: string | null;
+  sellerIds: readonly string[];
 };
 
 export type ProjectScope =
   | { kind: "all" }
-  | { kind: "own"; sellerId: string }
+  | { kind: "own"; sellerIds: string[] }
   | { kind: "blocked"; reason: string };
 
 export const SELLER_WITHOUT_LINK_MESSAGE =
@@ -26,10 +28,11 @@ export const SELLER_WITHOUT_LINK_MESSAGE =
 /** Decide o escopo de visibilidade de projetos do usuário. */
 export function resolveProjectScope(user: ScopeUser): ProjectScope {
   if (user.role === "SELLER") {
-    if (!user.sellerId) {
+    const sellerIds = [...new Set((user.sellerIds ?? []).filter(Boolean))];
+    if (sellerIds.length === 0) {
       return { kind: "blocked", reason: SELLER_WITHOUT_LINK_MESSAGE };
     }
-    return { kind: "own", sellerId: user.sellerId };
+    return { kind: "own", sellerIds };
   }
   return { kind: "all" };
 }

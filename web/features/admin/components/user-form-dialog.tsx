@@ -8,6 +8,7 @@ import * as usersApi from "@/features/admin/lib/users-api";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import { hydrateMasterDataFromApi } from "@/features/master-data/lib/master-data-hydrate";
 import { PermissionsEditor } from "./permissions-editor";
+import { SellerMultiSelect } from "./seller-multi-select";
 import type { User, UserPermissions, UserRole } from "@/features/auth/lib/auth-types";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
   const [active, setActive] = useState(true);
   const [mustChange, setMustChange] = useState(true);
   const [permissions, setPermissions] = useState<UserPermissions>(getDefaultPermissions("VIEWER"));
-  const [sellerId, setSellerId] = useState<string>("");
+  const [sellerIds, setSellerIds] = useState<string[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -51,7 +52,14 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
   // retorna `.filter(...)` cria um array novo a cada render → loop infinito de
   // re-render no Zustand (React #185).
   const vendedores = useMasterDataStore((s) => s.vendedores);
-  const activeSellers = useMemo(() => vendedores.filter((v) => v.active), [vendedores]);
+  // Todos os cadastros (inclusive inativos): um inativo JÁ vinculado continua
+  // exibido como "(inativo)"; o componente só oferece inativos já vinculados.
+  const sellerOptions = useMemo(
+    () => vendedores.map((v) => ({ id: v.id, name: v.name, active: v.active })),
+    [vendedores],
+  );
+  // Vínculos que o usuário já tem no banco (base da regra de inativos).
+  const linkedSellerIds = useMemo(() => (mode === "edit" && user?.sellerIds) || [], [mode, user]);
 
   // Reset form when dialog opens/changes
   useEffect(() => {
@@ -64,7 +72,7 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
       setActive(user.active);
       setMustChange(user.mustChangePassword);
       setPermissions(user.permissions);
-      setSellerId(user.sellerId ?? "");
+      setSellerIds(user.sellerIds ?? []);
     } else {
       setName("");
       setUsername("");
@@ -75,7 +83,7 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
       setActive(true);
       setMustChange(true);
       setPermissions(getDefaultPermissions("VIEWER"));
-      setSellerId("");
+      setSellerIds([]);
     }
     setError(null);
     setSubmitting(false);
@@ -116,13 +124,13 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
       if (password !== confirmPassword) { setError("As senhas não coincidem."); return; }
     }
 
-    if (role === "SELLER" && !sellerId) {
-      setError("Selecione o vendedor vinculado para o perfil Vendedor.");
+    if (role === "SELLER" && sellerIds.length === 0) {
+      setError("Selecione pelo menos um vendedor para o perfil Vendedor.");
       return;
     }
 
-    // Vínculo só vale para SELLER; demais papéis enviam null (limpa vínculo).
-    const sellerLink = role === "SELLER" ? sellerId : null;
+    // Vínculos só valem para SELLER; demais perfis enviam [] (o servidor remove).
+    const sellerLinks = role === "SELLER" ? sellerIds : [];
 
     setSubmitting(true);
     try {
@@ -136,7 +144,7 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
           active,
           mustChangePassword: mustChange,
           permissions,
-          sellerId: sellerLink,
+          sellerIds: sellerLinks,
         });
       } else if (user) {
         await usersApi.updateUser(user.id, {
@@ -146,7 +154,7 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
           active,
           mustChangePassword: mustChange,
           permissions,
-          sellerId: sellerLink,
+          sellerIds: sellerLinks,
         });
       }
       await onSaved?.();
@@ -317,27 +325,33 @@ export function UserFormDialog({ open, onClose, mode, user, onSaved }: UserFormD
               </div>
             </div>
 
-            {/* Vínculo com vendedor (apenas perfil Vendedor) */}
+            {/* Vínculo com vendedores (apenas perfil Vendedor) */}
             {role === "SELLER" && (
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-zinc-700 dark:text-zinc-300">
-                  Vendedor vinculado
+                <label htmlFor="user-sellers-input" className="mb-1.5 block text-[13px] font-medium text-zinc-700 dark:text-zinc-300">
+                  Vendedores vinculados <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={sellerId}
-                  onChange={(e) => setSellerId(e.target.value)}
+                <SellerMultiSelect
+                  inputId="user-sellers-input"
+                  sellers={sellerOptions}
+                  value={sellerIds}
+                  onChange={setSellerIds}
+                  linkedIds={linkedSellerIds}
                   disabled={submitting}
-                  className={cn(inputCls, "cursor-pointer")}
-                >
-                  <option value="">Selecione o vendedor…</option>
-                  {activeSellers.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-                <p className="mt-1 text-[12px] text-zinc-500 dark:text-zinc-400">
-                  O vendedor enxergará apenas os projetos vinculados a este cadastro.
+                  describedBy="user-sellers-help"
+                />
+                <p id="user-sellers-help" className="mt-1 text-[12px] text-zinc-500 dark:text-zinc-400">
+                  O usuário enxergará os projetos vinculados a qualquer um dos vendedores selecionados.
                 </p>
               </div>
+            )}
+
+            {/* Sair do perfil Vendedor remove os vínculos (o servidor faz e audita). */}
+            {mode === "edit" && user?.role === "SELLER" && role !== "SELLER" && (user.sellerIds?.length ?? 0) > 0 && (
+              <p role="status" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:border-amber-700/40 dark:bg-amber-900/15 dark:text-amber-300">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                Ao salvar com outro perfil, os vínculos com vendedores serão removidos.
+              </p>
             )}
 
             {/* Permissões personalizadas */}

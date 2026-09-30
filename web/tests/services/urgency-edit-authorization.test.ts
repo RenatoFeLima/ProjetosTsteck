@@ -53,7 +53,7 @@ import { createProject, setUrgency, updateProject, urgencyChangeRequested } from
 function makeUser(role: UserRole, patch?: (p: ReturnType<typeof getDefaultPermissions>) => void): SessionUser {
   const permissions = structuredClone(getDefaultPermissions(role));
   patch?.(permissions);
-  return { id: `u-${role}`, username: role.toLowerCase(), name: `Usuário ${role}`, email: null, role, active: true, mustChangePassword: false, permissions, lastLoginAt: null, sellerId: null };
+  return { id: `u-${role}`, username: role.toLowerCase(), name: `Usuário ${role}`, email: null, role, active: true, mustChangePassword: false, permissions, lastLoginAt: null, sellerIds: [] };
 }
 const PROJECTS = makeUser("PROJECTS");
 

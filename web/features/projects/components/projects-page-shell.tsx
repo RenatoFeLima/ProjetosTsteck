@@ -88,6 +88,16 @@ export function ProjectsPageShell() {
   // projects.changeStatus). Para os demais, item e botão nem aparecem; o
   // servidor recusa com 403 de qualquer forma.
   const canRegress = role === "ADMIN";
+  // Perfil Vendedor não lê os cadastros mestres: as opções do filtro "Vendedor"
+  // saem SÓ dos projetos que o servidor já entregou (escopo aplicado no backend),
+  // então nunca aparece um vendedor fora dos vínculos do usuário.
+  const sellerVendorOptions = useMemo(
+    () =>
+      isSeller
+        ? [...new Set(allProjects.map((p) => p.vendedor).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"))
+        : undefined,
+    [isSeller, allProjects],
+  );
   // Lembretes: gerenciar = equipe de projetos (ADMIN/PROJECTS ou quem tem
   // projects.edit); comerciais nunca. Mesma regra validada no backend.
   const canManageRem = canManageReminders({ role, permissions: perms });
@@ -445,7 +455,7 @@ export function ProjectsPageShell() {
           </div>
         </div>
 
-        {isSeller && !session?.user?.sellerId && (
+        {isSeller && (session?.user?.sellerIds?.length ?? 0) === 0 && (
           <div className="mt-2 rounded-xl border border-amber-300 bg-amber-50 dark:border-amber-700/40 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
             Usuário vendedor sem cadastro de vendedor vinculado. Contate o administrador.
           </div>
@@ -463,6 +473,7 @@ export function ProjectsPageShell() {
           onExport={canExport ? requestExport : undefined}
           exporting={exporting}
           onImport={canImport ? () => router.push("/administracao/importar-projetos-excel") : undefined}
+          vendedorOptionsOverride={sellerVendorOptions}
         />
 
         {/* Cards de KPI: ocultos para quem não tem KPI (ex.: vendedor). */}

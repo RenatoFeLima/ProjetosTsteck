@@ -122,7 +122,7 @@ import type { Project } from "@/features/projects/domain/project-types";
 
 const ADMIN: SessionUser = {
   id: "u-admin", username: "admin", name: "Admin", email: null, role: "ADMIN" as UserRole, active: true,
-  mustChangePassword: false, permissions: structuredClone(getDefaultPermissions("ADMIN")), lastLoginAt: null, sellerId: null,
+  mustChangePassword: false, permissions: structuredClone(getDefaultPermissions("ADMIN")), lastLoginAt: null, sellerIds: [],
 };
 
 function seed(flags: { projectReceived: boolean; cabinLocationDefined: boolean; alignmentCompleted: boolean }, status = "CADASTRO_INICIAL"): Tables {

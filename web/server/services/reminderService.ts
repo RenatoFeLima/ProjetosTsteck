@@ -113,8 +113,8 @@ async function loadReminderOr404(id: string) {
 
 /**
  * Lista lembretes visíveis ao usuário (todos os status — a UI separa ativos,
- * resolvidos e removidos). SELLER vê somente lembretes dos projetos do seu
- * vendedor; sem vínculo é bloqueado. Não expõe dados sensíveis (sem ids de
+ * resolvidos e removidos). SELLER vê somente lembretes dos projetos dos seus
+ * vendedores vinculados; sem vínculo é bloqueado. Não expõe dados sensíveis (sem ids de
  * usuário — apenas nomes, como nas observações).
  */
 export async function listReminders(actor: SessionUser): Promise<UiReminder[]> {
@@ -123,7 +123,7 @@ export async function listReminders(actor: SessionUser): Promise<UiReminder[]> {
   if (scope.kind === "blocked") throw new HttpError(403, scope.reason);
 
   const rows = await prisma.projectReminder.findMany({
-    where: scope.kind === "own" ? { project: { sellerId: scope.sellerId } } : {},
+    where: scope.kind === "own" ? { project: { sellerId: { in: scope.sellerIds } } } : {},
     orderBy: [{ nextAlertDate: "asc" }, { createdAt: "asc" }],
   });
   return rows.map(serializeReminder);

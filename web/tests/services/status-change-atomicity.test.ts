@@ -133,7 +133,7 @@ function makeUser(role: UserRole): SessionUser {
     mustChangePassword: false,
     permissions: structuredClone(getDefaultPermissions(role)),
     lastLoginAt: null,
-    sellerId: role === "SELLER" ? "s1" : null,
+    sellerIds: role === "SELLER" ? ["s1"] : [],
   };
 }
 const ADMIN = makeUser("ADMIN");
