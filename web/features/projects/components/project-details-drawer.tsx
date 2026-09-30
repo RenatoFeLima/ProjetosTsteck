@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Check, Clock3, FileText, MessageSquare, PencilLine, X } from "lucide-react";
+import { AlertCircle, Check, Clock3, FileText, MessageSquare, PencilLine, Undo2, X } from "lucide-react";
 import { useMasterDataStore } from "@/features/master-data/state/master-data-store";
 import {
   computeNextAction,
@@ -10,7 +10,9 @@ import {
   todayIsoDate,
   validateRequiredFields,
 } from "@/features/projects/domain/project-rules";
-import type { Project, ProjectObservation, StatusHistoryItem } from "@/features/projects/domain/project-types";
+import type { Project, ProjectObservation, ProjectStatus, StatusHistoryItem } from "@/features/projects/domain/project-types";
+import { ADMIN_REGRESSION_SOURCE, getRegressionTargets } from "@/features/projects/domain/status-regression";
+import { AdminStatusRegressionDialog, type RegressionSubmitResult } from "./admin-status-regression-dialog";
 import { PrazoBadge, StatusBadge, UrgenteBadge } from "./pill-badges";
 import { SearchableCombobox } from "./searchable-combobox";
 import { UnsavedChangesDialog } from "./unsaved-changes-dialog";
@@ -39,6 +41,8 @@ type ProjectDetailsDrawerProps = {
   canManageReminders?: boolean;
   /** Alterar a urgência exige projects.markUrgent (o servidor recusa sem ela). Default true. */
   canMarkUrgent?: boolean;
+  /** Regressão administrativa — presente SÓ para ADMIN; ausente = botão nem aparece. */
+  onRegressStatus?: (projectId: string, toStatus: ProjectStatus, reason: string) => Promise<RegressionSubmitResult>;
 };
 
 type DrawerMode = "view" | "edit";
@@ -58,13 +62,23 @@ function buildTimeline(
   statusHistory: StatusHistoryItem[],
   observations: ProjectObservation[],
 ): TimelineItem[] {
-  const statusItems: TimelineItem[] = statusHistory.map((item) => ({
-    id: `status-${item.id}`,
-    kind: "status",
-    when: item.alterado_em,
-    title: "Mudança de status",
-    description: `${item.status_de ?? "(inicio)"} -> ${item.status_para} (${item.origem})`,
-  }));
+  const statusItems: TimelineItem[] = statusHistory.map((item) =>
+    item.origem === ADMIN_REGRESSION_SOURCE
+      ? {
+          id: `status-${item.id}`,
+          kind: "status",
+          when: item.alterado_em,
+          title: "Regressão administrativa",
+          description: `${item.status_de ?? "(inicio)"} -> ${item.status_para}${item.nota ? `. Motivo: ${item.nota}` : ""}`,
+        }
+      : {
+          id: `status-${item.id}`,
+          kind: "status",
+          when: item.alterado_em,
+          title: "Mudança de status",
+          description: `${item.status_de ?? "(inicio)"} -> ${item.status_para} (${item.origem})`,
+        },
+  );
 
   const observationItems: TimelineItem[] = observations.map((item) => ({
     id: `obs-${item.id}`,
@@ -158,6 +172,7 @@ export function ProjectDetailsDrawer({
   canEdit = true,
   canManageReminders = false,
   canMarkUrgent = true,
+  onRegressStatus,
 }: ProjectDetailsDrawerProps) {
   // Perfil somente-leitura nunca entra em modo de edição, mesmo se solicitado.
   const safeInitialMode: DrawerMode = canEdit ? initialMode : "view";
@@ -184,6 +199,7 @@ export function ProjectDetailsDrawer({
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
   const [confirmAlignOpen, setConfirmAlignOpen] = useState(false);
   const [urgencyDialogOpen, setUrgencyDialogOpen] = useState(false);
+  const [regressionOpen, setRegressionOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // per-field validation errors
@@ -200,6 +216,8 @@ export function ProjectDetailsDrawer({
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
+      // Com o modal de regressão aberto, o Esc é dele (e fica bloqueado durante o envio).
+      if (regressionOpen) return;
       event.stopPropagation();
       if (mode === "edit") {
         if (editDirty) {
@@ -214,7 +232,7 @@ export function ProjectDetailsDrawer({
 
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [open, onClose, mode, editDirty]);
+  }, [open, onClose, mode, editDirty, regressionOpen]);
 
   // Ao abrir o drawer, busca do MySQL o histórico/observações reais do projeto.
   // Substitui no store as entradas deste projeto (mantém otimistas dos demais).
@@ -513,16 +531,30 @@ export function ProjectDetailsDrawer({
                 <UrgenteBadge urgente={project.urgente} urgentDeadline={project.urgentDeadline} />
                 <PrazoBadge project={project} />
               </div>
-              {canEdit && (
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={enterEditMode}
-                    className="inline-flex items-center gap-2 rounded-lg bg-[#9e0b0f] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#7f090c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9e0b0f]/50"
-                  >
-                    <PencilLine size={14} />
-                    Editar projeto
-                  </button>
+              {(canEdit || onRegressStatus) && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={enterEditMode}
+                      className="inline-flex items-center gap-2 rounded-lg bg-[#9e0b0f] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#7f090c] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9e0b0f]/50"
+                    >
+                      <PencilLine size={14} />
+                      Editar projeto
+                    </button>
+                  )}
+                  {onRegressStatus && (
+                    <button
+                      type="button"
+                      onClick={() => setRegressionOpen(true)}
+                      disabled={getRegressionTargets(project.status_atual).length === 0}
+                      title="Ação administrativa: voltar o projeto para uma etapa anterior"
+                      className="inline-flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-700/50 bg-white dark:bg-panel-soft px-3 py-2 text-sm font-semibold text-[#9e0b0f] dark:text-red-300 transition hover:bg-red-50 dark:hover:bg-red-900/20 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9e0b0f]/40"
+                    >
+                      <Undo2 size={14} />
+                      Regredir status
+                    </button>
+                  )}
                 </div>
               )}
               <div className="mt-3 inline-flex rounded-lg border border-zinc-200 dark:border-white/8 bg-zinc-50 dark:bg-panel-soft p-1">
@@ -1088,6 +1120,21 @@ export function ProjectDetailsDrawer({
           setUrgencyDialogOpen(false);
         }}
       />
+
+      {regressionOpen && onRegressStatus && (
+        <AdminStatusRegressionDialog
+          project={project}
+          onCancel={() => setRegressionOpen(false)}
+          onSubmit={async (toStatus, reason) => {
+            const result = await onRegressStatus(project.id, toStatus, reason);
+            if (result.ok) {
+              setRegressionOpen(false);
+              notify(`Status regredido para ${toStatus}.`);
+            }
+            return result;
+          }}
+        />
+      )}
     </div>
   );
 }

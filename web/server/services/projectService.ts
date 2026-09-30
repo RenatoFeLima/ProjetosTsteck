@@ -34,6 +34,12 @@ import {
 } from "@/features/projects/domain/project-export";
 import { resolveProjectScope, canViewKpis, canMutateProjects, isReadOnlyRole } from "@/features/auth/lib/project-scope";
 import { validateStatusTransition } from "@/features/projects/domain/project-rules";
+import {
+  ADMIN_REGRESSION_SOURCE,
+  isRegressionTarget,
+  normalizeRegressionReason,
+  regressionResetsAlignment,
+} from "@/features/projects/domain/status-regression";
 import type { Project } from "@/features/projects/domain/project-types";
 
 // Cláusula Prisma `where` derivada do escopo de visibilidade do usuário.
@@ -562,6 +568,11 @@ export async function changeStatus(
   toStatusInput: string,
   opts: { reason?: string; source?: string; note?: string; finalCode?: string } = {},
 ): Promise<SerializedProject> {
+  // Origem reservada: só regressStatus grava "admin_regression". A rota normal
+  // repassa o `source` do payload, então aqui ele não pode rotular o histórico.
+  if (opts.source === ADMIN_REGRESSION_SOURCE) {
+    throw new HttpError(400, "Origem de mudança de status inválida.");
+  }
   assertCanMutate(actor);
   assertPermission(actor, (p) => p.projects.changeStatus);
 
@@ -782,6 +793,128 @@ export async function changeStatus(
   }
 
   return result;
+}
+
+/** Outra operação mudou o status entre a leitura e a transação da regressão (desfaz tudo). */
+class RegressionConflict extends Error {}
+
+/**
+ * Regressão administrativa de status — operação EXCEPCIONAL e separada do fluxo
+ * normal (não passa por changeStatus nem por ALLOWED_DB_TRANSITIONS).
+ *  - Somente role ADMIN (não basta projects.changeStatus), checado antes de ler o projeto.
+ *  - Destino: etapa anterior do caminho principal (getRegressionTargets).
+ *  - Muda só status, currentStatusEnteredAt e updatedById; destino Cadastro
+ *    Inicial desmarca também "Alinhamento concluído". Código, urgência,
+ *    contadores, prazo importado e demais dados são preservados
+ *    (statusUpdateExtras NÃO roda).
+ *  - Status + histórico + fechamento de revisão aberta + observação + auditoria
+ *    numa ÚNICA transação: regressão sem auditoria (ou o contrário) é impossível.
+ *  - Nenhum e-mail.
+ */
+export async function regressStatus(
+  actor: SessionUser,
+  id: string,
+  toStatusInput: unknown,
+  reasonInput: unknown,
+): Promise<SerializedProject> {
+  if (actor.role !== "ADMIN") {
+    throw new HttpError(403, "Somente administradores podem regredir o status de um projeto.");
+  }
+
+  if (typeof toStatusInput !== "string") throw new HttpError(400, "Status de destino é obrigatório.");
+  const to = toDbStatus(toStatusInput);
+  const reasonCheck = normalizeRegressionReason(reasonInput);
+  if (!reasonCheck.ok) throw new HttpError(400, reasonCheck.error);
+  const reason = reasonCheck.reason;
+
+  const project = await prisma.project.findUnique({ where: { id } });
+  if (!project) throw new HttpError(404, "Projeto não encontrado.");
+
+  const from = project.status as DbStatus;
+  const fromUi = DB_TO_UI_STATUS[from];
+  const toUi = DB_TO_UI_STATUS[to];
+  if (from === to) throw new HttpError(400, `O projeto já está em "${toUi}".`);
+  if (!isRegressionTarget(fromUi, toUi)) {
+    throw new HttpError(400, `"${toUi}" não é uma etapa anterior a "${fromUi}" para regressão administrativa.`);
+  }
+
+  const resetAlignment = regressionResetsAlignment(toUi);
+  const alignmentReset = resetAlignment && project.alignmentCompleted;
+  const now = new Date();
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const applied = await tx.project.updateMany({
+        where: { id, status: from },
+        data: {
+          status: to,
+          currentStatusEnteredAt: now,
+          updatedById: actor.id,
+          ...(resetAlignment ? { alignmentCompleted: false } : {}),
+        },
+      });
+      if (applied.count !== 1) throw new RegressionConflict();
+
+      await tx.projectStatusHistory.updateMany({
+        where: { projectId: id, exitedAt: null },
+        data: { exitedAt: now },
+      });
+      await tx.projectStatusHistory.create({
+        data: {
+          projectId: id,
+          fromStatus: from,
+          toStatus: to,
+          enteredAt: now,
+          source: ADMIN_REGRESSION_SOURCE,
+          note: reason,
+          changedById: actor.id,
+        },
+      });
+
+      // Saindo de uma revisão: fecha o ciclo aberto (sem isso ele seguiria
+      // "em andamento" no SLA de revisão). Nenhum ciclo novo é aberto.
+      if (from === REVIEW_STUDY) {
+        await tx.projectReviewStudyHistory.updateMany({ where: { projectId: id, exitedAt: null }, data: { exitedAt: now } });
+      }
+      if (from === REVIEW_FINAL) {
+        await tx.projectFinalReviewHistory.updateMany({ where: { projectId: id, exitedAt: null }, data: { exitedAt: now } });
+      }
+
+      await tx.projectObservation.create({
+        data: {
+          projectId: id,
+          author: actor.name,
+          text:
+            `Regressão administrativa de status: ${fromUi} -> ${toUi}. Motivo: ${reason}` +
+            (alignmentReset ? " Alinhamento concluído marcado como pendente novamente." : ""),
+        },
+      });
+
+      // Auditoria DENTRO da transação (writeAudit engole erro depois do commit).
+      await tx.auditLog.create({
+        data: {
+          action: "ADMIN_STATUS_REGRESSION",
+          actorUserId: actor.id,
+          actorName: actor.name,
+          entityType: "project",
+          entityId: id,
+          message: `${actor.name} regrediu o projeto ${project.code}: ${fromUi} → ${toUi}.`,
+          metadataJson: {
+            projectCode: project.code,
+            fromStatus: fromUi,
+            toStatus: toUi,
+            reason,
+            ...(alignmentReset ? { alignmentReset: true, alignmentCompleted: { from: true, to: false } } : {}),
+          },
+        },
+      });
+    });
+  } catch (e) {
+    if (!(e instanceof RegressionConflict)) throw e;
+    throw new HttpError(409, "O status do projeto foi alterado por outra operação. Atualize a tela e tente novamente.");
+  }
+
+  return serializeProject(await reload(id));
 }
 
 /** Outra operação mudou a urgência entre a leitura e a transação (desfaz tudo). */

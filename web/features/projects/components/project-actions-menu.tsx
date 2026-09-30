@@ -1,6 +1,7 @@
 import type { Project } from "@/features/projects/domain/project-types";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { CircleDot, Eye, History, MoreHorizontal, PencilLine, Workflow } from "lucide-react";
+import { CircleDot, Eye, History, MoreHorizontal, PencilLine, Undo2, Workflow } from "lucide-react";
+import { getRegressionTargets } from "@/features/projects/domain/status-regression";
 import { cn } from "@/lib/utils";
 
 export type ProjectActionHandlers = {
@@ -10,6 +11,8 @@ export type ProjectActionHandlers = {
   onChangeStatus?: (project: Project) => void;
   onMarkUrgente?: (project: Project) => void;
   onViewHistory: (project: Project) => void;
+  /** Regressão administrativa — presente SÓ para ADMIN; ausente = item nem aparece. */
+  onRegressStatus?: (project: Project) => void;
 };
 
 type Props = ProjectActionHandlers & {
@@ -31,6 +34,7 @@ export function ProjectActionsMenu({
   onChangeStatus,
   onMarkUrgente,
   onViewHistory,
+  onRegressStatus,
   onRequestRemoveUrgency,
   triggerClassName,
 }: Props) {
@@ -112,6 +116,21 @@ export function ProjectActionsMenu({
               Ver historico
             </DropdownMenu.Item>
           </DropdownMenu.Group>
+          {onRegressStatus && (
+            <>
+              <DropdownMenu.Separator className="my-1 h-px bg-zinc-100 dark:bg-white/8" />
+              <DropdownMenu.Group>
+                <DropdownMenu.Item
+                  disabled={getRegressionTargets(project.status_atual).length === 0}
+                  onSelect={() => onRegressStatus(project)}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[#9e0b0f] dark:text-red-300 outline-none hover:bg-red-50 dark:hover:bg-red-900/20 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+                >
+                  <Undo2 size={14} />
+                  Regredir status
+                </DropdownMenu.Item>
+              </DropdownMenu.Group>
+            </>
+          )}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

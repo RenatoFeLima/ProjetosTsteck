@@ -2,6 +2,7 @@
 // Fonte obrigatória: ProjectStatusHistory.enteredAt (nunca updatedAt).
 
 import type { StatusHistoryItem } from "./project-types";
+import { ADMIN_REGRESSION_SOURCE } from "./status-regression";
 
 export type ProductionMetrics = {
   /** Envios de ante-projeto no período (contagem de eventos). */
@@ -38,8 +39,10 @@ export function calculateProductionMetrics(
   const start = periodStart ? parseISO(periodStart) : null;
   const end = periodEnd ? parseISO(periodEnd) : null;
 
-  // Filtra eventos dentro do período
+  // Filtra eventos dentro do período. Regressão administrativa não é produção:
+  // voltar um projeto para um status de envio não é um novo envio.
   const eventsInPeriod = statusHistory.filter((event) => {
+    if (event.origem === ADMIN_REGRESSION_SOURCE) return false;
     const eventDate = parseISO(event.alterado_em);
     if (start && eventDate < start) return false;
     if (end && eventDate > end) return false;

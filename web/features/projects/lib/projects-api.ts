@@ -36,6 +36,15 @@ export async function apiChangeStatus(
   return data.project;
 }
 
+/** Regressão administrativa (somente ADMIN; o servidor decide origem, ator e status atual). */
+export async function apiRegressStatus(id: string, toStatus: string, reason: string): Promise<Project> {
+  const data = await request<{ project: Project }>(`/api/projects/${id}/status-regression`, {
+    method: "POST",
+    body: JSON.stringify({ toStatus, reason }),
+  });
+  return data.project;
+}
+
 export type NextCodeSuggestion = {
   maxSuffix: number;
   nextSuffix: string;

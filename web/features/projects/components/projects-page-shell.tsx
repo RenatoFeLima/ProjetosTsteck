@@ -15,6 +15,7 @@ import { ProjectStatusChangeDialog } from "./project-status-change-dialog";
 import { UrgencyJustificationDialog } from "./urgency-justification-dialog";
 import { FinalCodeDialog } from "./final-code-dialog";
 import { ExportConfirmDialog } from "./export-confirm-dialog";
+import { AdminStatusRegressionDialog } from "./admin-status-regression-dialog";
 import { KpiDashboardErrorBoundary } from "./kpi-dashboard-error-boundary";
 import { PageContainer } from "./page-container";
 import { useProjectsStore, setProjectsErrorSink, type ProjectsView } from "@/features/projects/state/projects-store";
@@ -46,6 +47,7 @@ export function ProjectsPageShell() {
     deleteProject,
     toggleUrgente,
     moveStatus,
+    regressStatus,
     statusHistory,
     observations: allObservations,
     getProjectStatusHistory,
@@ -82,6 +84,10 @@ export function ProjectsPageShell() {
   // têm kpis.export=false → botão oculto e backend retorna 403 se forçarem direto.
   const canExport = role === "ADMIN" || Boolean(perms?.kpis.export);
   const canImport = role === "ADMIN";
+  // Regressão administrativa de status: SÓ o role ADMIN (não basta
+  // projects.changeStatus). Para os demais, item e botão nem aparecem; o
+  // servidor recusa com 403 de qualquer forma.
+  const canRegress = role === "ADMIN";
   // Lembretes: gerenciar = equipe de projetos (ADMIN/PROJECTS ou quem tem
   // projects.edit); comerciais nunca. Mesma regra validada no backend.
   const canManageRem = canManageReminders({ role, permissions: perms });
@@ -101,6 +107,7 @@ export function ProjectsPageShell() {
   } | null>(null);
   const [statusChangeProject, setStatusChangeProject] = useState<Project | undefined>(undefined);
   const [selectedUrgencyProject, setSelectedUrgencyProject] = useState<Project | undefined>(undefined);
+  const [regressionProject, setRegressionProject] = useState<Project | null>(null);
   const [anteProjFinalCodePending, setAnteProjFinalCodePending] = useState<{ project: Project; observation?: string } | null>(null);
   const [toast, setToast] = useState<string>("");
   // Estado real da carga (store). Antes da 1ª carga concluir, nada de "0 projetos".
@@ -280,6 +287,14 @@ export function ProjectsPageShell() {
     setStatusChangeProject(undefined);
     touchLastUpdated();
     notify("Status atualizado com sucesso.");
+  }
+
+  // Regressão administrativa (menu ⋯ e drawer): o servidor decide tudo; aqui só
+  // se orquestra a resposta. Em erro o modal continua aberto com a mensagem.
+  async function submitRegression(projectId: string, toStatus: ProjectStatus, reason: string) {
+    const result = await regressStatus(projectId, toStatus, reason);
+    if (result.ok) touchLastUpdated();
+    return result;
   }
 
   function notify(message: string) {
@@ -480,6 +495,7 @@ export function ProjectsPageShell() {
             onViewHistory={openHistory}
             onMarkUrgente={canMarkUrgent ? (project) => setSelectedUrgencyProject(project) : undefined}
             onRemoveUrgente={canMarkUrgent ? removeUrgent : () => {}}
+            onRegressStatus={canRegress ? setRegressionProject : undefined}
             onClearFilters={clearAllFilters}
             state={tableState}
             onRetry={retryTableLoad}
@@ -598,6 +614,23 @@ export function ProjectsPageShell() {
             canEdit={canMutate}
             canManageReminders={canManageRem}
             canMarkUrgent={canMarkUrgent}
+            onRegressStatus={canRegress ? submitRegression : undefined}
+          />
+        )}
+
+        {regressionProject && (
+          <AdminStatusRegressionDialog
+            key={regressionProject.id}
+            project={regressionProject}
+            onCancel={() => setRegressionProject(null)}
+            onSubmit={async (toStatus, reason) => {
+              const result = await submitRegression(regressionProject.id, toStatus, reason);
+              if (result.ok) {
+                setRegressionProject(null);
+                notify(`Status regredido para ${toStatus}.`);
+              }
+              return result;
+            }}
           />
         )}
 

@@ -22,6 +22,7 @@ import {
   apiGetAnalytics,
   apiGetHistory,
   apiListProjects,
+  apiRegressStatus,
   apiSetUrgency,
   apiUpdateProject,
   type ReviewAggItem,
@@ -128,6 +129,8 @@ type StoreState = {
   deleteProject: (id: string) => void;
   toggleUrgente: (id: string, urgentData?: { reason: string; deadline: string }) => void;
   moveStatus: (id: string, nextStatus: ProjectStatus, origem: StatusHistoryItem["origem"], nota?: string, finalCode?: string) => { ok: boolean; error?: string };
+  /** Regressão administrativa: SEM otimismo — só aplica a resposta do servidor. `error` = detalhe do servidor. */
+  regressStatus: (id: string, toStatus: ProjectStatus, reason: string) => Promise<{ ok: boolean; error?: string }>;
   addObservation: (projetoId: string, texto: string, usuario: string) => void;
   getProjectStatusHistory: (projectId: string) => StatusHistoryItem[];
   getProjectObservations: (projectId: string) => ProjectObservation[];
@@ -612,6 +615,23 @@ export const useProjectsStore = create<StoreState>((set, get) => ({
       .then((real) => set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) })))
       .catch(onPersistFailure("mudança de status", "Não foi possível alterar o status do projeto."));
 
+    return { ok: true };
+  },
+
+  // Não passa por validateStatusTransition/moveStatus: a regra da regressão é do
+  // servidor. Nada muda localmente antes da resposta; em erro, o projeto fica
+  // exatamente como estava. Histórico e observação (gravados pelo servidor na
+  // mesma transação) são recarregados em seguida.
+  regressStatus: async (id, toStatus, reason) => {
+    if (isPending(id)) return { ok: false, error: "Projeto ainda não foi salvo." };
+    try {
+      const real = await apiRegressStatus(id, toStatus, reason);
+      set((state) => ({ projects: state.projects.map((p) => (p.id === id ? real : p)) }));
+    } catch (e) {
+      debugLog("falha na regressão administrativa", e);
+      return { ok: false, error: messageFrom(e, "") || undefined };
+    }
+    await get().loadProjectDetail(id);
     return { ok: true };
   },
 

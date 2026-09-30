@@ -17,6 +17,8 @@ type ProjectsTableProps = {
   onViewHistory: (project: Project) => void;
   onMarkUrgente?: (project: Project) => void;
   onRemoveUrgente: (project: Project) => void;
+  /** Só ADMIN — ausente = "Regredir status" não aparece no menu ⋯. */
+  onRegressStatus?: (project: Project) => void;
   onClearFilters?: () => void;
   state?: "loading" | "ready" | "error";
   onRetry?: () => void;
@@ -50,6 +52,7 @@ export function ProjectsTable({
   onViewHistory,
   onMarkUrgente,
   onRemoveUrgente,
+  onRegressStatus,
   onClearFilters,
   state = "ready",
   onRetry,
@@ -195,7 +198,7 @@ export function ProjectsTable({
     );
   }
 
-  const actionHandlers = { onViewDetails, onEditProject, onChangeStatus, onMarkUrgente, onViewHistory };
+  const actionHandlers = { onViewDetails, onEditProject, onChangeStatus, onMarkUrgente, onViewHistory, onRegressStatus };
   const removeUrgencyDialog = (
     <RemoveUrgencyConfirmDialog
       open={Boolean(removeUrgencyProject)}

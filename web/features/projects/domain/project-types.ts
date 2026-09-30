@@ -84,7 +84,8 @@ export type StatusHistoryItem = {
   status_de: ProjectStatus | null;
   status_para: ProjectStatus;
   alterado_em: string;
-  origem: "kanban" | "formulario" | "acao-rapida" | "sistema";
+  /** "admin_regression" = regressão administrativa (só o servidor grava; ver status-regression.ts). */
+  origem: "kanban" | "formulario" | "acao-rapida" | "sistema" | "admin_regression";
   nota?: string;
 };
 
