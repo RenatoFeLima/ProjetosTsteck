@@ -48,7 +48,7 @@ export async function apiRegressStatus(id: string, toStatus: string, reason: str
 export type NextCodeSuggestion = {
   maxSuffix: number;
   nextSuffix: string;
-  /** Código do último projeto que chegou em PROJETO APROVADO / terminal (referência "De:"). */
+  /** Maior código final válido entre os projetos atualmente em PROJETO FINAL ENVIADO (referência "De:"). */
   lastFinalCode: string | null;
   /** Código provisório do projeto sendo movimentado. */
   currentDraftCode: string | null;
@@ -56,8 +56,9 @@ export type NextCodeSuggestion = {
   suggestedFinalCode: string | null;
 };
 
-/** Sugestão do código final, baseada no último projeto finalizado. `currentCode`
- *  é o código provisório do projeto sendo movimentado (fallback/secundário). */
+/** Sugestão do código final, baseada nos projetos atualmente em PROJETO FINAL
+ *  ENVIADO. `currentCode` é o código provisório do projeto sendo movimentado
+ *  (fallback quando não há código final válido). */
 export async function apiGetNextCodeSuggestion(currentCode?: string): Promise<NextCodeSuggestion> {
   const qs = currentCode ? `?currentCode=${encodeURIComponent(currentCode)}` : "";
   return request<NextCodeSuggestion>(`/api/projects/next-code-suggestion${qs}`);

@@ -21,11 +21,9 @@ import {
   ELABORATE_MESSAGE,
 } from "@/lib/mail/notify-project";
 import {
-  maxCodeSuffix,
   padSuffix,
   hasValidFinalCode,
-  extractCodeSuffix,
-  suggestNextCode,
+  suggestFinalCodeFromSent,
 } from "@/features/projects/domain/project-code";
 import {
   buildProjectsCsv,
@@ -1137,78 +1135,43 @@ export async function listAllReviews(actor: SessionUser) {
 }
 
 export type NextCodeSuggestion = {
-  /** Maior sufixo GLOBAL (compat) — usado como fallback quando não há finalizados. */
+  /** Maior sufixo válido entre os projetos ATUALMENTE em PROJETO_FINAL_ENVIADO (0 se nenhum). */
   maxSuffix: number;
-  /** Próximo sufixo GLOBAL (compat). */
+  /** maxSuffix + 1 com padding; vazio quando não há código válido (sem sequência inventada). */
   nextSuffix: string;
-  /** Código do último/maior projeto que já chegou em ANTE_PROJETO_ENVIADO ou PROJETO_APROVADO. */
+  /** Código de maior sufixo válido em PROJETO_FINAL_ENVIADO (referência "De:"). */
   lastFinalCode: string | null;
   /** Código provisório do projeto sendo movimentado (informação secundária). */
   currentDraftCode: string | null;
-  /** Sugestão do código final: próximo sequencial sobre o último finalizado. */
+  /** Sugestão do código final; sem código válido em PF ENVIADO = o próprio código atual. */
   suggestedFinalCode: string | null;
 };
 
-/** Sugestão do próximo código. A referência principal é o ÚLTIMO projeto
- *  que já chegou em ANTE_PROJETO_ENVIADO ou PROJETO_APROVADO (maior sufixo
- *  numérico): "De:" = esse código, "Para:" = prefixo + sufixo + 1. Se não
- *  existir nenhum anterior, usa o código provisório atual como fallback. */
+/** Sugestão do próximo código final. Regra (deliberadamente simples): só os
+ *  projetos cujo status ATUAL é PROJETO_FINAL_ENVIADO participam — maior sufixo
+ *  entre os códigos finais válidos + 1, com o prefixo desse código. Projeto que
+ *  sai de PF ENVIADO (aprovação, revisão, regressão) deixa de contar na hora;
+ *  histórico, auditoria e outros status não são consultados. */
 export async function nextCodeSuggestion(
   actor: SessionUser,
   currentCode?: string,
 ): Promise<NextCodeSuggestion> {
   assertPermission(actor, (p) => p.projects.view);
 
-  // Compat: sufixo global (todos os projetos).
-  const allRows = await prisma.project.findMany({ select: { code: true } });
-  const globalMax = maxCodeSuffix(allRows.map((r) => r.code));
-
-  // Projetos que já chegaram em ANTE_PROJETO_APROVADO ou PROJETO_APROVADO — status
-  // atual OU histórico (um projeto pode sair e voltar para esses status).
-  const ids = new Set<string>();
-  const [historyHits, currentFinal] = await Promise.all([
-    prisma.projectStatusHistory.findMany({
-      where: { toStatus: { in: ["ANTE_PROJETO_APROVADO", "PROJETO_APROVADO"] } },
-      select: { projectId: true },
-    }),
-    prisma.project.findMany({
-      where: { status: { in: ["ANTE_PROJETO_APROVADO", "PROJETO_APROVADO"] } },
-      select: { id: true },
-    }),
-  ]);
-  historyHits.forEach((r) => ids.add(r.projectId));
-  currentFinal.forEach((p) => ids.add(p.id));
-
-  const finalProjects = ids.size
-    ? await prisma.project.findMany({ where: { id: { in: [...ids] } }, select: { code: true } })
-    : [];
-
-  // Referência = código finalizado de maior sufixo numérico.
-  let lastFinalCode: string | null = null;
-  let maxFinalSuffix = -1;
-  for (const p of finalProjects) {
-    const n = extractCodeSuffix(p.code);
-    if (n !== null && n > maxFinalSuffix) {
-      maxFinalSuffix = n;
-      lastFinalCode = p.code;
-    }
-  }
-
-  // Base da sugestão: último finalizado; senão, código provisório atual.
-  const draft = currentCode?.trim() || null;
-  let suggestedFinalCode: string | null = null;
-  if (lastFinalCode) {
-    suggestedFinalCode = suggestNextCode(lastFinalCode, maxFinalSuffix);
-  } else if (draft) {
-    const draftSuffix = extractCodeSuffix(draft);
-    suggestedFinalCode = suggestNextCode(draft, draftSuffix ?? globalMax);
-  }
+  const sent = await prisma.project.findMany({
+    where: { status: "PROJETO_FINAL_ENVIADO" },
+    select: { code: true },
+  });
+  const { lastFinalCode, maxSuffix, suggestedFinalCode } = suggestFinalCodeFromSent(
+    sent.map((p) => p.code),
+    currentCode,
+  );
 
   return {
-    maxSuffix: globalMax,
-    nextSuffix: padSuffix(globalMax + 1),
+    maxSuffix: maxSuffix ?? 0,
+    nextSuffix: maxSuffix === null ? "" : padSuffix(maxSuffix + 1),
     lastFinalCode,
-    currentDraftCode: draft,
+    currentDraftCode: currentCode?.trim() || null,
     suggestedFinalCode,
   };
 }

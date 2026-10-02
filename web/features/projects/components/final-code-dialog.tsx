@@ -15,11 +15,11 @@ type Props = {
   onCancel: () => void;
 };
 
-/** Modal exibido ao mover um projeto para "Ante-Projeto Enviado": confirma/edita
- *  o código do projeto, com sugestão automática baseada no último código registrado. */
+/** Modal exibido ao mover um projeto para "Projeto Final Enviado": confirma/edita
+ *  o código do projeto, com sugestão baseada nos projetos atualmente em PF Enviado. */
 export function FinalCodeDialog({ open, currentCode, ignoreId, isCodigoDuplicado, onConfirm, onCancel }: Props) {
   const [code, setCode] = useState("");
-  // Referência "De:": código do último projeto que chegou em PROJETO APROVADO (terminal).
+  // Referência "De:": maior código final válido entre os projetos em PROJETO FINAL ENVIADO.
   const [lastFinalCode, setLastFinalCode] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
   const [loading, setLoading] = useState(false);
